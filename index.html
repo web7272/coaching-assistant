@@ -259,6 +259,13 @@ async function setupDatabase() {
 
 // ==================== NAVIGATION ====================
 function showScreen(id) {
+  if (id === 'dashboard') {
+    const pwd = prompt('請輸入教練密碼：');
+    if (pwd !== 'vivi2024coach') {
+      alert('密碼錯誤');
+      return;
+    }
+  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if (id === 'dashboard') loadDashboard();
