@@ -7,179 +7,97 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500&family=Noto+Sans+TC:wght@300;400;500&display=swap');
   :root {
-    --sage: #7a9e7e;
-    --sage-light: #a8c5ab;
-    --sage-dark: #4a6b4e;
-    --cream: #faf7f2;
-    --charcoal: #2d2d2d;
-    --mid: #6b6b6b;
-    --light: #c8c0b8;
+    --sage: #7a9e7e; --sage-light: #a8c5ab; --sage-dark: #4a6b4e;
+    --cream: #faf7f2; --charcoal: #2d2d2d; --mid: #6b6b6b; --light: #c8c0b8;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--cream); font-family: 'Noto Sans TC', sans-serif; color: var(--charcoal); min-height: 100vh; }
-
-  /* SCREENS */
   .screen { display: none; flex-direction: column; min-height: 100vh; }
   .screen.active { display: flex; }
 
   /* WELCOME */
-  #welcome {
-    background: linear-gradient(160deg, #3d5c40 0%, #2d4030 40%, #1a2a1c 100%);
-    justify-content: flex-end;
-    padding: 40px 28px 56px;
-    position: relative;
-    overflow: hidden;
-  }
-  #welcome::before {
-    content: '';
-    position: absolute;
-    top: -20%; right: -20%;
-    width: 70vw; height: 70vw;
-    background: radial-gradient(circle, rgba(122,158,126,0.15) 0%, transparent 70%);
-    border-radius: 50%;
-  }
+  #welcome { background: linear-gradient(160deg, #3d5c40 0%, #2d4030 40%, #1a2a1c 100%); justify-content: flex-end; padding: 40px 28px 56px; position: relative; overflow: hidden; }
+  #welcome::before { content: ''; position: absolute; top: -20%; right: -20%; width: 70vw; height: 70vw; background: radial-gradient(circle, rgba(122,158,126,0.15) 0%, transparent 70%); border-radius: 50%; }
   .welcome-eyebrow { font-size: 11px; letter-spacing: 3px; color: #7a9e7e; text-transform: uppercase; margin-bottom: 16px; }
   .welcome-title { font-family: 'Noto Serif TC', serif; font-size: 36px; font-weight: 300; line-height: 1.3; color: #f0ede8; margin-bottom: 12px; }
   .welcome-title span { color: #a8c5ab; }
   .welcome-sub { font-size: 14px; color: #8aaa8e; line-height: 1.8; margin-bottom: 48px; }
   .welcome-buttons { display: flex; flex-direction: column; gap: 12px; }
-  .btn-primary {
-    background: linear-gradient(135deg, #7a9e7e, #5a7e5e);
-    color: white; border: none;
-    padding: 18px 28px; border-radius: 16px;
-    font-size: 16px; font-weight: 500; font-family: inherit;
-    cursor: pointer; text-align: left;
-    display: flex; align-items: center; justify-content: space-between;
-    box-shadow: 0 4px 16px rgba(90,126,94,0.4);
-    -webkit-tap-highlight-color: transparent;
-  }
-  .btn-secondary {
-    background: rgba(255,255,255,0.06); color: #a8c5ab;
-    border: 1px solid rgba(122,158,126,0.3);
-    padding: 16px 28px; border-radius: 16px;
-    font-size: 14px; font-family: inherit;
-    cursor: pointer; text-align: left;
-    -webkit-tap-highlight-color: transparent;
-  }
+  .btn-primary { background: linear-gradient(135deg, #7a9e7e, #5a7e5e); color: white; border: none; padding: 18px 28px; border-radius: 16px; font-size: 16px; font-weight: 500; font-family: inherit; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 16px rgba(90,126,94,0.4); -webkit-tap-highlight-color: transparent; }
+  .btn-secondary { background: rgba(255,255,255,0.06); color: #a8c5ab; border: 1px solid rgba(122,158,126,0.3); padding: 16px 28px; border-radius: 16px; font-size: 14px; font-family: inherit; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; }
+  .disclaimer { font-size: 11px; color: #8aaa8e; text-align: center; padding: 16px 20px 0; line-height: 1.6; }
 
   /* SETUP */
   #setup { background: var(--cream); }
-  .screen-header {
-    background: white; padding: 20px 24px 16px;
-    border-bottom: 1px solid #ede8e0;
-    display: flex; align-items: center; gap: 12px;
-    position: sticky; top: 0; z-index: 10;
-  }
-  .icon-btn {
-    width: 36px; height: 36px; border-radius: 50%;
-    border: none; background: #f0ede8; color: var(--mid);
-    font-size: 18px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-  }
+  .screen-header { background: white; padding: 20px 24px 16px; border-bottom: 1px solid #ede8e0; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: #f0ede8; color: var(--mid); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .screen-title { font-family: 'Noto Serif TC', serif; font-size: 18px; font-weight: 400; }
   .setup-body { padding: 24px 20px; flex: 1; }
   .form-group { margin-bottom: 20px; }
   .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--mid); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }
-  .form-input {
-    width: 100%; padding: 14px 16px;
-    border: 1.5px solid #e0dbd4; border-radius: 12px;
-    font-size: 15px; font-family: inherit; color: var(--charcoal);
-    background: white; outline: none;
-    -webkit-appearance: none;
-  }
+  .form-input { width: 100%; padding: 14px 16px; border: 1.5px solid #e0dbd4; border-radius: 12px; font-size: 15px; font-family: inherit; color: var(--charcoal); background: white; outline: none; -webkit-appearance: none; }
   .form-input:focus { border-color: var(--sage); }
   textarea.form-input { min-height: 100px; resize: none; line-height: 1.6; }
   .module-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .module-btn {
-    padding: 14px 10px; border-radius: 12px;
-    border: 1.5px solid #e0dbd4; background: white;
-    font-size: 13px; font-family: inherit; color: var(--mid);
-    cursor: pointer; text-align: center; line-height: 1.4;
-    -webkit-tap-highlight-color: transparent;
-  }
+  .module-btn { padding: 14px 10px; border-radius: 12px; border: 1.5px solid #e0dbd4; background: white; font-size: 13px; font-family: inherit; color: var(--mid); cursor: pointer; text-align: center; line-height: 1.4; -webkit-tap-highlight-color: transparent; }
   .module-btn.selected { border-color: var(--sage); background: #f0f7f0; color: var(--sage-dark); font-weight: 500; }
   .week-row { display: flex; gap: 8px; }
-  .week-btn {
-    flex: 1; padding: 12px 6px; border-radius: 10px;
-    border: 1.5px solid #e0dbd4; background: white;
-    font-size: 14px; font-family: inherit; color: var(--mid);
-    cursor: pointer; text-align: center;
-    -webkit-tap-highlight-color: transparent;
-  }
+  .week-btn { flex: 1; padding: 12px 6px; border-radius: 10px; border: 1.5px solid #e0dbd4; background: white; font-size: 14px; font-family: inherit; color: var(--mid); cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; }
   .week-btn.selected { border-color: var(--sage); background: #f0f7f0; color: var(--sage-dark); font-weight: 500; }
   .setup-footer { padding: 20px; background: white; border-top: 1px solid #ede8e0; position: sticky; bottom: 0; }
-  .btn-full {
-    width: 100%; background: linear-gradient(135deg, #7a9e7e, #5a7e5e);
-    color: white; border: none; padding: 18px; border-radius: 14px;
-    font-size: 16px; font-weight: 500; font-family: inherit;
-    cursor: pointer; box-shadow: 0 4px 16px rgba(90,126,94,0.3);
-    -webkit-tap-highlight-color: transparent;
-  }
+  .btn-full { width: 100%; background: linear-gradient(135deg, #7a9e7e, #5a7e5e); color: white; border: none; padding: 18px; border-radius: 14px; font-size: 16px; font-weight: 500; font-family: inherit; cursor: pointer; box-shadow: 0 4px 16px rgba(90,126,94,0.3); -webkit-tap-highlight-color: transparent; }
   .btn-full:disabled { background: #c8c0b8; box-shadow: none; cursor: not-allowed; }
 
   /* CHAT */
-  #chat { background: var(--cream); height: 100vh; overflow: hidden; }
-  .chat-header {
-    background: white; padding: 16px 20px;
-    border-bottom: 1px solid #ede8e0;
-    display: flex; align-items: center; gap: 12px;
-  }
-  .chat-info { flex: 1; }
+  #chat { background: var(--cream); height: 100vh; overflow: hidden; display: none; flex-direction: column; }
+  #chat.active { display: flex; }
+  .chat-header { background: white; padding: 16px 20px; border-bottom: 1px solid #ede8e0; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .chat-info { flex: 1; min-width: 0; }
   .chat-name { font-size: 15px; font-weight: 500; }
   .chat-meta { font-size: 11px; color: var(--mid); margin-top: 1px; }
-  .module-badge {
-    background: #f0f7f0; color: var(--sage-dark);
-    border: 1px solid #c8e0ca;
-    padding: 4px 10px; border-radius: 20px;
-    font-size: 11px; font-weight: 500; white-space: nowrap;
-  }
-  .chat-messages {
-    height: calc(100vh - 140px);
-    overflow-y: auto; padding: 20px 16px;
-    display: flex; flex-direction: column; gap: 16px;
-    scroll-behavior: smooth;
-  }
+  .module-badge { background: #f0f7f0; color: var(--sage-dark); border: 1px solid #c8e0ca; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+
+  /* PROGRESS BAR */
+  .progress-bar-wrap { background: white; padding: 8px 20px 10px; border-bottom: 1px solid #ede8e0; flex-shrink: 0; }
+  .progress-label { font-size: 11px; color: var(--mid); margin-bottom: 5px; display: flex; justify-content: space-between; }
+  .progress-track { background: #f0ede8; border-radius: 4px; height: 4px; overflow: hidden; }
+  .progress-fill { background: linear-gradient(90deg, #7a9e7e, #5a7e5e); height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+
+  .chat-messages { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
   .msg { display: flex; flex-direction: column; max-width: 88%; animation: fadeUp 0.3s ease; }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .msg.assistant { align-self: flex-start; }
   .msg.user { align-self: flex-end; }
   .msg-with-avatar { display: flex; align-items: flex-end; gap: 8px; }
-  .coach-avatar {
-    width: 28px; height: 28px; min-width: 28px;
-    background: linear-gradient(135deg, #7a9e7e, #4a6b4e);
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: 13px; color: white; margin-bottom: 4px;
-  }
+  .coach-avatar { width: 28px; height: 28px; min-width: 28px; background: linear-gradient(135deg, #7a9e7e, #4a6b4e); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; color: white; margin-bottom: 4px; }
   .msg-text { padding: 14px 16px; border-radius: 18px; font-size: 15px; line-height: 1.75; }
   .msg.assistant .msg-text { background: white; color: var(--charcoal); border-bottom-left-radius: 4px; box-shadow: 0 4px 24px rgba(0,0,0,0.07); }
   .msg.user .msg-text { background: linear-gradient(135deg, #7a9e7e, #5a7e5e); color: white; border-bottom-right-radius: 4px; }
   .msg-time { font-size: 10px; color: var(--light); margin-top: 4px; padding: 0 4px; }
   .msg.user .msg-time { text-align: right; }
+
+  /* DAY COMPLETE CARD */
+  .day-complete-card { background: white; border-radius: 20px; padding: 28px 24px; margin: 8px 0; box-shadow: 0 4px 24px rgba(0,0,0,0.08); text-align: center; animation: fadeUp 0.4s ease; }
+  .day-complete-icon { font-size: 40px; margin-bottom: 12px; }
+  .day-complete-title { font-family: 'Noto Serif TC', serif; font-size: 20px; color: var(--charcoal); margin-bottom: 8px; }
+  .day-complete-sub { font-size: 14px; color: var(--mid); line-height: 1.7; margin-bottom: 20px; }
+  .btn-complete { background: linear-gradient(135deg, #7a9e7e, #5a7e5e); color: white; border: none; padding: 14px 28px; border-radius: 14px; font-size: 15px; font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
   .typing-indicator { display: flex; align-items: center; gap: 8px; padding: 14px 16px; background: white; border-radius: 18px; border-bottom-left-radius: 4px; box-shadow: 0 4px 24px rgba(0,0,0,0.07); max-width: 80px; }
   .dot { width: 7px; height: 7px; background: var(--sage-light); border-radius: 50%; animation: bounce 1.2s infinite; }
   .dot:nth-child(2) { animation-delay: 0.2s; }
   .dot:nth-child(3) { animation-delay: 0.4s; }
   @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
-  .chat-input-area { background: white; border-top: 1px solid #ede8e0; padding: 12px 16px; display: flex; align-items: flex-end; gap: 10px; }
-  #userInput {
-    flex: 1; border: 1.5px solid #e0dbd4; border-radius: 22px;
-    padding: 12px 18px; font-size: 15px; font-family: inherit;
-    color: var(--charcoal); outline: none; resize: none;
-    min-height: 46px; max-height: 120px; line-height: 1.5;
-    -webkit-appearance: none;
-  }
+
+  .chat-input-area { background: white; border-top: 1px solid #ede8e0; padding: 12px 16px; display: flex; align-items: flex-end; gap: 10px; flex-shrink: 0; }
+  #userInput { flex: 1; border: 1.5px solid #e0dbd4; border-radius: 22px; padding: 12px 18px; font-size: 15px; font-family: inherit; color: var(--charcoal); outline: none; resize: none; min-height: 46px; max-height: 120px; line-height: 1.5; -webkit-appearance: none; }
   #userInput:focus { border-color: var(--sage); }
-  .send-btn {
-    width: 46px; height: 46px; min-width: 46px;
-    border-radius: 50%; background: linear-gradient(135deg, #7a9e7e, #5a7e5e);
-    border: none; color: white; font-size: 20px;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 8px rgba(90,126,94,0.4);
-    -webkit-tap-highlight-color: transparent; flex-shrink: 0;
-  }
+  #userInput:disabled { background: #f5f5f5; }
+  .send-btn { width: 46px; height: 46px; min-width: 46px; border-radius: 50%; background: linear-gradient(135deg, #7a9e7e, #5a7e5e); border: none; color: white; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(90,126,94,0.4); -webkit-tap-highlight-color: transparent; flex-shrink: 0; }
+  .send-btn:disabled { background: #c8c0b8; box-shadow: none; cursor: not-allowed; }
 
   /* DASHBOARD */
-  #dashboard { background: #1a2a1c; color: #e8f0e8; }
+  #dashboard { background: #1a2a1c; color: #e8f0e8; min-height: 100vh; }
   .dash-header { padding: 20px 24px 16px; border-bottom: 1px solid #2d3f2f; display: flex; align-items: center; justify-content: space-between; }
   .dash-header h2 { font-size: 18px; font-weight: 500; color: #a8c5ab; }
   .back-btn { background: none; border: 1px solid #4a6b4e; color: #a8c5ab; padding: 6px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; font-family: inherit; }
@@ -188,17 +106,18 @@
   .student-name { font-size: 16px; font-weight: 500; color: #d4e8d4; margin-bottom: 4px; }
   .student-meta { font-size: 12px; color: #7a9e7e; margin-bottom: 10px; }
   .student-preview { font-size: 13px; color: #9ab09a; line-height: 1.6; max-height: 60px; overflow: hidden; }
-  .convo-detail { display: none; flex-direction: column; height: 100vh; background: #1a2a1c; }
-  .convo-header { padding: 16px 20px; border-bottom: 1px solid #2d3f2f; display: flex; align-items: center; gap: 12px; }
-  .convo-header h3 { font-size: 16px; color: #d4e8d4; flex: 1; }
+  .convo-detail { display: none; flex-direction: column; height: 100vh; background: #1a2a1c; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; }
+  .convo-header { padding: 16px 20px; border-bottom: 1px solid #2d3f2f; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .convo-header h3 { font-size: 15px; color: #d4e8d4; flex: 1; }
   .convo-messages { flex: 1; overflow-y: auto; padding: 16px; }
   .msg-row { margin-bottom: 16px; }
   .msg-label { font-size: 11px; color: #7a9e7e; margin-bottom: 4px; font-weight: 500; text-transform: uppercase; }
   .msg-bubble { background: #243526; border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.7; color: #d4e8d4; }
   .msg-bubble.assistant { background: #1e3320; border-left: 3px solid #7a9e7e; color: #b8d4b8; }
-  .empty-state { text-align: center; padding: 60px 24px; color: var(--mid); }
+  .export-btn { margin: 16px; background: #4a6b4e; color: #d4e8d4; border: none; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-family: inherit; cursor: pointer; width: calc(100% - 32px); }
+  .empty-state { text-align: center; padding: 60px 24px; }
   .empty-icon { font-size: 48px; margin-bottom: 16px; }
-  .disclaimer { font-size: 11px; color: #8aaa8e; text-align: center; padding: 12px 20px; line-height: 1.6; }
+  .loading { text-align: center; padding: 40px; color: #7a9e7e; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -209,9 +128,7 @@
   <div class="welcome-title">探索你<br>內心的<span>那個人</span></div>
   <div class="welcome-sub">透過一個又一個的問題<br>找到驅動你的那個核心</div>
   <div class="welcome-buttons">
-    <button class="btn-primary" onclick="showScreen('setup')">
-      <span>開始新的探索</span><span>→</span>
-    </button>
+    <button class="btn-primary" onclick="showScreen('setup')"><span>開始新的探索</span><span>→</span></button>
     <button class="btn-secondary" onclick="showScreen('dashboard')">📋 教練後台</button>
   </div>
   <div class="disclaimer">本工具為教練輔助工具，不提供心理治療或醫療建議。<br>如有心理健康需求，請諮詢專業人員。</div>
@@ -266,12 +183,19 @@
     </div>
     <div class="module-badge" id="chatBadge">—</div>
   </div>
-  <div class="chat-messages" id="chatMessages">
-    <div class="empty-state"><div class="empty-icon">🌿</div></div>
+  <div class="progress-bar-wrap">
+    <div class="progress-label">
+      <span id="progressLabel">今日進度</span>
+      <span id="progressCount">0 / 8</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    </div>
   </div>
+  <div class="chat-messages" id="chatMessages"></div>
   <div class="chat-input-area">
     <textarea id="userInput" placeholder="輸入你的回答..." rows="1" oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
-    <button class="send-btn" onclick="sendMessage()">↑</button>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
   </div>
 </div>
 
@@ -284,9 +208,10 @@
   <div id="dashContent" class="dash-list"></div>
   <div id="convoDetail" class="convo-detail">
     <div class="convo-header">
-      <button class="icon-btn" style="background:#2d4030;color:#a8c5ab" onclick="closeConvo()">←</button>
+      <button class="icon-btn" style="background:#2d4030;color:#a8c5ab;flex-shrink:0" onclick="closeConvo()">←</button>
       <h3 id="convoTitle">—</h3>
     </div>
+    <button class="export-btn" onclick="exportConvo()">📋 複製完整對話（給教練分析用）</button>
     <div class="convo-messages" id="convoMessages"></div>
   </div>
 </div>
@@ -294,40 +219,52 @@
 <script>
 const HANDBOOK = {
   金錢: {
-    1: { rule:'不替學員說出任何一個詞。挖到讓他身體有感覺的詞為止。', context:`模組一：金錢 第一週：價值觀挖掘\n起點：「如果你現在的金錢狀態變成你想要的樣子，你的生活會有什麼不同？」\n問句鏈Q1-Q11：從外部結果挖到Self Concept核心\n- Q1: 擁有這個目標，會為你的人生帶來什麼你現在感受不到的改變？\n- Q2: 當你真正得到它時，這件事會為你完成什麼樣的任務或功能？\n- Q3: 擁有這個目標，會為你帶來什麼你現在沒有的東西？\n- Q4: 如果你已經擁有了它，那會讓你有能力去做到哪些你以前做不到的事？\n- Q5: 這個結果會提供給你什麼樣的資源，好讓你去追求下一個階段？\n- Q6: 擁有這個東西，對你來說最核心的重要性是什麼？\n- Q7: 當這個目標實現後，它解決了你生命中的哪一個不安或空缺？\n- 橋接：那個不安或空缺，讓你覺得自己是一個什麼樣的人？\n- Q8: 關於這個目標，對你來說最重要的部分是什麼？\n- Q9: 如果這個目標實現了，那會滿足你內心的哪一種渴望？\n- Q10: 當你擁有這個目標時，你覺得自己變成了一個什麼樣的人？\n- Q11: 在那個擁有它的畫面裡，你最喜歡哪一個部分的自己？\n- 落地：在這個領域裡，你是一個什麼樣的人？\n卡點：一直說外部成就→「如果把那些全部拿掉，你還想要什麼？」` },
-    2: { rule:'先讓學員定義每個詞，再排序。', context:`模組一：金錢 第二週：排序＋願景建立\n確認上週清單，定義每個詞，兩兩配對排序，建立願景畫面，落地問句。` },
-    3: { rule:'從家族語錄切入，找到阻力真正的根源。', context:`模組一：金錢 第三週：家族語錄信念辨識\n找出最有身體反應的家族金錢語錄，深入記憶，找正向意圖，建立新信念。` },
-    4: { rule:'整合所有材料，建立新的Self Concept宣言。', context:`模組一：金錢 第四週：Self Concept整合宣言\n回顧三週材料，確認核心三個詞，建立宣言，讓學員唸出並觀察身體反應。` }
+    1: { rule:'不替學員說出任何一個詞。挖到讓他身體有感覺的詞為止。', context:`模組一：金錢 第一週：價值觀挖掘\n起點：「如果你現在的金錢狀態變成你想要的樣子，你的生活會有什麼不同？」\nQ1: 擁有這個目標，會為你的人生帶來什麼你現在感受不到的改變？\nQ2: 當你真正得到它時，這件事會為你完成什麼樣的任務或功能？\nQ3: 擁有這個目標，會為你帶來什麼你現在沒有的東西？\nQ4: 如果你已經擁有了它，那會讓你有能力去做到哪些你以前做不到的事？\nQ5: 這個結果會提供給你什麼樣的資源，好讓你去追求下一個階段？\nQ6: 擁有這個東西，對你來說最核心的重要性是什麼？\nQ7: 當這個目標實現後，它解決了你生命中的哪一個不安或空缺？\n橋接：那個不安或空缺，讓你覺得自己是一個什麼樣的人？\nQ8: 在那個擁有它的畫面裡，你最喜歡哪一個部分的自己？\n落地：在這個領域裡，你是一個什麼樣的人？\n卡點：一直說外部成就→「如果把那些全部拿掉，你還想要什麼？」` },
+    2: { rule:'先讓學員定義每個詞，再排序。', context:`模組一：金錢 第二週：排序＋願景建立\n確認上週清單，定義每個詞，兩兩配對排序，建立願景畫面。` },
+    3: { rule:'從家族語錄切入，找到阻力真正的根源。', context:`模組一：金錢 第三週：家族語錄信念辨識` },
+    4: { rule:'整合所有材料，建立新的Self Concept宣言。', context:`模組一：金錢 第四週：Self Concept整合宣言` }
   },
   事業: {
-    1: { rule:'所有答案都繼續往下問，不幫學員評估答案是否夠真實。', context:`模組二：事業 第一週：價值觀挖掘\n起點：「在事業上，你真正想要什麼？」\n同金錢模組Q1-Q11問句鏈，聚焦事業面向。\n健康能量融入：「你現在的工作狀態，你的身體感受是什麼？輕還是重？」\n卡點：一直說外部環境→「在那些之外，你自己裡面有什麼聲音？」` },
-    2: { rule:'排序＋事業願景建立，健康能量做連結。', context:`模組二：事業 第二週：排序＋願景` },
+    1: { rule:'所有答案都繼續往下問，不幫學員評估答案是否夠真實。', context:`模組二：事業 第一週：價值觀挖掘\n起點：「在事業上，你真正想要什麼？」\n同金錢Q1-Q8問句鏈，聚焦事業。健康能量融入：「你現在的工作狀態，你的身體感受是什麼？輕還是重？」\n卡點：一直說外部環境→「在那些之外，你自己裡面有什麼聲音？」` },
+    2: { rule:'排序＋事業願景建立。', context:`模組二：事業 第二週：排序＋願景` },
     3: { rule:'找出阻止事業前進的核心信念。', context:`模組二：事業 第三週：職場信念辨識` },
-    4: { rule:'整合宣言，事業Self Concept完整建立。', context:`模組二：事業 第四週：整合宣言` }
+    4: { rule:'整合宣言。', context:`模組二：事業 第四週：整合宣言` }
   },
   親子家庭: {
-    1: { rule:'不評論父母，焦點永遠在學員自己的需求和選擇上。', context:`模組三：親子家庭 第一週：雙向探索\n子女版起點：「在你和父母的關係裡，你真正想要的是什麼？」\n父母版起點：「作為父母，在和孩子的關係裡，你真正想要的是什麼？」\n走Q1-Q11問句鏈，最後各自有落地問句。` },
+    1: { rule:'不評論父母，焦點永遠在學員自己的需求和選擇上。', context:`模組三：親子家庭 第一週：雙向探索\n子女版起點：「在你和父母的關係裡，你真正想要的是什麼？」\n父母版起點：「作為父母，在和孩子的關係裡，你真正想要的是什麼？」\n走Q1-Q8問句鏈。` },
     2: { rule:'排序親子關係的核心價值觀。', context:`模組三：親子家庭 第二週：排序＋願景` },
     3: { rule:'家族模式識別與轉化。', context:`模組三：親子家庭 第三週：家族模式` },
     4: { rule:'整合宣言。', context:`模組三：親子家庭 第四週：整合宣言` }
   },
   伴侶關係: {
-    1: { rule:'焦點永遠在學員，不在伴侶。學員說伴侶的行為，把它翻譯成學員的感受需求。', context:`模組四：伴侶關係 第一週：價值觀挖掘\n起點：「在親密關係裡，你希望可以感受到什麼？你覺得什麼是重要的？」\n問句鏈Q1-Q11：從外部條件挖到內在感受需求。\n自我情緒融入：「在關係裡，你最難被接住的那個情緒是什麼？」\n落地：「在親密關係裡，你是一個什麼樣的人？」\n卡點：一直說對方的問題→「我聽到了。在你說的這些裡，你自己最想感受到的是什麼？」` },
+    1: { rule:'焦點永遠在學員，不在伴侶。學員說伴侶的行為，把它翻譯成學員的感受需求。', context:`模組四：伴侶關係 第一週：價值觀挖掘\n起點：「在親密關係裡，你希望可以感受到什麼？你覺得什麼是重要的？」\nQ1-Q8問句鏈：從外部條件挖到內在感受需求。\n自我情緒融入：「在關係裡，你最難被接住的那個情緒是什麼？」\n卡點：一直說對方問題→「我聽到了。在你說的這些裡，你自己最想感受到的是什麼？」` },
     2: { rule:'排序關係價值觀，建立親密願景。', context:`模組四：伴侶關係 第二週：排序＋願景` },
     3: { rule:'找出關係信念的根源。', context:`模組四：伴侶關係 第三週：關係信念` },
-    4: { rule:'整合宣言，在關係中的Self Concept。', context:`模組四：伴侶關係 第四週：整合宣言` }
+    4: { rule:'整合宣言。', context:`模組四：伴侶關係 第四週：整合宣言` }
   }
 };
 
-let state = { studentName:'', module:'', week:0, sessionNotes:'', messages:[], isLoading:false };
-let allSessions = JSON.parse(localStorage.getItem('coaching_sessions') || '[]');
+const MAX_QUESTIONS = 8;
+let state = { studentName:'', module:'', week:0, sessionNotes:'', messages:[], isLoading:false, questionNumber:0, dayComplete:false };
+let currentConvoData = null;
 
+// ==================== INIT ====================
+async function initSetup() {
+  await setupDatabase();
+}
+
+async function setupDatabase() {
+  try { await fetch('/api/setup'); } catch(e) {}
+}
+
+// ==================== NAVIGATION ====================
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (id === 'dashboard') renderDashboard();
+  if (id === 'dashboard') loadDashboard();
 }
 
+// ==================== SETUP ====================
 function selectModule(btn, module) {
   document.querySelectorAll('.module-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
@@ -349,16 +286,68 @@ function checkReady() {
 
 document.getElementById('studentName').addEventListener('input', checkReady);
 
-function startChat() {
+// ==================== CHAT ====================
+async function startChat() {
   state.studentName = document.getElementById('studentName').value.trim();
   state.sessionNotes = document.getElementById('sessionNotes').value.trim();
   state.messages = [];
+  state.questionNumber = 0;
+  state.dayComplete = false;
+
   document.getElementById('chatName').textContent = state.studentName;
-  document.getElementById('chatMeta').textContent = `模組${['一','二','三','四'][['金錢','事業','親子家庭','伴侶關係'].indexOf(state.module)]} · 第${state.week}週`;
+  const moduleNums = ['一','二','三','四'];
+  const modules = ['金錢','事業','親子家庭','伴侶關係'];
+  document.getElementById('chatMeta').textContent = `模組${moduleNums[modules.indexOf(state.module)]} · 第${state.week}週`;
   document.getElementById('chatBadge').textContent = state.module;
   document.getElementById('chatMessages').innerHTML = '';
+
+  updateProgress(0);
   showScreen('chat');
-  setTimeout(() => addMessage('assistant', getOpeningQuestion()), 600);
+
+  // 載入之前的對話記錄
+  await loadPreviousMessages();
+
+  if (state.messages.length === 0) {
+    setTimeout(() => addMessage('assistant', getOpeningQuestion()), 600);
+  }
+}
+
+async function loadPreviousMessages() {
+  try {
+    const res = await fetch(`/api/sessions?action=messages&studentName=${encodeURIComponent(state.studentName)}&module=${encodeURIComponent(state.module)}&week=${state.week}`);
+    const data = await res.json();
+
+    if (data.messages && data.messages.length > 0) {
+      const msgs = document.getElementById('chatMessages');
+      msgs.innerHTML = '';
+
+      // 找到最後問題編號
+      const userMsgs = data.messages.filter(m => m.role === 'user');
+      state.questionNumber = userMsgs.length;
+
+      data.messages.forEach(m => {
+        state.messages.push({ role: m.role, content: m.content });
+        renderMessage(m.role, m.content);
+      });
+
+      updateProgress(state.questionNumber);
+
+      if (state.questionNumber >= MAX_QUESTIONS) {
+        state.dayComplete = true;
+        showDayComplete();
+      } else {
+        // 顯示繼續提示
+        const continueNote = document.createElement('div');
+        continueNote.style.cssText = 'text-align:center;font-size:12px;color:#aaa;padding:8px;margin:4px 0;';
+        continueNote.textContent = `── 繼續上次的探索 ──`;
+        document.getElementById('chatMessages').appendChild(continueNote);
+      }
+
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  } catch(e) {
+    console.log('No previous messages');
+  }
 }
 
 function getOpeningQuestion() {
@@ -374,10 +363,8 @@ function getOpeningQuestion() {
   return starters[state.module];
 }
 
-function addMessage(role, text) {
+function renderMessage(role, text) {
   const msgs = document.getElementById('chatMessages');
-  const empty = msgs.querySelector('.empty-state');
-  if (empty) empty.remove();
   const div = document.createElement('div');
   div.className = `msg ${role}`;
   const time = new Date().toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'});
@@ -388,8 +375,36 @@ function addMessage(role, text) {
   }
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
-  state.messages.push({role, content:text, time});
-  saveSession();
+}
+
+function addMessage(role, text) {
+  renderMessage(role, text);
+  state.messages.push({ role, content: text });
+}
+
+function updateProgress(count) {
+  const pct = Math.min((count / MAX_QUESTIONS) * 100, 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressCount').textContent = `${count} / ${MAX_QUESTIONS}`;
+  document.getElementById('progressLabel').textContent = count >= MAX_QUESTIONS ? '今日探索完成 🌿' : '今日進度';
+}
+
+function showDayComplete() {
+  const msgs = document.getElementById('chatMessages');
+  const card = document.createElement('div');
+  card.className = 'day-complete-card';
+  card.innerHTML = `
+    <div class="day-complete-icon">🌿</div>
+    <div class="day-complete-title">今天的探索先到這裡</div>
+    <div class="day-complete-sub">你今天挖出了很多重要的東西。<br>讓這些答案在心裡沉澱一天。<br>明天我們繼續往更深的地方走。</div>
+    <button class="btn-complete" onclick="showScreen('welcome')">回到首頁</button>
+  `;
+  msgs.appendChild(card);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  document.getElementById('userInput').disabled = true;
+  document.getElementById('sendBtn').disabled = true;
+  state.dayComplete = true;
 }
 
 function showTyping() {
@@ -404,13 +419,16 @@ function showTyping() {
 function hideTyping() { const t = document.getElementById('typing'); if (t) t.remove(); }
 
 async function sendMessage() {
+  if (state.dayComplete) return;
   const input = document.getElementById('userInput');
   const text = input.value.trim();
   if (!text || state.isLoading) return;
+
   input.value = ''; input.style.height = 'auto';
   addMessage('user', text);
   state.isLoading = true;
   showTyping();
+
   try {
     const handbook = HANDBOOK[state.module][state.week];
     const notes = state.sessionNotes ? `\n\n上次Session重點：${state.sessionNotes}` : '';
@@ -418,7 +436,8 @@ async function sendMessage() {
 
 學員姓名：${state.studentName}
 目前模組：${state.module}
-目前週次：第${state.week}週${notes}
+目前週次：第${state.week}週
+今日問題進度：第${state.questionNumber + 1}題，共${MAX_QUESTIONS}題${notes}
 
 核心守則：${handbook.rule}
 
@@ -428,75 +447,120 @@ ${handbook.context}
 你的角色規則：
 1. 你只問問題，不給建議，不做評論，不替學員說出任何詞彙
 2. 每次只問一個問題，問完就停
-3. 學員說什麼都繼續往下問，不評價答案的好壞
-4. 若學員停在表層，用手冊的卡點處理問句帶他往內走
+3. 學員說什麼都繼續往下問，不評價答案好壞
+4. 若學員停在表層，用手冊的卡點問句帶他往內走
 5. 問句要溫暖、自然，不要像問卷
 6. 當學員說出某個詞時有停頓或情緒，停在那裡繼續深挖
-7. 不要分析學員，不要解釋框架，就是問問題
+7. 不分析學員，不解釋框架，就是問問題
 8. 中文回覆，語氣溫和而有深度
 9. 回覆簡短，通常就是一個問句加一句承接語`;
 
-    const apiMessages = state.messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({role:m.role, content:m.content}));
+    const apiMessages = state.messages.map(m => ({role:m.role, content:m.content}));
 
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({systemPrompt, messages: apiMessages})
+      body: JSON.stringify({
+        systemPrompt,
+        messages: apiMessages,
+        studentName: state.studentName,
+        module: state.module,
+        week: state.week,
+        sessionNotes: state.sessionNotes,
+        questionNumber: state.questionNumber
+      })
     });
 
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
     hideTyping();
     addMessage('assistant', data.content);
+
+    state.questionNumber = data.questionNumber || state.questionNumber + 1;
+    updateProgress(state.questionNumber);
+
+    if (data.dayComplete) {
+      setTimeout(() => showDayComplete(), 1000);
+    }
+
   } catch(e) {
     hideTyping();
     addMessage('assistant', '抱歉，連線發生了問題。請稍後再試。');
   }
+
   state.isLoading = false;
 }
 
 function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
 function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
-function saveSession() {
-  const existing = allSessions.findIndex(s => s.studentName === state.studentName && s.module === state.module && s.week === state.week);
-  const sessionData = { studentName:state.studentName, module:state.module, week:state.week, messages:state.messages, lastUpdated:new Date().toISOString() };
-  if (existing >= 0) allSessions[existing] = sessionData;
-  else allSessions.unshift(sessionData);
-  localStorage.setItem('coaching_sessions', JSON.stringify(allSessions));
-}
-
-function renderDashboard() {
-  allSessions = JSON.parse(localStorage.getItem('coaching_sessions') || '[]');
+// ==================== DASHBOARD ====================
+async function loadDashboard() {
   const container = document.getElementById('dashContent');
-  document.getElementById('convoDetail').style.display = 'none';
-  container.style.display = 'block';
-  if (allSessions.length === 0) {
-    container.innerHTML = `<div class="empty-state" style="color:#7a9e7e"><div class="empty-icon">🌿</div><div style="font-size:14px;line-height:1.8">還沒有學員記錄</div></div>`;
-    return;
+  container.innerHTML = '<div class="loading">載入中...</div>';
+
+  try {
+    const res = await fetch('/api/sessions');
+    const data = await res.json();
+
+    if (!data.sessions || data.sessions.length === 0) {
+      container.innerHTML = `<div class="empty-state" style="color:#7a9e7e"><div class="empty-icon">🌿</div><div style="font-size:14px;line-height:1.8">還沒有學員記錄</div></div>`;
+      return;
+    }
+
+    container.innerHTML = data.sessions.map((s, i) => {
+      const preview = s.last_answer ? s.last_answer.substring(0, 60) + '...' : '尚未回答';
+      const date = new Date(s.updated_at).toLocaleDateString('zh-TW');
+      return `<div class="student-card" onclick="showConvo('${s.student_name}','${s.module}',${s.week})">
+        <div class="student-name">${s.student_name}</div>
+        <div class="student-meta">${s.module} · 第${s.week}週 · ${date} · ${s.answer_count || 0}則回答</div>
+        <div class="student-preview">${preview}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state" style="color:#7a9e7e"><div style="font-size:14px">載入失敗，請重試</div></div>`;
   }
-  container.innerHTML = allSessions.map((s,i) => {
-    const lastMsg = s.messages.filter(m => m.role === 'user').slice(-1)[0];
-    const preview = lastMsg ? lastMsg.content.substring(0,60)+'...' : '尚未回答';
-    const date = new Date(s.lastUpdated).toLocaleDateString('zh-TW');
-    const count = s.messages.filter(m => m.role === 'user').length;
-    return `<div class="student-card" onclick="showConvo(${i})"><div class="student-name">${s.studentName}</div><div class="student-meta">${s.module} · 第${s.week}週 · ${date} · ${count}則回答</div><div class="student-preview">${preview}</div></div>`;
-  }).join('');
 }
 
-function showConvo(idx) {
-  const s = allSessions[idx];
+async function showConvo(studentName, module, week) {
   document.getElementById('dashContent').style.display = 'none';
   const detail = document.getElementById('convoDetail');
   detail.style.display = 'flex';
-  document.getElementById('convoTitle').textContent = `${s.studentName} · ${s.module} · 第${s.week}週`;
-  document.getElementById('convoMessages').innerHTML = s.messages.map(m => `<div class="msg-row"><div class="msg-label">${m.role==='assistant'?'✦ 助理':'👤 '+s.studentName}</div><div class="msg-bubble ${m.role}">${m.content.replace(/\n/g,'<br>')}</div></div>`).join('');
+  document.getElementById('convoTitle').textContent = `${studentName} · ${module} · 第${week}週`;
+  document.getElementById('convoMessages').innerHTML = '<div class="loading">載入中...</div>';
+
+  try {
+    const res = await fetch(`/api/sessions?action=messages&studentName=${encodeURIComponent(studentName)}&module=${encodeURIComponent(module)}&week=${week}`);
+    const data = await res.json();
+    currentConvoData = { studentName, module, week, messages: data.messages };
+
+    document.getElementById('convoMessages').innerHTML = data.messages.map(m => `
+      <div class="msg-row">
+        <div class="msg-label">${m.role === 'assistant' ? '✦ 助理' : '👤 ' + studentName}</div>
+        <div class="msg-bubble ${m.role}">${m.content.replace(/\n/g,'<br>')}</div>
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('convoMessages').innerHTML = '<div style="color:#7a9e7e;padding:20px">載入失敗</div>';
+  }
+}
+
+function exportConvo() {
+  if (!currentConvoData) return;
+  const { studentName, module, week, messages } = currentConvoData;
+  let text = `學員：${studentName}\n模組：${module} · 第${week}週\n日期：${new Date().toLocaleDateString('zh-TW')}\n\n`;
+  text += messages.map(m => `${m.role === 'assistant' ? '【助理】' : '【學員】'}\n${m.content}`).join('\n\n');
+  navigator.clipboard.writeText(text).then(() => alert('已複製！可以貼給教練分析用。'));
 }
 
 function closeConvo() {
   document.getElementById('convoDetail').style.display = 'none';
   document.getElementById('dashContent').style.display = 'block';
+  currentConvoData = null;
 }
+
+// 初始化
+initSetup();
 </script>
 </body>
 </html>
