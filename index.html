@@ -37,6 +37,7 @@
   .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--mid); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }
   .form-input { width: 100%; padding: 14px 16px; border: 1.5px solid #e0dbd4; border-radius: 12px; font-size: 15px; font-family: inherit; color: var(--charcoal); background: white; outline: none; -webkit-appearance: none; }
   .form-input:focus { border-color: var(--sage); }
+  .form-error { display: none; color: #c0392b; font-size: 12px; margin-top: 6px; padding-left: 4px; }
   textarea.form-input { min-height: 100px; resize: none; line-height: 1.6; }
   .module-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .module-btn { padding: 14px 10px; border-radius: 12px; border: 1.5px solid #e0dbd4; background: white; font-size: 13px; font-family: inherit; color: var(--mid); cursor: pointer; text-align: center; line-height: 1.4; -webkit-tap-highlight-color: transparent; }
@@ -49,20 +50,20 @@
   .btn-full:disabled { background: #c8c0b8; box-shadow: none; cursor: not-allowed; }
 
   /* CHAT */
-  #chat { background: var(--cream); height: 100vh; overflow: hidden; display: none; flex-direction: column; }
-  #chat.active { display: flex; }
+  #chat { background: var(--cream); height: 100vh; overflow: hidden; }
   .chat-header { background: white; padding: 16px 20px; border-bottom: 1px solid #ede8e0; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
   .chat-info { flex: 1; min-width: 0; }
   .chat-name { font-size: 15px; font-weight: 500; }
   .chat-meta { font-size: 11px; color: var(--mid); margin-top: 1px; }
   .module-badge { background: #f0f7f0; color: var(--sage-dark); border: 1px solid #c8e0ca; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; white-space: nowrap; }
-
-  /* PROGRESS BAR */
   .progress-bar-wrap { background: white; padding: 8px 20px 10px; border-bottom: 1px solid #ede8e0; flex-shrink: 0; }
   .progress-label { font-size: 11px; color: var(--mid); margin-bottom: 5px; display: flex; justify-content: space-between; }
   .progress-track { background: #f0ede8; border-radius: 4px; height: 4px; overflow: hidden; }
   .progress-fill { background: linear-gradient(90deg, #7a9e7e, #5a7e5e); height: 100%; border-radius: 4px; transition: width 0.4s ease; }
-
+  .day-indicator { background: white; padding: 6px 20px; border-bottom: 1px solid #ede8e0; display: flex; gap: 6px; flex-shrink: 0; }
+  .day-dot { width: 8px; height: 8px; border-radius: 50%; background: #e0dbd4; }
+  .day-dot.done { background: var(--sage); }
+  .day-dot.today { background: var(--sage-dark); transform: scale(1.3); }
   .chat-messages { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
   .msg { display: flex; flex-direction: column; max-width: 88%; animation: fadeUp 0.3s ease; }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -75,20 +76,17 @@
   .msg.user .msg-text { background: linear-gradient(135deg, #7a9e7e, #5a7e5e); color: white; border-bottom-right-radius: 4px; }
   .msg-time { font-size: 10px; color: var(--light); margin-top: 4px; padding: 0 4px; }
   .msg.user .msg-time { text-align: right; }
-
-  /* DAY COMPLETE CARD */
+  .day-divider { text-align: center; font-size: 11px; color: var(--light); padding: 8px 0; }
   .day-complete-card { background: white; border-radius: 20px; padding: 28px 24px; margin: 8px 0; box-shadow: 0 4px 24px rgba(0,0,0,0.08); text-align: center; animation: fadeUp 0.4s ease; }
   .day-complete-icon { font-size: 40px; margin-bottom: 12px; }
   .day-complete-title { font-family: 'Noto Serif TC', serif; font-size: 20px; color: var(--charcoal); margin-bottom: 8px; }
   .day-complete-sub { font-size: 14px; color: var(--mid); line-height: 1.7; margin-bottom: 20px; }
   .btn-complete { background: linear-gradient(135deg, #7a9e7e, #5a7e5e); color: white; border: none; padding: 14px 28px; border-radius: 14px; font-size: 15px; font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-
   .typing-indicator { display: flex; align-items: center; gap: 8px; padding: 14px 16px; background: white; border-radius: 18px; border-bottom-left-radius: 4px; box-shadow: 0 4px 24px rgba(0,0,0,0.07); max-width: 80px; }
   .dot { width: 7px; height: 7px; background: var(--sage-light); border-radius: 50%; animation: bounce 1.2s infinite; }
   .dot:nth-child(2) { animation-delay: 0.2s; }
   .dot:nth-child(3) { animation-delay: 0.4s; }
   @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
-
   .chat-input-area { background: white; border-top: 1px solid #ede8e0; padding: 12px 16px; display: flex; align-items: flex-end; gap: 10px; flex-shrink: 0; }
   #userInput { flex: 1; border: 1.5px solid #e0dbd4; border-radius: 22px; padding: 12px 18px; font-size: 15px; font-family: inherit; color: var(--charcoal); outline: none; resize: none; min-height: 46px; max-height: 120px; line-height: 1.5; -webkit-appearance: none; }
   #userInput:focus { border-color: var(--sage); }
@@ -104,8 +102,11 @@
   .dash-list { padding: 16px; flex: 1; overflow-y: auto; }
   .student-card { background: #243526; border-radius: 12px; padding: 16px; margin-bottom: 12px; cursor: pointer; }
   .student-name { font-size: 16px; font-weight: 500; color: #d4e8d4; margin-bottom: 4px; }
-  .student-meta { font-size: 12px; color: #7a9e7e; margin-bottom: 10px; }
-  .student-preview { font-size: 13px; color: #9ab09a; line-height: 1.6; max-height: 60px; overflow: hidden; }
+  .student-meta { font-size: 12px; color: #7a9e7e; margin-bottom: 6px; }
+  .student-progress { display: flex; gap: 4px; margin-bottom: 8px; }
+  .progress-dot { width: 10px; height: 10px; border-radius: 50%; background: #2d4030; }
+  .progress-dot.done { background: #7a9e7e; }
+  .student-preview { font-size: 13px; color: #9ab09a; line-height: 1.6; max-height: 40px; overflow: hidden; }
   .convo-detail { display: none; flex-direction: column; height: 100vh; background: #1a2a1c; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; }
   .convo-header { padding: 16px 20px; border-bottom: 1px solid #2d3f2f; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
   .convo-header h3 { font-size: 15px; color: #d4e8d4; flex: 1; }
@@ -115,9 +116,8 @@
   .msg-bubble { background: #243526; border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.7; color: #d4e8d4; }
   .msg-bubble.assistant { background: #1e3320; border-left: 3px solid #7a9e7e; color: #b8d4b8; }
   .export-btn { margin: 16px; background: #4a6b4e; color: #d4e8d4; border: none; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-family: inherit; cursor: pointer; width: calc(100% - 32px); }
-  .empty-state { text-align: center; padding: 60px 24px; }
-  .empty-icon { font-size: 48px; margin-bottom: 16px; }
   .loading { text-align: center; padding: 40px; color: #7a9e7e; font-size: 14px; }
+  .empty-state { text-align: center; padding: 60px 24px; }
 </style>
 </head>
 <body>
@@ -129,7 +129,7 @@
   <div class="welcome-sub">透過一個又一個的問題<br>找到驅動你的那個核心</div>
   <div class="welcome-buttons">
     <button class="btn-primary" onclick="showScreen('setup')"><span>開始新的探索</span><span>→</span></button>
-    <button class="btn-secondary" onclick="showScreen('dashboard')">📋 教練後台</button>
+    <button class="btn-secondary" onclick="showDashboard()">📋 教練後台</button>
   </div>
   <div class="disclaimer">本工具為教練輔助工具，不提供心理治療或醫療建議。<br>如有心理健康需求，請諮詢專業人員。</div>
 </div>
@@ -143,8 +143,8 @@
   <div class="setup-body">
     <div class="form-group">
       <label class="form-label">你的專屬編號</label>
-      <input type="text" class="form-input" id="studentName" placeholder="輸入教練給你的編號（例如 A001）" maxlength="4">
-<div id="nameError" style="display:none;color:#c0392b;font-size:12px;margin-top:6px;padding-left:4px">格式錯誤，請輸入教練給你的專屬編號</div>
+      <input type="text" class="form-input" id="studentId" placeholder="輸入教練給你的編號（例如 A001）" maxlength="4">
+      <div class="form-error" id="idError">格式錯誤，請輸入教練給你的專屬編號（例如 A001）</div>
     </div>
     <div class="form-group">
       <label class="form-label">選擇探索模組</label>
@@ -184,6 +184,7 @@
     </div>
     <div class="module-badge" id="chatBadge">—</div>
   </div>
+  <div class="day-indicator" id="dayIndicator"></div>
   <div class="progress-bar-wrap">
     <div class="progress-label">
       <span id="progressLabel">今日進度</span>
@@ -221,55 +222,54 @@
 const HANDBOOK = {
   金錢: {
     1: { rule:'不替學員說出任何一個詞。挖到讓他身體有感覺的詞為止。', context:`模組一：金錢 第一週：價值觀挖掘\n起點：「如果你現在的金錢狀態變成你想要的樣子，你的生活會有什麼不同？」\nQ1: 擁有這個目標，會為你的人生帶來什麼你現在感受不到的改變？\nQ2: 當你真正得到它時，這件事會為你完成什麼樣的任務或功能？\nQ3: 擁有這個目標，會為你帶來什麼你現在沒有的東西？\nQ4: 如果你已經擁有了它，那會讓你有能力去做到哪些你以前做不到的事？\nQ5: 這個結果會提供給你什麼樣的資源，好讓你去追求下一個階段？\nQ6: 擁有這個東西，對你來說最核心的重要性是什麼？\nQ7: 當這個目標實現後，它解決了你生命中的哪一個不安或空缺？\n橋接：那個不安或空缺，讓你覺得自己是一個什麼樣的人？\nQ8: 在那個擁有它的畫面裡，你最喜歡哪一個部分的自己？\n落地：在這個領域裡，你是一個什麼樣的人？\n卡點：一直說外部成就→「如果把那些全部拿掉，你還想要什麼？」` },
-    2: { rule:'先讓學員定義每個詞，再排序。', context:`模組一：金錢 第二週：排序＋願景建立\n確認上週清單，定義每個詞，兩兩配對排序，建立願景畫面。` },
+    2: { rule:'先讓學員定義每個詞，再排序。', context:`模組一：金錢 第二週：排序＋願景建立` },
     3: { rule:'從家族語錄切入，找到阻力真正的根源。', context:`模組一：金錢 第三週：家族語錄信念辨識` },
     4: { rule:'整合所有材料，建立新的Self Concept宣言。', context:`模組一：金錢 第四週：Self Concept整合宣言` }
   },
   事業: {
     1: { rule:'所有答案都繼續往下問，不幫學員評估答案是否夠真實。', context:`模組二：事業 第一週：價值觀挖掘\n起點：「在事業上，你真正想要什麼？」\n同金錢Q1-Q8問句鏈，聚焦事業。健康能量融入：「你現在的工作狀態，你的身體感受是什麼？輕還是重？」\n卡點：一直說外部環境→「在那些之外，你自己裡面有什麼聲音？」` },
-    2: { rule:'排序＋事業願景建立。', context:`模組二：事業 第二週：排序＋願景` },
-    3: { rule:'找出阻止事業前進的核心信念。', context:`模組二：事業 第三週：職場信念辨識` },
-    4: { rule:'整合宣言。', context:`模組二：事業 第四週：整合宣言` }
+    2: { rule:'排序＋事業願景建立。', context:`模組二：事業 第二週` },
+    3: { rule:'找出阻止事業前進的核心信念。', context:`模組二：事業 第三週` },
+    4: { rule:'整合宣言。', context:`模組二：事業 第四週` }
   },
   親子家庭: {
-    1: { rule:'不評論父母，焦點永遠在學員自己的需求和選擇上。', context:`模組三：親子家庭 第一週：雙向探索\n子女版起點：「在你和父母的關係裡，你真正想要的是什麼？」\n父母版起點：「作為父母，在和孩子的關係裡，你真正想要的是什麼？」\n走Q1-Q8問句鏈。` },
-    2: { rule:'排序親子關係的核心價值觀。', context:`模組三：親子家庭 第二週：排序＋願景` },
-    3: { rule:'家族模式識別與轉化。', context:`模組三：親子家庭 第三週：家族模式` },
-    4: { rule:'整合宣言。', context:`模組三：親子家庭 第四週：整合宣言` }
+    1: { rule:'不評論父母，焦點永遠在學員自己的需求和選擇上。', context:`模組三：親子家庭 第一週\n子女版起點：「在你和父母的關係裡，你真正想要的是什麼？」\n父母版起點：「作為父母，在和孩子的關係裡，你真正想要的是什麼？」` },
+    2: { rule:'排序親子關係的核心價值觀。', context:`模組三：親子家庭 第二週` },
+    3: { rule:'家族模式識別與轉化。', context:`模組三：親子家庭 第三週` },
+    4: { rule:'整合宣言。', context:`模組三：親子家庭 第四週` }
   },
   伴侶關係: {
-    1: { rule:'焦點永遠在學員，不在伴侶。學員說伴侶的行為，把它翻譯成學員的感受需求。', context:`模組四：伴侶關係 第一週：價值觀挖掘\n起點：「在親密關係裡，你希望可以感受到什麼？你覺得什麼是重要的？」\nQ1-Q8問句鏈：從外部條件挖到內在感受需求。\n自我情緒融入：「在關係裡，你最難被接住的那個情緒是什麼？」\n卡點：一直說對方問題→「我聽到了。在你說的這些裡，你自己最想感受到的是什麼？」` },
-    2: { rule:'排序關係價值觀，建立親密願景。', context:`模組四：伴侶關係 第二週：排序＋願景` },
-    3: { rule:'找出關係信念的根源。', context:`模組四：伴侶關係 第三週：關係信念` },
-    4: { rule:'整合宣言。', context:`模組四：伴侶關係 第四週：整合宣言` }
+    1: { rule:'焦點永遠在學員，不在伴侶。學員說伴侶的行為，把它翻譯成學員的感受需求。', context:`模組四：伴侶關係 第一週\n起點：「在親密關係裡，你希望可以感受到什麼？你覺得什麼是重要的？」\nQ1-Q8問句鏈：從外部條件挖到內在感受需求。\n卡點：一直說對方問題→「我聽到了。在你說的這些裡，你自己最想感受到的是什麼？」` },
+    2: { rule:'排序關係價值觀，建立親密願景。', context:`模組四：伴侶關係 第二週` },
+    3: { rule:'找出關係信念的根源。', context:`模組四：伴侶關係 第三週` },
+    4: { rule:'整合宣言。', context:`模組四：伴侶關係 第四週` }
   }
 };
 
 const MAX_QUESTIONS = 8;
-let state = { studentName:'', module:'', week:0, sessionNotes:'', messages:[], isLoading:false, questionNumber:0, dayComplete:false };
+let state = {
+  studentId: '', module: '', week: 0, sessionNotes: '',
+  messages: [], isLoading: false,
+  questionNumber: 0, dayNumber: 1, dayComplete: false
+};
 let currentConvoData = null;
 
 // ==================== INIT ====================
 async function initSetup() {
-  await setupDatabase();
-}
-
-async function setupDatabase() {
   try { await fetch('/api/setup'); } catch(e) {}
 }
 
 // ==================== NAVIGATION ====================
 function showScreen(id) {
-  if (id === 'dashboard') {
-    const pwd = prompt('請輸入教練密碼：');
-    if (pwd !== 'TheBestSCCoachVivi2727') {
-      alert('密碼錯誤');
-      return;
-    }
-  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (id === 'dashboard') loadDashboard();
+}
+
+function showDashboard() {
+  const pwd = prompt('請輸入教練密碼：');
+  if (pwd !== 'vivi2024coach') { alert('密碼錯誤'); return; }
+  showScreen('dashboard');
+  loadDashboard();
 }
 
 // ==================== SETUP ====================
@@ -288,89 +288,105 @@ function selectWeek(btn, week) {
 }
 
 function checkReady() {
-  const name = document.getElementById('studentName').value.trim();
-  const validFormat = /^[A-Za-z]\d{3}$/.test(name);
-  const errorEl = document.getElementById('nameError');
-  
-  if (name && !validFormat) {
-    errorEl.style.display = 'block';
-  } else {
-    errorEl.style.display = 'none';
-  }
-  
+  const id = document.getElementById('studentId').value.trim();
+  const validFormat = /^[A-Za-z]\d{3}$/.test(id);
+  const errorEl = document.getElementById('idError');
+  if (id && !validFormat) { errorEl.style.display = 'block'; } 
+  else { errorEl.style.display = 'none'; }
   document.getElementById('startBtn').disabled = !(validFormat && state.module && state.week);
 }
 
-document.getElementById('studentName').addEventListener('input', checkReady);
+document.getElementById('studentId').addEventListener('input', checkReady);
 
 // ==================== CHAT ====================
 async function startChat() {
-  state.studentName = document.getElementById('studentName').value.trim();
+  state.studentId = document.getElementById('studentId').value.trim().toUpperCase();
   state.sessionNotes = document.getElementById('sessionNotes').value.trim();
   state.messages = [];
   state.questionNumber = 0;
   state.dayComplete = false;
 
-  document.getElementById('chatName').textContent = state.studentName;
   const moduleNums = ['一','二','三','四'];
   const modules = ['金錢','事業','親子家庭','伴侶關係'];
+  document.getElementById('chatName').textContent = state.studentId;
   document.getElementById('chatMeta').textContent = `模組${moduleNums[modules.indexOf(state.module)]} · 第${state.week}週`;
   document.getElementById('chatBadge').textContent = state.module;
   document.getElementById('chatMessages').innerHTML = '';
 
-  updateProgress(0);
   showScreen('chat');
 
-  // 載入之前的對話記錄
-  await loadPreviousMessages();
+  // 載入今天的狀態
+  await loadTodaySession();
+}
 
-  if (state.messages.length === 0) {
+async function loadTodaySession() {
+  try {
+    const res = await fetch(`/api/sessions?action=today&studentId=${state.studentId}&module=${encodeURIComponent(state.module)}&week=${state.week}`);
+    const data = await res.json();
+
+    state.dayNumber = data.dayNumber || 1;
+    state.questionNumber = data.questionsToday || 0;
+
+    updateDayIndicator(state.dayNumber);
+    updateProgress(state.questionNumber);
+
+    if (data.dayComplete) {
+      // 今天已完成，載入今天的對話記錄顯示
+      await loadTodayMessages(data.session?.id);
+      showDayComplete(state.dayNumber);
+      return;
+    }
+
+    // 載入今天的對話記錄（如果有）
+    if (data.session) {
+      await loadTodayMessages(data.session.id);
+      // 顯示繼續提示
+      if (state.questionNumber > 0) {
+        addDivider('繼續今天的探索');
+      }
+    }
+
+    // 如果今天還沒開始，顯示開場問題
+    if (state.questionNumber === 0) {
+      setTimeout(() => addMessage('assistant', getOpeningQuestion()), 600);
+    }
+
+  } catch(e) {
+    console.log('Load error:', e);
+    state.dayNumber = 1;
     setTimeout(() => addMessage('assistant', getOpeningQuestion()), 600);
   }
 }
 
-async function loadPreviousMessages() {
+async function loadTodayMessages(sessionId) {
+  if (!sessionId) return;
   try {
-    const res = await fetch(`/api/sessions?action=messages&studentName=${encodeURIComponent(state.studentName)}&module=${encodeURIComponent(state.module)}&week=${state.week}`);
+    const res = await fetch(`/api/sessions?action=history&studentId=${state.studentId}&module=${encodeURIComponent(state.module)}&week=${state.week}`);
     const data = await res.json();
 
-    if (data.messages && data.messages.length > 0) {
-      const msgs = document.getElementById('chatMessages');
-      msgs.innerHTML = '';
+    const today = new Date().toISOString().split('T')[0];
+    const todayMsgs = data.messages.filter(m => m.session_date === today);
 
-      // 找到最後問題編號
-      const userMsgs = data.messages.filter(m => m.role === 'user');
-      state.questionNumber = userMsgs.length;
+    todayMsgs.forEach(m => {
+      renderMessage(m.role, m.content);
+      state.messages.push({ role: m.role, content: m.content });
+    });
 
-      data.messages.forEach(m => {
-        state.messages.push({ role: m.role, content: m.content });
-        renderMessage(m.role, m.content);
-      });
-
-      updateProgress(state.questionNumber);
-
-      if (state.questionNumber >= MAX_QUESTIONS) {
-        state.dayComplete = true;
-        showDayComplete();
-      } else {
-        // 顯示繼續提示
-        const continueNote = document.createElement('div');
-        continueNote.style.cssText = 'text-align:center;font-size:12px;color:#aaa;padding:8px;margin:4px 0;';
-        continueNote.textContent = `── 繼續上次的探索 ──`;
-        document.getElementById('chatMessages').appendChild(continueNote);
-      }
-
-      msgs.scrollTop = msgs.scrollHeight;
-    }
-  } catch(e) {
-    console.log('No previous messages');
-  }
+    document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+  } catch(e) { console.log('History load error:', e); }
 }
 
 function getOpeningQuestion() {
+  const dayNum = state.dayNumber;
+
+  if (dayNum > 1) {
+    return `歡迎回來。\n\n你昨天說了很多重要的事。今天我們繼續往更深處走。\n\n這週你想到了什麼？把最有感覺的一個想法說出來。`;
+  }
+
   if (state.week === 2) return `很高興繼續我們的探索。\n\n上週挖出的那些詞，現在回頭看，還有感覺嗎？有沒有哪個詞你想加、或是換掉的？`;
   if (state.week === 3) return `今天我們做一件不一樣的事。\n\n在你成長的過程中，關於「${state.module}」這件事，你家裡最常說的一句話是什麼？`;
   if (state.week === 4) return `我們到第四週了。\n\n這三週走下來，哪一個時刻讓你印象最深刻？哪一句你說出來的話，讓你自己停下來了？`;
+
   const starters = {
     金錢: `你好，很高興今天可以陪你探索。\n\n讓我問你第一個問題——\n\n如果你現在的金錢狀態，變成了你想要的樣子，你的生活會有什麼不同？`,
     事業: `你好，很高興今天可以陪你探索。\n\n讓我問你第一個問題——\n\n在事業上，你真正想要的是什麼？第一個冒出來的念頭，不用想太久。`,
@@ -378,6 +394,53 @@ function getOpeningQuestion() {
     伴侶關係: `你好，很高興今天可以陪你探索。\n\n讓我問你第一個問題——\n\n在親密關係裡，你希望可以感受到什麼？你覺得什麼對你來說是重要的？`
   };
   return starters[state.module];
+}
+
+function updateDayIndicator(dayNumber) {
+  const indicator = document.getElementById('dayIndicator');
+  indicator.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'day-dot' + (i < dayNumber ? ' done' : '') + (i === dayNumber ? ' today' : '');
+    dot.title = `第${i}天`;
+    indicator.appendChild(dot);
+  }
+}
+
+function updateProgress(count) {
+  const pct = Math.min((count / MAX_QUESTIONS) * 100, 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressCount').textContent = `${count} / ${MAX_QUESTIONS}`;
+  document.getElementById('progressLabel').textContent = count >= MAX_QUESTIONS ? '今日探索完成 🌿' : `第${state.dayNumber}天進度`;
+}
+
+function addDivider(text) {
+  const msgs = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'day-divider';
+  div.textContent = `── ${text} ──`;
+  msgs.appendChild(div);
+}
+
+function showDayComplete(dayNumber) {
+  const msgs = document.getElementById('chatMessages');
+  const isWeekEnd = dayNumber === 5;
+  const card = document.createElement('div');
+  card.className = 'day-complete-card';
+  card.innerHTML = `
+    <div class="day-complete-icon">${isWeekEnd ? '🎉' : '🌿'}</div>
+    <div class="day-complete-title">${isWeekEnd ? '本週探索完成！' : '今天的探索先到這裡'}</div>
+    <div class="day-complete-sub">${isWeekEnd
+      ? '你這週走了很深的路。<br>帶著作業去過週末，讓答案慢慢沉澱。<br>下週一我們繼續。'
+      : '你今天挖出了很多重要的東西。<br>讓這些答案在心裡沉澱一天。<br>明天我們繼續往更深的地方走。'
+    }</div>
+    <button class="btn-complete" onclick="showScreen('welcome')">回到首頁</button>
+  `;
+  msgs.appendChild(card);
+  msgs.scrollTop = msgs.scrollHeight;
+  document.getElementById('userInput').disabled = true;
+  document.getElementById('sendBtn').disabled = true;
+  state.dayComplete = true;
 }
 
 function renderMessage(role, text) {
@@ -397,31 +460,6 @@ function renderMessage(role, text) {
 function addMessage(role, text) {
   renderMessage(role, text);
   state.messages.push({ role, content: text });
-}
-
-function updateProgress(count) {
-  const pct = Math.min((count / MAX_QUESTIONS) * 100, 100);
-  document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressCount').textContent = `${count} / ${MAX_QUESTIONS}`;
-  document.getElementById('progressLabel').textContent = count >= MAX_QUESTIONS ? '今日探索完成 🌿' : '今日進度';
-}
-
-function showDayComplete() {
-  const msgs = document.getElementById('chatMessages');
-  const card = document.createElement('div');
-  card.className = 'day-complete-card';
-  card.innerHTML = `
-    <div class="day-complete-icon">🌿</div>
-    <div class="day-complete-title">今天的探索先到這裡</div>
-    <div class="day-complete-sub">你今天挖出了很多重要的東西。<br>讓這些答案在心裡沉澱一天。<br>明天我們繼續往更深的地方走。</div>
-    <button class="btn-complete" onclick="showScreen('welcome')">回到首頁</button>
-  `;
-  msgs.appendChild(card);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  document.getElementById('userInput').disabled = true;
-  document.getElementById('sendBtn').disabled = true;
-  state.dayComplete = true;
 }
 
 function showTyping() {
@@ -451,9 +489,10 @@ async function sendMessage() {
     const notes = state.sessionNotes ? `\n\n上次Session重點：${state.sessionNotes}` : '';
     const systemPrompt = `你是一個教練助理，使用Damon Cart的Self Concept框架帶領學員進行內在探索。
 
-學員姓名：${state.studentName}
+學員編號：${state.studentId}
 目前模組：${state.module}
 目前週次：第${state.week}週
+今天是第${state.dayNumber}天（共5天）
 今日問題進度：第${state.questionNumber + 1}題，共${MAX_QUESTIONS}題${notes}
 
 核心守則：${handbook.rule}
@@ -472,19 +511,19 @@ ${handbook.context}
 8. 中文回覆，語氣溫和而有深度
 9. 回覆簡短，通常就是一個問句加一句承接語`;
 
-    const apiMessages = state.messages.map(m => ({role:m.role, content:m.content}));
+    const apiMessages = state.messages.map(m => ({role: m.role, content: m.content}));
 
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        systemPrompt,
-        messages: apiMessages,
-        studentName: state.studentName,
+        systemPrompt, messages: apiMessages,
+        studentId: state.studentId,
         module: state.module,
         week: state.week,
         sessionNotes: state.sessionNotes,
-        questionNumber: state.questionNumber
+        questionNumber: state.questionNumber,
+        dayNumber: state.dayNumber
       })
     });
 
@@ -497,7 +536,7 @@ ${handbook.context}
     updateProgress(state.questionNumber);
 
     if (data.dayComplete) {
-      setTimeout(() => showDayComplete(), 1000);
+      setTimeout(() => showDayComplete(state.dayNumber), 1000);
     }
 
   } catch(e) {
@@ -521,42 +560,59 @@ async function loadDashboard() {
     const data = await res.json();
 
     if (!data.sessions || data.sessions.length === 0) {
-      container.innerHTML = `<div class="empty-state" style="color:#7a9e7e"><div class="empty-icon">🌿</div><div style="font-size:14px;line-height:1.8">還沒有學員記錄</div></div>`;
+      container.innerHTML = `<div class="empty-state" style="color:#7a9e7e;text-align:center;padding:60px 24px"><div style="font-size:40px;margin-bottom:16px">🌿</div><div style="font-size:14px;line-height:1.8">還沒有學員記錄</div></div>`;
       return;
     }
 
     container.innerHTML = data.sessions.map((s, i) => {
       const preview = s.last_answer ? s.last_answer.substring(0, 60) + '...' : '尚未回答';
-      const date = new Date(s.updated_at).toLocaleDateString('zh-TW');
-      return `<div class="student-card" onclick="showConvo('${s.student_name}','${s.module}',${s.week})">
-        <div class="student-name">${s.student_name}</div>
-        <div class="student-meta">${s.module} · 第${s.week}週 · ${date} · ${s.answer_count || 0}則回答</div>
+      const date = new Date(s.last_active).toLocaleDateString('zh-TW');
+      const daysCompleted = parseInt(s.days_completed) || 0;
+
+      // 畫進度點
+      const dots = Array.from({length: 5}, (_, i) =>
+        `<div class="progress-dot${i < daysCompleted ? ' done' : ''}"></div>`
+      ).join('');
+
+      return `<div class="student-card" onclick="showConvo('${s.student_id}','${s.module}',${s.week})">
+        <div class="student-name">${s.student_id}</div>
+        <div class="student-meta">${s.module} · 第${s.week}週 · 最後活躍 ${date}</div>
+        <div class="student-progress">${dots}</div>
         <div class="student-preview">${preview}</div>
       </div>`;
     }).join('');
   } catch(e) {
-    container.innerHTML = `<div class="empty-state" style="color:#7a9e7e"><div style="font-size:14px">載入失敗，請重試</div></div>`;
+    container.innerHTML = `<div style="color:#7a9e7e;padding:20px;text-align:center">載入失敗，請重試</div>`;
   }
 }
 
-async function showConvo(studentName, module, week) {
+async function showConvo(studentId, module, week) {
   document.getElementById('dashContent').style.display = 'none';
   const detail = document.getElementById('convoDetail');
   detail.style.display = 'flex';
-  document.getElementById('convoTitle').textContent = `${studentName} · ${module} · 第${week}週`;
+  document.getElementById('convoTitle').textContent = `${studentId} · ${module} · 第${week}週`;
   document.getElementById('convoMessages').innerHTML = '<div class="loading">載入中...</div>';
 
   try {
-    const res = await fetch(`/api/sessions?action=messages&studentName=${encodeURIComponent(studentName)}&module=${encodeURIComponent(module)}&week=${week}`);
+    const res = await fetch(`/api/sessions?action=history&studentId=${studentId}&module=${encodeURIComponent(module)}&week=${week}`);
     const data = await res.json();
-    currentConvoData = { studentName, module, week, messages: data.messages };
+    currentConvoData = { studentId, module, week, messages: data.messages };
 
-    document.getElementById('convoMessages').innerHTML = data.messages.map(m => `
-      <div class="msg-row">
-        <div class="msg-label">${m.role === 'assistant' ? '✦ 助理' : '👤 ' + studentName}</div>
+    // 按天分組顯示
+    let currentDay = null;
+    let html = '';
+    data.messages.forEach(m => {
+      if (m.day !== currentDay) {
+        currentDay = m.day;
+        html += `<div style="text-align:center;font-size:11px;color:#4a6b4e;padding:12px 0;font-weight:500">── 第${m.day}天 ──</div>`;
+      }
+      html += `<div class="msg-row">
+        <div class="msg-label">${m.role === 'assistant' ? '✦ 助理' : '👤 ' + studentId}</div>
         <div class="msg-bubble ${m.role}">${m.content.replace(/\n/g,'<br>')}</div>
-      </div>
-    `).join('');
+      </div>`;
+    });
+
+    document.getElementById('convoMessages').innerHTML = html || '<div style="color:#7a9e7e;padding:20px">還沒有對話記錄</div>';
   } catch(e) {
     document.getElementById('convoMessages').innerHTML = '<div style="color:#7a9e7e;padding:20px">載入失敗</div>';
   }
@@ -564,9 +620,16 @@ async function showConvo(studentName, module, week) {
 
 function exportConvo() {
   if (!currentConvoData) return;
-  const { studentName, module, week, messages } = currentConvoData;
-  let text = `學員：${studentName}\n模組：${module} · 第${week}週\n日期：${new Date().toLocaleDateString('zh-TW')}\n\n`;
-  text += messages.map(m => `${m.role === 'assistant' ? '【助理】' : '【學員】'}\n${m.content}`).join('\n\n');
+  const { studentId, module, week, messages } = currentConvoData;
+  let text = `學員：${studentId}\n模組：${module} · 第${week}週\n日期：${new Date().toLocaleDateString('zh-TW')}\n\n`;
+  let currentDay = null;
+  messages.forEach(m => {
+    if (m.day !== currentDay) {
+      currentDay = m.day;
+      text += `\n===== 第${m.day}天 =====\n\n`;
+    }
+    text += `${m.role === 'assistant' ? '【助理】' : '【學員】'}\n${m.content}\n\n`;
+  });
   navigator.clipboard.writeText(text).then(() => alert('已複製！可以貼給教練分析用。'));
 }
 
@@ -576,7 +639,6 @@ function closeConvo() {
   currentConvoData = null;
 }
 
-// 初始化
 initSetup();
 </script>
 </body>
