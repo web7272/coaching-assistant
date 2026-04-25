@@ -143,7 +143,8 @@
   <div class="setup-body">
     <div class="form-group">
       <label class="form-label">你的專屬編號</label>
-      <input type="text" class="form-input" id="studentName" placeholder="輸入你的名字">
+      <input type="text" class="form-input" id="studentName" placeholder="輸入教練給你的編號（例如 A001）" maxlength="4">
+<div id="nameError" style="display:none;color:#c0392b;font-size:12px;margin-top:6px;padding-left:4px">格式錯誤，請輸入教練給你的專屬編號</div>
     </div>
     <div class="form-group">
       <label class="form-label">選擇探索模組</label>
@@ -288,7 +289,16 @@ function selectWeek(btn, week) {
 
 function checkReady() {
   const name = document.getElementById('studentName').value.trim();
-  document.getElementById('startBtn').disabled = !(name && state.module && state.week);
+  const validFormat = /^[A-Za-z]\d{3}$/.test(name);
+  const errorEl = document.getElementById('nameError');
+  
+  if (name && !validFormat) {
+    errorEl.style.display = 'block';
+  } else {
+    errorEl.style.display = 'none';
+  }
+  
+  document.getElementById('startBtn').disabled = !(validFormat && state.module && state.week);
 }
 
 document.getElementById('studentName').addEventListener('input', checkReady);
