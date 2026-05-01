@@ -4,12 +4,10 @@ export default async function handler(req, res) {
   try {
     const sql = neon(process.env.DATABASE_URL);
 
-    // Drop old tables and recreate with correct schema
     await sql`DROP TABLE IF EXISTS messages CASCADE`;
     await sql`DROP TABLE IF EXISTS sessions CASCADE`;
     await sql`DROP TABLE IF EXISTS students CASCADE`;
 
-    // Students table
     await sql`
       CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
@@ -29,7 +27,6 @@ export default async function handler(req, res) {
       )
     `;
 
-    // Sessions table - one per student per module per week per day
     await sql`
       CREATE TABLE IF NOT EXISTS sessions (
         id SERIAL PRIMARY KEY,
@@ -42,13 +39,14 @@ export default async function handler(req, res) {
         questions_today INTEGER DEFAULT 0,
         day_complete BOOLEAN DEFAULT FALSE,
         week_complete BOOLEAN DEFAULT FALSE,
+        damon_note TEXT,
+        damon_note_public TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(student_id, module, week, session_date)
       )
     `;
 
-    // Messages table
     await sql`
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
@@ -60,7 +58,7 @@ export default async function handler(req, res) {
       )
     `;
 
-    return res.status(200).json({ success: true, message: 'Tables ready - fresh start' });
+    return res.status(200).json({ success: true, message: 'Tables ready with damon_note' });
   } catch (error) {
     console.error('Setup error:', error);
     return res.status(500).json({ error: error.message });
