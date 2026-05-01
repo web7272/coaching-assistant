@@ -4,9 +4,12 @@ export default async function handler(req, res) {
   try {
     const sql = neon(process.env.DATABASE_URL);
 
+    // Drop old tables and recreate with correct schema
+    await sql`DROP TABLE IF EXISTS messages CASCADE`;
+    await sql`DROP TABLE IF EXISTS sessions CASCADE`;
+    await sql`DROP TABLE IF EXISTS students CASCADE`;
+
     // Students table
-    // plan: 'trial' | 'self' | 'self_money' | 'self_relationship' | 'all'
-    // tier: 0=免費試用 1=純App 2=App+Live 3=App+Live+1對1 4=SC日記訂閱
     await sql`
       CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
@@ -14,20 +17,19 @@ export default async function handler(req, res) {
         email VARCHAR(255),
         plan VARCHAR(30) DEFAULT 'trial',
         tier INTEGER DEFAULT 0,
-        self_week INTEGER DEFAULT 1,
-        money_week INTEGER DEFAULT 0,
-        relationship_week INTEGER DEFAULT 0,
-        self_complete BOOLEAN DEFAULT FALSE,
-        money_complete BOOLEAN DEFAULT FALSE,
-        relationship_complete BOOLEAN DEFAULT FALSE,
+        current_module VARCHAR(20) DEFAULT 'self',
+        current_week INTEGER DEFAULT 1,
+        current_day INTEGER DEFAULT 1,
+        self_week_completed INTEGER DEFAULT 0,
+        money_unlocked BOOLEAN DEFAULT FALSE,
+        relationship_unlocked BOOLEAN DEFAULT FALSE,
         notes TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `;
 
-    // Sessions table
-    // module: 'self' | 'money' | 'relationship'
+    // Sessions table - one per student per module per week per day
     await sql`
       CREATE TABLE IF NOT EXISTS sessions (
         id SERIAL PRIMARY KEY,
@@ -58,7 +60,7 @@ export default async function handler(req, res) {
       )
     `;
 
-    return res.status(200).json({ success: true, message: 'Tables ready' });
+    return res.status(200).json({ success: true, message: 'Tables ready - fresh start' });
   } catch (error) {
     console.error('Setup error:', error);
     return res.status(500).json({ error: error.message });
