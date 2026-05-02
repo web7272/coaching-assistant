@@ -104,18 +104,18 @@ ${yesterdayNote}
   const turnsLeft = MAX_TURNS - turnCount;
 
   // 收尾指令——在學員回答完之後才觸發，讓 Claude 做 Reflection 再問落地問句
-  let closureInstruction = '';
-  if (shouldClose || timeUp) {
-    closureInstruction = `
+ let closureInstruction = '';
+if (shouldClose || timeUp) {
+  closureInstruction = `
 
-# 收尾指令（現在執行）
-學員剛才說了：「${lastUserMessage || ''}」
-這是今天最後一輪。請按這個順序：
-1. Reflection：把學員剛才說的話回給他（「你說的是『___』。」）
-2. Micro-Validation：「我聽到了。」
-3. 落地問句：「${weekGoal.landing_q}」
-4. 不要再問其他問題。就這三步，然後停。`;
-  }
+# 收尾指令（現在立刻執行）
+你已經問過落地問句了。學員剛才說了：「${lastUserMessage || ''}」
+這是今天的答案。
+現在只需要做兩件事：
+1. 說「你說的是『___』。」（Reflection）
+2. 說「今天先到這裡。把這句話留下來。🌿」
+不要再問任何問題。不要再問落地問句。直接說結束語。`;
+}
 
   return `你是一個 Adaptive Coaching Engine，使用 Damon Cart 的 Self Concept 框架。
 
