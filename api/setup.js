@@ -4,10 +4,7 @@ export default async function handler(req, res) {
   try {
     const sql = neon(process.env.DATABASE_URL);
 
-    await sql`DROP TABLE IF EXISTS messages CASCADE`;
-    await sql`DROP TABLE IF EXISTS sessions CASCADE`;
-    await sql`DROP TABLE IF EXISTS students CASCADE`;
-
+    // 只建立不存在的表格，不刪除任何資料
     await sql`
       CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
@@ -58,7 +55,7 @@ export default async function handler(req, res) {
       )
     `;
 
-    return res.status(200).json({ success: true, message: 'Tables ready with damon_note' });
+    return res.status(200).json({ success: true, message: 'Tables ready' });
   } catch (error) {
     console.error('Setup error:', error);
     return res.status(500).json({ error: error.message });
