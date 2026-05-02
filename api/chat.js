@@ -403,8 +403,6 @@ export default async function handler(req, res) {
     // 偵測今天是否完成
     // 收尾關鍵詞：落地問句問完、說了結束語
     const dayComplete = !isDay6 && (
-      shouldClose ||
-      timeUp ||
       content.includes('今天先到這裡') ||
       content.includes('把這句話留下來') ||
       content.includes('明天我們繼續') ||
