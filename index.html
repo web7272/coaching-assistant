@@ -6,13 +6,12 @@
 <title>看見自己</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500&family=Noto+Sans+TC:wght@300;400;500&display=swap');
-  :root { --sage:#7a9e7e;--sage-light:#a8c5ab;--sage-dark:#4a6b4e;--cream:#faf7f2;--charcoal:#2d2d2d;--mid:#6b6b6b;--light:#c8c0b8; }
+  :root{--sage:#7a9e7e;--sage-light:#a8c5ab;--sage-dark:#4a6b4e;--cream:#faf7f2;--charcoal:#2d2d2d;--mid:#6b6b6b;--light:#c8c0b8;}
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--cream);font-family:'Noto Sans TC',sans-serif;color:var(--charcoal);min-height:100vh;}
   .screen{display:none;flex-direction:column;min-height:100vh;}
   .screen.active{display:flex;}
 
-  /* WELCOME */
   #welcome{background:linear-gradient(160deg,#3d5c40 0%,#2d4030 40%,#1a2a1c 100%);justify-content:flex-end;padding:40px 28px 56px;position:relative;overflow:hidden;}
   #welcome::before{content:'';position:absolute;top:-20%;right:-20%;width:70vw;height:70vw;background:radial-gradient(circle,rgba(122,158,126,0.15) 0%,transparent 70%);border-radius:50%;}
   .welcome-eyebrow{font-size:11px;letter-spacing:3px;color:#7a9e7e;text-transform:uppercase;margin-bottom:16px;}
@@ -24,7 +23,6 @@
   .btn-secondary{background:rgba(255,255,255,0.06);color:#a8c5ab;border:1px solid rgba(122,158,126,0.3);padding:16px 28px;border-radius:16px;font-size:14px;font-family:inherit;cursor:pointer;text-align:left;}
   .disclaimer{font-size:11px;color:#8aaa8e;text-align:center;padding:16px 20px 0;line-height:1.6;}
 
-  /* SETUP */
   #setup{background:var(--cream);}
   .screen-header{background:white;padding:20px 24px 16px;border-bottom:1px solid #ede8e0;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;}
   .icon-btn{width:36px;height:36px;border-radius:50%;border:none;background:#f0ede8;color:var(--mid);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -40,7 +38,6 @@
   .btn-full{width:100%;background:linear-gradient(135deg,#7a9e7e,#5a7e5e);color:white;border:none;padding:18px;border-radius:14px;font-size:16px;font-weight:500;font-family:inherit;cursor:pointer;box-shadow:0 4px 16px rgba(90,126,94,0.3);}
   .btn-full:disabled{background:#c8c0b8;box-shadow:none;cursor:not-allowed;}
 
-  /* CHAT */
   #chat{background:var(--cream);height:100vh;overflow:hidden;}
   .chat-header{background:white;padding:16px 20px;border-bottom:1px solid #ede8e0;display:flex;align-items:center;gap:12px;flex-shrink:0;}
   .chat-info{flex:1;min-width:0;}
@@ -63,6 +60,7 @@
   .msg.user .msg-text{background:linear-gradient(135deg,#7a9e7e,#5a7e5e);color:white;border-bottom-right-radius:4px;}
   .msg-time{font-size:10px;color:var(--light);margin-top:4px;padding:0 4px;}
   .msg.user .msg-time{text-align:right;}
+  .day-divider{text-align:center;font-size:11px;color:var(--light);padding:8px 0;margin:4px 0;}
   .damon-note-card{background:linear-gradient(135deg,#2d4030,#1a2a1c);border-radius:20px;padding:24px;margin:8px 0;animation:fadeUp 0.5s ease;}
   .damon-note-header{font-size:11px;letter-spacing:2px;color:#7a9e7e;text-transform:uppercase;margin-bottom:12px;}
   .damon-note-quote{font-family:'Noto Serif TC',serif;font-size:16px;color:#f0ede8;line-height:1.7;margin-bottom:16px;font-style:italic;}
@@ -74,6 +72,7 @@
   .day-complete-title{font-family:'Noto Serif TC',serif;font-size:20px;color:var(--charcoal);margin-bottom:8px;}
   .day-complete-sub{font-size:14px;color:var(--mid);line-height:1.7;margin-bottom:20px;}
   .btn-complete{background:linear-gradient(135deg,#7a9e7e,#5a7e5e);color:white;border:none;padding:14px 28px;border-radius:14px;font-size:15px;font-family:inherit;cursor:pointer;}
+  .already-done-card{background:#f0f7f0;border-radius:20px;padding:24px;margin:8px 0;text-align:center;}
   .typing-indicator{display:flex;align-items:center;gap:8px;padding:12px 16px;background:white;border-radius:18px;border-bottom-left-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,0.06);max-width:80px;}
   .dot{width:7px;height:7px;background:var(--sage-light);border-radius:50%;animation:bounce 1.2s infinite;}
   .dot:nth-child(2){animation-delay:0.2s;}
@@ -86,7 +85,6 @@
   .send-btn{width:46px;height:46px;min-width:46px;border-radius:50%;background:linear-gradient(135deg,#7a9e7e,#5a7e5e);border:none;color:white;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(90,126,94,0.4);flex-shrink:0;}
   .send-btn:disabled{background:#c8c0b8;box-shadow:none;cursor:not-allowed;}
 
-  /* DASHBOARD */
   #dashboard{background:#1a2a1c;color:#e8f0e8;min-height:100vh;}
   .dash-header{padding:20px 24px 16px;border-bottom:1px solid #2d3f2f;display:flex;align-items:center;justify-content:space-between;}
   .dash-header h2{font-size:18px;font-weight:500;color:#a8c5ab;}
@@ -94,13 +92,11 @@
   .back-btn{background:none;border:1px solid #4a6b4e;color:#a8c5ab;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;font-family:inherit;}
   .add-btn{background:#4a6b4e;border:none;color:#d4e8d4;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;font-family:inherit;}
   .dash-list{padding:16px;flex:1;overflow-y:auto;}
-  .student-card{background:#243526;border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer;position:relative;}
+  .student-card{background:#243526;border-radius:12px;padding:16px;margin-bottom:12px;cursor:pointer;}
   .student-name{font-size:16px;font-weight:500;color:#d4e8d4;margin-bottom:4px;}
   .student-meta{font-size:12px;color:#7a9e7e;margin-bottom:4px;}
   .student-plan{font-size:11px;color:#4a6b4e;margin-bottom:8px;}
   .student-preview{font-size:13px;color:#9ab09a;line-height:1.6;}
-
-  /* ADD STUDENT MODAL */
   .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center;padding:20px;}
   .modal-overlay.active{display:flex;}
   .modal{background:#1e3020;border-radius:20px;padding:24px;width:100%;max-width:400px;}
@@ -108,18 +104,15 @@
   .modal-field{margin-bottom:16px;}
   .modal-label{display:block;font-size:12px;color:#7a9e7e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
   .modal-input{width:100%;padding:12px 14px;background:#243526;border:1px solid #4a6b4e;border-radius:10px;color:#d4e8d4;font-size:14px;font-family:inherit;outline:none;}
-  .modal-input:focus{border-color:#7a9e7e;}
   .modal-select{width:100%;padding:12px 14px;background:#243526;border:1px solid #4a6b4e;border-radius:10px;color:#d4e8d4;font-size:14px;font-family:inherit;outline:none;}
   .modal-actions{display:flex;gap:10px;margin-top:20px;}
   .modal-cancel{flex:1;background:none;border:1px solid #4a6b4e;color:#a8c5ab;padding:12px;border-radius:10px;font-family:inherit;cursor:pointer;font-size:14px;}
   .modal-save{flex:2;background:#4a6b4e;border:none;color:#d4e8d4;padding:12px;border-radius:10px;font-family:inherit;cursor:pointer;font-size:14px;font-weight:500;}
   .modal-result{margin-top:12px;padding:12px;background:#243526;border-radius:10px;color:#a8c5ab;font-size:14px;display:none;}
-
-  /* CONVO DETAIL */
   .convo-detail{display:none;flex-direction:column;height:100vh;background:#1a2a1c;position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;}
   .convo-header{padding:16px 20px;border-bottom:1px solid #2d3f2f;display:flex;align-items:center;gap:12px;flex-shrink:0;}
   .convo-header h3{font-size:15px;color:#d4e8d4;flex:1;}
-  .convo-tabs{display:flex;gap:0;border-bottom:1px solid #2d3f2f;flex-shrink:0;}
+  .convo-tabs{display:flex;border-bottom:1px solid #2d3f2f;flex-shrink:0;}
   .convo-tab{flex:1;padding:12px;text-align:center;font-size:13px;color:#7a9e7e;cursor:pointer;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit;}
   .convo-tab.active{color:#a8c5ab;border-bottom-color:#7a9e7e;}
   .convo-content{flex:1;overflow-y:auto;padding:16px;}
@@ -139,7 +132,6 @@
 </head>
 <body>
 
-<!-- WELCOME -->
 <div id="welcome" class="screen active">
   <div class="welcome-eyebrow">See Yourself</div>
   <div class="welcome-title">看見你<br>內心的<span>那個人</span></div>
@@ -151,7 +143,6 @@
   <div class="disclaimer">本工具為教練輔助工具，不提供心理治療或醫療建議。</div>
 </div>
 
-<!-- SETUP -->
 <div id="setup" class="screen">
   <div class="screen-header">
     <button class="icon-btn" onclick="showScreen('welcome')">←</button>
@@ -170,7 +161,6 @@
   </div>
 </div>
 
-<!-- CHAT -->
 <div id="chat" class="screen">
   <div class="chat-header">
     <button class="icon-btn" onclick="showScreen('welcome')">←</button>
@@ -188,7 +178,6 @@
   </div>
 </div>
 
-<!-- DASHBOARD -->
 <div id="dashboard" class="screen" style="background:#1a2a1c;color:#e8f0e8;">
   <div class="dash-header">
     <h2>📋 教練後台</h2>
@@ -212,7 +201,6 @@
   </div>
 </div>
 
-<!-- ADD STUDENT MODAL -->
 <div class="modal-overlay" id="addModal">
   <div class="modal">
     <h3>新增學員</h3>
@@ -252,16 +240,16 @@
 </div>
 
 <script>
-let state = { studentId:'', module:'', week:0, day:0, messages:[], isLoading:false, dayComplete:false };
+const MODULE_LABELS = {self:'🌿 自我關係',money:'💰 金錢關係',relationship:'💫 伴侶關係'};
+const PLAN_LABELS = {trial:'免費試用',self_only:'自我關係',self_money:'自我+金錢',self_relationship:'自我+伴侶',all:'全套'};
+const TIER_LABELS = {0:'免費試用',1:'自學系統',2:'陪跑版',3:'1對1教練'};
+
+let state = {studentId:'',module:'',week:0,day:0,messages:[],isLoading:false,dayComplete:false};
 let currentConvoData = null;
 let currentTab = 'messages';
 let studentData = null;
+let lookupTimer = null;
 
-const MODULE_LABELS = { self:'🌿 自我關係', money:'💰 金錢關係', relationship:'💫 伴侶關係' };
-const PLAN_LABELS = { trial:'免費試用', self_only:'自我關係', self_money:'自我+金錢', self_relationship:'自我+伴侶', all:'全套' };
-const TIER_LABELS = { 0:'免費試用', 1:'自學系統', 2:'陪跑版', 3:'1對1教練' };
-
-// ==================== NAVIGATION ====================
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -274,18 +262,14 @@ function showDashboard() {
   loadDashboard();
 }
 
-// ==================== SETUP - AUTO LOOKUP ====================
-let lookupTimer = null;
-
+// ==================== SETUP ====================
 function onIdInput() {
   const id = document.getElementById('studentId').value.trim().toUpperCase();
   document.getElementById('idError').style.display = 'none';
   document.getElementById('studentInfo').style.display = 'none';
   document.getElementById('startBtn').disabled = true;
   studentData = null;
-
   if (!/^[A-Za-z]\d{3}$/.test(id)) return;
-
   clearTimeout(lookupTimer);
   lookupTimer = setTimeout(() => lookupStudent(id), 500);
 }
@@ -295,21 +279,14 @@ async function lookupStudent(id) {
     const res = await fetch(`/api/students?studentId=${id}`);
     if (!res.ok) {
       document.getElementById('idError').style.display = 'block';
-      document.getElementById('idError').textContent = '找不到這個編號，請確認後再試';
       return;
     }
     const data = await res.json();
     studentData = data.student;
-
     const moduleLabel = MODULE_LABELS[studentData.current_module] || studentData.current_module;
     const infoEl = document.getElementById('studentInfo');
     infoEl.style.display = 'block';
-    infoEl.innerHTML = `
-      <strong>${moduleLabel}</strong><br>
-      Week ${studentData.current_week} · Day ${studentData.current_day}<br>
-      <span style="color:var(--mid);font-size:12px">${PLAN_LABELS[studentData.plan] || studentData.plan}</span>
-    `;
-
+    infoEl.innerHTML = `<strong>${moduleLabel}</strong><br>Week ${studentData.current_week} · Day ${studentData.current_day}<br><span style="color:var(--mid);font-size:12px">${PLAN_LABELS[studentData.plan] || studentData.plan}</span>`;
     document.getElementById('startBtn').disabled = false;
   } catch(e) {
     document.getElementById('idError').style.display = 'block';
@@ -332,10 +309,87 @@ async function startChat() {
   document.getElementById('chatMeta').textContent = `${moduleLabel} Week ${state.week} Day ${state.day}`;
   document.getElementById('chatBadge').textContent = moduleLabel;
   document.getElementById('chatMessages').innerHTML = '';
+  document.getElementById('userInput').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
 
   updateDayIndicator();
   showScreen('chat');
-  setTimeout(() => addMessage('assistant', getOpeningMessage()), 500);
+
+  // 載入今天的對話狀態
+  await loadTodaySession();
+}
+
+async function loadTodaySession() {
+  const today = new Date().toISOString().split('T')[0];
+
+  try {
+    const res = await fetch(`/api/sessions?action=history&studentId=${state.studentId}&module=${encodeURIComponent(state.module)}&week=${state.week}`);
+    const data = await res.json();
+
+    if (!data.messages || data.messages.length === 0) {
+      // 完全沒有對話記錄，開始全新的
+      setTimeout(() => addMessage('assistant', getOpeningMessage()), 500);
+      return;
+    }
+
+    // 找今天的訊息
+    const todayMsgs = data.messages.filter(m => {
+      const msgDate = m.session_date || m.created_at?.split('T')[0];
+      return msgDate === today;
+    });
+
+    // 找今天的 session 狀態
+    const todaySession = data.sessions?.find(s => s.session_date === today);
+    const isDoneToday = todaySession?.day_complete === true;
+
+    if (todayMsgs.length > 0) {
+      // 今天有對話記錄——載入顯示
+      const divider = document.createElement('div');
+      divider.className = 'day-divider';
+      divider.textContent = '── 繼續今天的探索 ──';
+      document.getElementById('chatMessages').appendChild(divider);
+
+      todayMsgs.forEach(m => {
+        renderMessage(m.role, m.content);
+        state.messages.push({ role: m.role, content: m.content });
+      });
+
+      document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+
+      if (isDoneToday) {
+        // 今天已完成，顯示完成卡，鎖定輸入
+        if (todaySession?.damon_note_public) {
+          showDamonNote(todaySession.damon_note_public);
+        }
+        showAlreadyDone();
+      }
+      // 今天未完成，直接繼續（不顯示開場問句）
+      return;
+    }
+
+    // 今天沒有對話，但之前有——開始今天的新對話
+    setTimeout(() => addMessage('assistant', getOpeningMessage()), 500);
+
+  } catch(e) {
+    console.log('Load session error:', e);
+    setTimeout(() => addMessage('assistant', getOpeningMessage()), 500);
+  }
+}
+
+function showAlreadyDone() {
+  const msgs = document.getElementById('chatMessages');
+  const card = document.createElement('div');
+  card.className = 'already-done-card';
+  card.innerHTML = `
+    <div style="font-size:28px;margin-bottom:8px">✓</div>
+    <div style="font-family:'Noto Serif TC',serif;font-size:16px;color:var(--sage-dark);margin-bottom:6px">今天的探索已完成</div>
+    <div style="font-size:13px;color:var(--mid);line-height:1.7">讓今天的東西繼續沉澱。<br>明天我們繼續。</div>
+  `;
+  msgs.appendChild(card);
+  msgs.scrollTop = msgs.scrollHeight;
+  document.getElementById('userInput').disabled = true;
+  document.getElementById('sendBtn').disabled = true;
+  state.dayComplete = true;
 }
 
 function getOpeningMessage() {
@@ -349,9 +403,15 @@ function getOpeningMessage() {
   }
 
   const openings = {
-    self: isVideoDay ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？` : `你好，很高興今天可以陪你探索。\n\n在你的生活裡，有什麼地方讓你感覺不對勁？或者有什麼你覺得應該不是這樣的？`,
-    money: isVideoDay ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？` : `你好，很高興今天可以陪你探索。\n\n在你的金錢和事業上，有什麼地方讓你感覺不對勁？`,
-    relationship: isVideoDay ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？` : `你好，很高興今天可以陪你探索。\n\n在你最重要的關係裡，有什麼地方讓你感覺不對勁？不用整理，說那個感覺。`
+    self: isVideoDay
+      ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？`
+      : `你好，很高興今天可以陪你探索。\n\n在你的生活裡，有什麼地方讓你感覺不對勁？或者有什麼你覺得應該不是這樣的？`,
+    money: isVideoDay
+      ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？`
+      : `你好，很高興今天可以陪你探索。\n\n在你的金錢和事業上，有什麼地方讓你感覺不對勁？`,
+    relationship: isVideoDay
+      ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？`
+      : `你好，很高興今天可以陪你探索。\n\n在你最重要的關係裡，有什麼地方讓你感覺不對勁？不用整理，說那個感覺。`
   };
   return openings[state.module] || openings.self;
 }
@@ -371,7 +431,7 @@ function renderMessage(role, text) {
   const msgs = document.getElementById('chatMessages');
   const div = document.createElement('div');
   div.className = `msg ${role}`;
-  const time = new Date().toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'});
+  const time = new Date().toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'});
   if (role === 'assistant') {
     div.innerHTML = `<div class="msg-with-avatar"><div class="coach-avatar">✦</div><div class="msg-text">${text.replace(/\n/g,'<br>')}</div></div><div class="msg-time">${time}</div>`;
   } else {
@@ -383,7 +443,7 @@ function renderMessage(role, text) {
 
 function addMessage(role, text) {
   renderMessage(role, text);
-  state.messages.push({ role, content: text });
+  state.messages.push({role, content: text});
 }
 
 function showDamonNote(notePublic) {
@@ -392,7 +452,6 @@ function showDamonNote(notePublic) {
   const tomorrowIdx = notePublic.indexOf('明天我們從這裡繼續');
   const todayText = tomorrowIdx > -1 ? notePublic.substring(0, tomorrowIdx).trim() : notePublic;
   const tomorrowText = tomorrowIdx > -1 ? notePublic.substring(tomorrowIdx + 10).trim() : '';
-
   const card = document.createElement('div');
   card.className = 'damon-note-card';
   card.innerHTML = `
@@ -481,23 +540,20 @@ function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault
 async function loadDashboard() {
   const container = document.getElementById('dashContent');
   container.innerHTML = '<div class="loading">載入中...</div>';
-
   try {
     const res = await fetch('/api/students');
     const data = await res.json();
-
     if (!data.students || data.students.length === 0) {
       container.innerHTML = `<div class="empty-state"><div style="font-size:40px;margin-bottom:16px">🌿</div><div>還沒有學員，點「+ 新增學員」開始</div></div>`;
       return;
     }
-
     container.innerHTML = data.students.map(s => {
       const moduleLabel = MODULE_LABELS[s.current_module] || s.current_module;
       const planLabel = PLAN_LABELS[s.plan] || s.plan;
       const tierLabel = TIER_LABELS[s.tier] || s.tier;
       const lastActive = s.last_active ? new Date(s.last_active).toLocaleDateString('zh-TW') : '尚未開始';
       return `<div class="student-card" onclick="showConvo('${s.student_id}','${s.current_module}',${s.current_week})">
-        <div class="student-name">${s.student_id} ${s.email ? '· ' + s.email : ''}</div>
+        <div class="student-name">${s.student_id}${s.email ? ' · ' + s.email : ''}</div>
         <div class="student-meta">${moduleLabel} Week ${s.current_week} Day ${s.current_day} · 最後活躍 ${lastActive}</div>
         <div class="student-plan">${planLabel} · ${tierLabel} · 完成 ${s.days_completed || 0} 天</div>
         ${s.notes ? `<div class="student-preview">${s.notes}</div>` : ''}
@@ -508,41 +564,31 @@ async function loadDashboard() {
   }
 }
 
-// ==================== ADD STUDENT MODAL ====================
 function showAddModal() {
   document.getElementById('addModal').classList.add('active');
   document.getElementById('addResult').style.display = 'none';
   document.getElementById('newEmail').value = '';
   document.getElementById('newNotes').value = '';
 }
-
-function hideAddModal() {
-  document.getElementById('addModal').classList.remove('active');
-}
+function hideAddModal() { document.getElementById('addModal').classList.remove('active'); }
 
 async function addStudent() {
   const email = document.getElementById('newEmail').value.trim();
   const plan = document.getElementById('newPlan').value;
   const tier = parseInt(document.getElementById('newTier').value);
   const notes = document.getElementById('newNotes').value.trim();
-
   try {
     const res = await fetch('/api/students', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ email, plan, tier, notes })
+      body: JSON.stringify({email, plan, tier, notes})
     });
-
     const data = await res.json();
     const resultEl = document.getElementById('addResult');
     resultEl.style.display = 'block';
-
     if (data.success) {
       resultEl.innerHTML = `✅ 學員建立成功！<br><strong style="font-size:20px;color:#a8c5ab">${data.studentId}</strong><br>這是他的專屬編號，請傳給學員。`;
-      setTimeout(() => {
-        hideAddModal();
-        loadDashboard();
-      }, 3000);
+      setTimeout(() => { hideAddModal(); loadDashboard(); }, 3000);
     } else {
       resultEl.textContent = '建立失敗：' + (data.error || '未知錯誤');
     }
@@ -552,13 +598,12 @@ async function addStudent() {
   }
 }
 
-// ==================== CONVO DETAIL ====================
 async function showConvo(studentId, module, week) {
   document.getElementById('dashContent').style.display = 'none';
   const detail = document.getElementById('convoDetail');
   detail.style.display = 'flex';
-  document.getElementById('convoTitle').textContent = `${studentId} · ${MODULE_LABELS[module] || module} · Week ${week}`;
-  currentConvoData = { studentId, module, week };
+  document.getElementById('convoTitle').textContent = `${studentId} · ${MODULE_LABELS[module]||module} · Week ${week}`;
+  currentConvoData = {studentId, module, week};
   currentTab = 'messages';
   document.querySelectorAll('.convo-tab').forEach((t,i) => t.classList.toggle('active', i===0));
   await loadConvoContent();
@@ -567,9 +612,8 @@ async function showConvo(studentId, module, week) {
 async function loadConvoContent() {
   const container = document.getElementById('convoContent');
   container.innerHTML = '<div class="loading">載入中...</div>';
-
   try {
-    const { studentId, module, week } = currentConvoData;
+    const {studentId, module, week} = currentConvoData;
     const res = await fetch(`/api/sessions?action=history&studentId=${studentId}&module=${encodeURIComponent(module)}&week=${week}`);
     const data = await res.json();
     currentConvoData.messages = data.messages || [];
@@ -582,38 +626,24 @@ async function loadConvoContent() {
 
 function renderConvoContent() {
   const container = document.getElementById('convoContent');
-  const { messages, sessions, studentId } = currentConvoData;
-
+  const {messages, sessions, studentId} = currentConvoData;
   if (currentTab === 'messages') {
-    if (!messages || messages.length === 0) {
-      container.innerHTML = '<div style="color:#7a9e7e;padding:20px">還沒有對話記錄</div>';
-      return;
-    }
-    let html = '';
-    let currentDay = null;
+    if (!messages || messages.length === 0) { container.innerHTML = '<div style="color:#7a9e7e;padding:20px">還沒有對話記錄</div>'; return; }
+    let html = '', currentDay = null;
     messages.forEach(m => {
       if (m.day !== currentDay) {
         currentDay = m.day;
         html += `<div style="text-align:center;font-size:11px;color:#4a6b4e;padding:12px 0;font-weight:500">── Day ${m.day} ──</div>`;
       }
-      html += `<div class="msg-row">
-        <div class="msg-label">${m.role === 'assistant' ? '✦ 助理' : '👤 ' + studentId}</div>
-        <div class="msg-bubble ${m.role}">${m.content.replace(/\n/g,'<br>')}</div>
-      </div>`;
+      html += `<div class="msg-row"><div class="msg-label">${m.role==='assistant'?'✦ 助理':'👤 '+studentId}</div><div class="msg-bubble ${m.role}">${m.content.replace(/\n/g,'<br>')}</div></div>`;
     });
     container.innerHTML = html;
   } else {
-    if (!sessions || sessions.length === 0) {
-      container.innerHTML = '<div style="color:#7a9e7e;padding:20px">還沒有 Damon Note</div>';
-      return;
-    }
+    if (!sessions || sessions.length === 0) { container.innerHTML = '<div style="color:#7a9e7e;padding:20px">還沒有 Damon Note</div>'; return; }
     let html = '';
     sessions.forEach(s => {
       if (!s.damon_note) return;
-      html += `<div style="margin-bottom:20px">
-        <div style="font-size:11px;color:#4a6b4e;margin-bottom:8px;font-weight:500">── Day ${s.day} · ${s.session_date} ──</div>
-        <div class="damon-note-full">${formatDamonNote(s.damon_note)}</div>
-      </div>`;
+      html += `<div style="margin-bottom:20px"><div style="font-size:11px;color:#4a6b4e;margin-bottom:8px;font-weight:500">── Day ${s.day} · ${s.session_date} ──</div><div class="damon-note-full">${formatDamonNote(s.damon_note)}</div></div>`;
     });
     container.innerHTML = html || '<div style="color:#7a9e7e;padding:20px">還沒有 Damon Note</div>';
   }
@@ -627,10 +657,7 @@ function formatDamonNote(note) {
     if (match) {
       const content = match[1].trim();
       const isSC = s === 'SC 觀察';
-      html += `<div class="damon-note-section">
-        <div class="damon-note-section-title">${s}</div>
-        ${isSC ? `<div class="damon-note-sc">${content.replace(/\n/g,'<br>')}</div>` : `<div class="damon-note-section-content">${content.replace(/\n/g,'<br>')}</div>`}
-      </div>`;
+      html += `<div class="damon-note-section"><div class="damon-note-section-title">${s}</div>${isSC?`<div class="damon-note-sc">${content.replace(/\n/g,'<br>')}</div>`:`<div class="damon-note-section-content">${content.replace(/\n/g,'<br>')}</div>`}</div>`;
     }
   });
   return html;
@@ -638,20 +665,18 @@ function formatDamonNote(note) {
 
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.convo-tab').forEach((t,i) => {
-    t.classList.toggle('active', (i===0&&tab==='messages')||(i===1&&tab==='note'));
-  });
+  document.querySelectorAll('.convo-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='messages')||(i===1&&tab==='note')));
   renderConvoContent();
 }
 
 function exportConvo() {
   if (!currentConvoData?.messages) return;
-  const { studentId, module, week, messages } = currentConvoData;
+  const {studentId, module, week, messages} = currentConvoData;
   let text = `學員：${studentId}\n模組：${MODULE_LABELS[module]||module} Week ${week}\n日期：${new Date().toLocaleDateString('zh-TW')}\n\n`;
   let currentDay = null;
   messages.forEach(m => {
     if (m.day !== currentDay) { currentDay = m.day; text += `\n===== Day ${m.day} =====\n\n`; }
-    text += `${m.role === 'assistant' ? '【助理】' : '【學員】'}\n${m.content}\n\n`;
+    text += `${m.role==='assistant'?'【助理】':'【學員】'}\n${m.content}\n\n`;
   });
   navigator.clipboard.writeText(text).then(() => alert('已複製！'));
 }
@@ -661,7 +686,6 @@ function closeConvo() {
   document.getElementById('dashContent').style.display = 'block';
   currentConvoData = null;
 }
-
 </script>
 </body>
 </html>
