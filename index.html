@@ -599,6 +599,8 @@ async function addStudent() {
     if (data.success) {
       resultEl.innerHTML = `✅ 學員建立成功！<br><strong style="font-size:20px;color:#a8c5ab">${data.studentId}</strong><br>這是他的專屬編號，請傳給學員。`;
       setTimeout(() => { hideAddModal(); loadDashboard(); }, 3000);
+    } else if (data.error === 'EMAIL_EXISTS') {
+      resultEl.innerHTML = `⚠️ ${data.message}`;
     } else {
       resultEl.textContent = '建立失敗：' + (data.error || '未知錯誤');
     }
