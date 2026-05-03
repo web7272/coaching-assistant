@@ -351,10 +351,14 @@ export default async function handler(req, res) {
       if (notes.length > 0) yesterdayNote = notes[0].damon_note;
     } catch(e) {}
 
+    // 找今天這個 day 的 session
+    // ⚠️ 必須同時看 day——否則同一天連測 Day 1 → Day 2 會被塞進同一個 session row，
+    //    導致 messages.day 全是 1、damon_note 只生成一次、stats 只算 1 天
     let sessions = await sql`
       SELECT id, questions_today, created_at FROM sessions
       WHERE student_id = ${studentId} AND module = ${module}
         AND week = ${parseInt(week)} AND session_date = ${sessionDate}
+        AND day = ${day || 1}
       LIMIT 1
     `;
 
