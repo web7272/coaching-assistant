@@ -468,12 +468,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Server error:', error);
-    // DEBUG 版：把錯誤訊息直接回給前端，方便定位 root cause
-    // 上線版本可以改回 { error: 'Server error' }
-    return res.status(500).json({
-      error: 'Server error',
-      message: error?.message || String(error),
-      stack: error?.stack?.split('\n').slice(0, 5).join('\n') || null,
-    });
+    return res.status(500).json({ error: 'Server error' });
   }
 }
