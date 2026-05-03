@@ -377,7 +377,10 @@ async function loadTodaySession() {
     }
 
     // 今天沒有對話，但之前有——開始今天的新對話
-    setTimeout(() => addMessage('assistant', getOpeningMessage()), 500);
+    // 找最近一天的 damon_note_public
+    const lastSession = data.sessions?.[data.sessions.length - 1];
+    const yesterdayNotePublic = lastSession?.damon_note_public || null;
+    setTimeout(() => addMessage('assistant', getOpeningMessage(yesterdayNotePublic)), 500);
 
   } catch(e) {
     console.log('Load session error:', e);
@@ -401,12 +404,27 @@ function showAlreadyDone() {
   state.dayComplete = true;
 }
 
-function getOpeningMessage() {
+function getOpeningMessage(yesterdayNotePublic) {
   const isVideoDay = state.day === 1 || state.day === 2;
   const isDay6 = state.day === 6;
 
   if (isDay6) return `今天是整合日。\n\n這週你說了很多重要的事。讓我們把這週放在一起看。`;
 
+  // 有昨天的 Damon Note——承接昨天
+  if (state.day > 1 && yesterdayNotePublic) {
+    // 抽取昨天的關鍵句
+    const lines = yesterdayNotePublic.split('\n');
+    const keyLine = lines.find(l => l.startsWith('「') || l.includes('「')) || '';
+    const keyPhrase = keyLine.trim();
+
+    if (isVideoDay) {
+      return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n我們等等繼續往那裡走。\n\n今天也有一支影片——先去看完，看完回來告訴我有沒有什麼讓你停下來的地方。`;
+    } else {
+      return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n今天我們從這裡繼續往更深處走。`;
+    }
+  }
+
+  // 第一天或沒有昨天的 Note
   if (state.day > 1) {
     return `歡迎回來。\n\n昨天你走到了很重要的地方。今天我們繼續往更深處走。\n\n${isVideoDay ? '今天先去看今天的影片，看完回來告訴我讓你停下來的地方。' : '今天從哪裡開始，你說。'}`;
   }
