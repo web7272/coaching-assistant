@@ -250,6 +250,15 @@ let currentTab = 'messages';
 let studentData = null;
 let lookupTimer = null;
 
+function getToday() {
+  // Use client's local date in YYYY-MM-DD format
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -320,7 +329,7 @@ async function startChat() {
 }
 
 async function loadTodaySession() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getToday();
 
   try {
     const res = await fetch(`/api/sessions?action=history&studentId=${state.studentId}&module=${encodeURIComponent(state.module)}&week=${state.week}`);
@@ -511,7 +520,8 @@ async function sendMessage() {
         module: state.module,
         week: state.week,
         day: state.day,
-        sessionNotes: ''
+        sessionNotes: '',
+        today: getToday()
       })
     });
 
