@@ -182,25 +182,64 @@ export default async function handler(req, res) {
       }
 
       // ---------- 後台列表 ----------
-      const rows = await sql`
+      // 先取 students 主表（這個一定能成功）
+      const students = await sql`
         SELECT
-          s.student_id,
-          s.email,
-          s.plan,
-          s.tier,
-          s.current_module,
-          s.current_week,
-          s.current_day,
-          s.notes,
-          s.created_at,
-          (SELECT COUNT(*) FROM sessions
-            WHERE student_id = s.student_id AND status = 'completed') AS days_completed,
-          (SELECT MAX(updated_at) FROM sessions
-            WHERE student_id = s.student_id) AS last_active
-        FROM students s
-        ORDER BY s.created_at DESC
+          student_id, email, plan, tier,
+          current_module, current_week, current_day,
+          notes, created_at
+        FROM students
+        ORDER BY created_at DESC
       `;
-      return res.status(200).json({ students: rows });
+
+      // 再嘗試補 sessions 統計（schema 可能不同，失敗就降級不補）
+      // 兼容兩種可能 schema：
+      //   - 有 status 欄位 → 用 status='completed' 算
+      //   - 沒 status 欄位 → 退回用 dayN 欄位 / completed_at / 純粹 count
+      let stats = {};
+      try {
+        const rows = await sql`
+          SELECT student_id,
+                 COUNT(*) FILTER (WHERE status = 'completed') AS days_completed,
+                 MAX(updated_at) AS last_active
+          FROM sessions
+          GROUP BY student_id
+        `;
+        for (const r of rows) {
+          stats[r.student_id] = {
+            days_completed: Number(r.days_completed) || 0,
+            last_active: r.last_active,
+          };
+        }
+      } catch (e1) {
+        // 第一種 schema 不對，試第二種：用 created_at 當 last_active
+        try {
+          const rows = await sql`
+            SELECT student_id,
+                   COUNT(*) AS days_completed,
+                   MAX(created_at) AS last_active
+            FROM sessions
+            GROUP BY student_id
+          `;
+          for (const r of rows) {
+            stats[r.student_id] = {
+              days_completed: Number(r.days_completed) || 0,
+              last_active: r.last_active,
+            };
+          }
+        } catch (e2) {
+          // 兩種都失敗就純粹不補統計，列表還是會顯示出來
+          console.warn('sessions stats query failed:', e2.message);
+        }
+      }
+
+      const merged = students.map(s => ({
+        ...s,
+        days_completed: stats[s.student_id]?.days_completed ?? 0,
+        last_active: stats[s.student_id]?.last_active ?? null,
+      }));
+
+      return res.status(200).json({ students: merged });
     }
 
     return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
