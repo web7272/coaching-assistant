@@ -4,7 +4,10 @@ export default async function handler(req, res) {
   try {
     const sql = neon(process.env.DATABASE_URL);
 
-    // 只建立不存在的表格，不刪除任何資料
+    await sql`DROP TABLE IF EXISTS messages CASCADE`;
+    await sql`DROP TABLE IF EXISTS sessions CASCADE`;
+    await sql`DROP TABLE IF EXISTS students CASCADE`;
+
     await sql`
       CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
@@ -55,9 +58,9 @@ export default async function handler(req, res) {
       )
     `;
 
-    return res.status(200).json({ success: true, message: 'Tables ready' });
+    return res.status(200).json({ success: true, message: 'Database reset complete - all data cleared' });
   } catch (error) {
-    console.error('Setup error:', error);
+    console.error('Reset error:', error);
     return res.status(500).json({ error: error.message });
   }
 }
