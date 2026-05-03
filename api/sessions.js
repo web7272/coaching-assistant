@@ -3,16 +3,13 @@ import { neon } from '@neondatabase/serverless';
 export default async function handler(req, res) {
   const sql = neon(process.env.DATABASE_URL);
 
-  // GET - 取得學員資料
   if (req.method === 'GET') {
-    const { studentId, module, week, action } = req.query;
+    const { studentId, module, week, action, today } = req.query;
 
     try {
-      // 取得今天的 session 狀態
-      if (action === 'today' && studentId && module && week) {
-        const today = new Date().toISOString().split('T')[0];
+      if (action === 'today' && studentId && module && week && today) {
         const sessions = await sql`
-          SELECT s.*, 
+          SELECT s.*,
             (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id AND m.role = 'user') as message_count
           FROM sessions s
           WHERE s.student_id = ${studentId}
@@ -23,10 +20,8 @@ export default async function handler(req, res) {
         `;
 
         if (sessions.length === 0) {
-          // 計算今天是第幾天
           const allDays = await sql`
-            SELECT COUNT(*) as day_count
-            FROM sessions
+            SELECT COUNT(*) as day_count FROM sessions
             WHERE student_id = ${studentId}
               AND module = ${module}
               AND week = ${parseInt(week)}
@@ -43,10 +38,11 @@ export default async function handler(req, res) {
         });
       }
 
-      // 取得完整對話歷史（跨所有天）
+      // 取得完整對話歷史（含 damon_note）
       if (action === 'history' && studentId && module && week) {
         const allSessions = await sql`
-          SELECT s.id, s.day, s.session_date, s.questions_today, s.day_complete
+          SELECT s.id, s.day, s.session_date, s.questions_today,
+                 s.day_complete, s.damon_note, s.damon_note_public
           FROM sessions s
           WHERE s.student_id = ${studentId}
             AND s.module = ${module}
@@ -64,6 +60,7 @@ export default async function handler(req, res) {
           FROM messages m
           JOIN sessions s ON m.session_id = s.id
           WHERE m.session_id = ANY(${sessionIds})
+            AND m.role IN ('user', 'assistant')
           ORDER BY m.created_at ASC
         `;
 
@@ -72,23 +69,19 @@ export default async function handler(req, res) {
 
       // 取得所有學員列表（教練後台用）
       const allStudents = await sql`
-        SELECT 
-          s.student_id,
-          s.module,
-          s.week,
+        SELECT
+          s.student_id, s.module, s.week,
           MAX(s.session_date) as last_active,
           COUNT(DISTINCT s.session_date) as days_completed,
           SUM(s.questions_today) as total_questions,
           (
-            SELECT m.content 
-            FROM messages m 
-            JOIN sessions s2 ON m.session_id = s2.id 
-            WHERE s2.student_id = s.student_id 
-              AND s2.module = s.module 
+            SELECT m.content FROM messages m
+            JOIN sessions s2 ON m.session_id = s2.id
+            WHERE s2.student_id = s.student_id
+              AND s2.module = s.module
               AND s2.week = s.week
               AND m.role = 'user'
-            ORDER BY m.created_at DESC 
-            LIMIT 1
+            ORDER BY m.created_at DESC LIMIT 1
           ) as last_answer
         FROM sessions s
         GROUP BY s.student_id, s.module, s.week
@@ -103,20 +96,18 @@ export default async function handler(req, res) {
     }
   }
 
-  // POST - 建立或更新今天的 session
   if (req.method === 'POST') {
-    const { studentId, module, week, sessionNotes, role, content, questionNumber, dayNumber } = req.body;
+    const { studentId, module, week, sessionNotes, role, content, questionNumber, dayNumber, today } = req.body;
 
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const sessionDate = today || new Date().toLocaleDateString('sv');
 
-      // 找或建立今天的 session
       let sessions = await sql`
         SELECT id, questions_today FROM sessions
         WHERE student_id = ${studentId}
           AND module = ${module}
           AND week = ${parseInt(week)}
-          AND session_date = ${today}
+          AND session_date = ${sessionDate}
         LIMIT 1
       `;
 
@@ -124,7 +115,7 @@ export default async function handler(req, res) {
       if (sessions.length === 0) {
         const newSession = await sql`
           INSERT INTO sessions (student_id, module, week, day, session_date, session_notes, questions_today)
-          VALUES (${studentId}, ${module}, ${parseInt(week)}, ${dayNumber || 1}, ${today}, ${sessionNotes || ''}, 0)
+          VALUES (${studentId}, ${module}, ${parseInt(week)}, ${dayNumber || 1}, ${sessionDate}, ${sessionNotes || ''}, 0)
           RETURNING id
         `;
         sessionId = newSession[0].id;
@@ -133,18 +124,14 @@ export default async function handler(req, res) {
         await sql`UPDATE sessions SET updated_at = NOW() WHERE id = ${sessionId}`;
       }
 
-      // 儲存訊息
       await sql`
         INSERT INTO messages (session_id, role, content, question_number)
         VALUES (${sessionId}, ${role}, ${content}, ${questionNumber || 0})
       `;
 
-      // 如果是學員回答，更新今日題數
       if (role === 'user') {
         await sql`
-          UPDATE sessions 
-          SET questions_today = questions_today + 1,
-              updated_at = NOW()
+          UPDATE sessions SET questions_today = questions_today + 1, updated_at = NOW()
           WHERE id = ${sessionId}
         `;
       }
@@ -157,19 +144,17 @@ export default async function handler(req, res) {
     }
   }
 
-  // PATCH - 標記今天完成
   if (req.method === 'PATCH') {
-    const { studentId, module, week } = req.body;
-    const today = new Date().toISOString().split('T')[0];
+    const { studentId, module, week, today } = req.body;
+    const sessionDate = today || new Date().toLocaleDateString('sv');
 
     try {
       await sql`
-        UPDATE sessions 
-        SET day_complete = TRUE, updated_at = NOW()
+        UPDATE sessions SET day_complete = TRUE, updated_at = NOW()
         WHERE student_id = ${studentId}
           AND module = ${module}
           AND week = ${parseInt(week)}
-          AND session_date = ${today}
+          AND session_date = ${sessionDate}
       `;
       return res.status(200).json({ success: true });
     } catch (error) {
