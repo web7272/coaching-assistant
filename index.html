@@ -593,11 +593,17 @@ async function loadDashboard() {
       const planLabel = PLAN_LABELS[s.plan] || s.plan;
       const tierLabel = TIER_LABELS[s.tier] || s.tier;
       const lastActive = s.last_active ? new Date(s.last_active).toLocaleDateString('zh-TW') : '尚未開始';
-      return `<div class="student-card" onclick="showConvo('${s.student_id}','${s.current_module}',${s.current_week})">
-        <div class="student-name">${s.student_id}${s.email ? ' · ' + s.email : ''}</div>
-        <div class="student-meta">${moduleLabel} Week ${s.current_week} Day ${s.current_day} · 最後活躍 ${lastActive}</div>
-        <div class="student-plan">${planLabel} · ${tierLabel} · 完成 ${s.days_completed || 0} 天</div>
-        ${s.notes ? `<div class="student-preview">${s.notes}</div>` : ''}
+      const studentJson = JSON.stringify(s).replace(/"/g, '&quot;');
+      return `<div class="student-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <div class="student-name">${s.student_id}${s.email ? ' · ' + s.email : ''}</div>
+          <button onclick="event.stopPropagation();showEditModal(JSON.parse(this.dataset.s))" data-s="${studentJson}" style="background:#4a6b4e;border:none;color:#d4e8d4;padding:4px 10px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;flex-shrink:0;">✏️ 編輯</button>
+        </div>
+        <div onclick="showConvo('${s.student_id}','${s.current_module}',${s.current_week})" style="cursor:pointer;">
+          <div class="student-meta">${moduleLabel} Week ${s.current_week} Day ${s.current_day} · 最後活躍 ${lastActive}</div>
+          <div class="student-plan">${planLabel} · ${tierLabel} · 完成 ${s.days_completed || 0} 天</div>
+          ${s.notes ? `<div class="student-preview">${s.notes}</div>` : ''}
+        </div>
       </div>`;
     }).join('');
   } catch(e) {
