@@ -243,6 +243,70 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h3 id="editStudentId">編輯學員</h3>
+    <div class="modal-field">
+      <label class="modal-label">方案</label>
+      <select class="modal-select" id="editPlan">
+        <option value="trial">免費試用</option>
+        <option value="self_only">自我關係（NT$2,000）</option>
+        <option value="self_money">自我+金錢（NT$3,500）</option>
+        <option value="self_relationship">自我+伴侶（NT$3,500）</option>
+        <option value="all">全套（NT$5,000）</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">層級</label>
+      <select class="modal-select" id="editTier">
+        <option value="0">免費試用</option>
+        <option value="1">自學系統</option>
+        <option value="2">陪跑版</option>
+        <option value="3">1對1教練</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">當前模組</label>
+      <select class="modal-select" id="editModule">
+        <option value="self">🌿 自我關係</option>
+        <option value="money">💰 金錢關係</option>
+        <option value="relationship">💫 伴侶關係</option>
+      </select>
+    </div>
+    <div class="modal-field" style="display:flex;gap:12px;">
+      <div style="flex:1;">
+        <label class="modal-label">第幾週</label>
+        <select class="modal-select" id="editWeek">
+          <option value="1">Week 1</option>
+          <option value="2">Week 2</option>
+          <option value="3">Week 3</option>
+          <option value="4">Week 4</option>
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label class="modal-label">第幾天</label>
+        <select class="modal-select" id="editDay">
+          <option value="1">Day 1</option>
+          <option value="2">Day 2</option>
+          <option value="3">Day 3</option>
+          <option value="4">Day 4</option>
+          <option value="5">Day 5</option>
+          <option value="6">Day 6</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">備注</label>
+      <input type="text" class="modal-input" id="editNotes" placeholder="教練備注">
+    </div>
+    <div class="modal-result" id="editResult"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="hideEditModal()">取消</button>
+      <button class="modal-save" onclick="saveStudent()">儲存變更</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const MODULE_LABELS = {self:'🌿 自我關係',money:'💰 金錢關係',relationship:'💫 伴侶關係'};
 const PLAN_LABELS = {trial:'免費試用',self_only:'自我關係',self_money:'自我+金錢',self_relationship:'自我+伴侶',all:'全套'};
@@ -291,19 +355,20 @@ function onIdInput() {
 
 async function lookupStudent(id, email) {
   try {
-    const res = await fetch(`/api/students?studentId=${id}`);
+    // 後端雙重驗證：student_id + email 都對才回資料
+    // email 不再從 URL 流出，前端也拿不到 email（只拿驗證結果）
+    const res = await fetch('/api/students', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'login', studentId: id, email})
+    });
     if (!res.ok) {
+      // 401 / 400 / 404 都統一顯示錯誤訊息（不洩漏哪個錯）
       document.getElementById('idError').style.display = 'block';
+      document.getElementById('idError').textContent = '編號或 email 不正確，請確認後再試';
       return;
     }
     const data = await res.json();
-    // 比對 email（不分大小寫）
-    const storedEmail = (data.student.email || '').toLowerCase().trim();
-    const inputEmail = (email || '').toLowerCase().trim();
-    if (storedEmail && storedEmail !== inputEmail) {
-      document.getElementById('idError').style.display = 'block';
-      return;
-    }
     studentData = data.student;
     const moduleLabel = MODULE_LABELS[studentData.current_module] || studentData.current_module;
     const infoEl = document.getElementById('studentInfo');
