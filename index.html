@@ -415,7 +415,7 @@ async function loadTodaySession() {
 
     if (!data.messages || data.messages.length === 0) {
       // 完全沒有對話記錄，開始全新的
-      setTimeout(() => addMessage('assistant', getOpeningMessage()), 500);
+      setTimeout(() => addMessage('assistant', getOpeningMessage(), true), 500);
       return;
     }
 
@@ -458,11 +458,11 @@ async function loadTodaySession() {
     // 找最近一天的 damon_note_public
     const lastSession = data.sessions?.[data.sessions.length - 1];
     const yesterdayNotePublic = lastSession?.damon_note_public || null;
-    setTimeout(() => addMessage('assistant', getOpeningMessage(yesterdayNotePublic)), 500);
+    setTimeout(() => addMessage('assistant', getOpeningMessage(yesterdayNotePublic), true), 500);
 
   } catch(e) {
     console.log('Load session error:', e);
-    setTimeout(() => addMessage('assistant', getOpeningMessage()), 500);
+    setTimeout(() => addMessage('assistant', getOpeningMessage(), true), 500);
   }
 }
 
@@ -546,9 +546,11 @@ function renderMessage(role, text) {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, isOpening = false) {
   renderMessage(role, text);
-  state.messages.push({role, content: text});
+  // 開場訊息（前端組的「歡迎回來」之類）不進 state.messages，避免污染送給 Anthropic API 的歷史
+  // Anthropic API 規定 messages 第一條必須是 user，如果開場 assistant 訊息進 state.messages，會讓 API 回 400
+  if (!isOpening) state.messages.push({role, content: text});
 }
 
 function showDamonNote(notePublic) {
@@ -634,7 +636,7 @@ async function sendMessage() {
     }
   } catch(e) {
     hideTyping();
-    addMessage('assistant', '抱歉，連線發生了問題。請稍後再試。');
+    addMessage('assistant', '抱歉，連線發生了問題。請稍後再試。', true);
   }
   state.isLoading = false;
 }
