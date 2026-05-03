@@ -330,8 +330,17 @@ async function advanceStudentDay(sql, studentId, module, week, day) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { messages, studentId, module, week, day, sessionNotes, today } = req.body;
-  if (!messages || !studentId) return res.status(400).json({ error: 'Missing required fields' });
+  const { messages: rawMessages, studentId, module, week, day, sessionNotes, today } = req.body;
+  if (!rawMessages || !studentId) return res.status(400).json({ error: 'Missing required fields' });
+
+  // 防呆：Anthropic API 規定 messages 第一條必須是 user
+  // 把開頭所有非 user 的 message 剝掉（例如前端組的「歡迎回來」開場 assistant 訊息）
+  let firstUserIdx = rawMessages.findIndex(m => m?.role === 'user');
+  const messages = firstUserIdx >= 0 ? rawMessages.slice(firstUserIdx) : [];
+
+  if (messages.length === 0) {
+    return res.status(400).json({ error: 'NO_USER_MESSAGE' });
+  }
 
   const sessionDate = today || new Date().toLocaleDateString('sv');
   const isDay6 = day === 6;
