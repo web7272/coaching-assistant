@@ -8,7 +8,7 @@ const WEEK_GOALS = {
     1: {
       goal: '從「不對勁」切入，找到學員真正在追求的東西，挖出初版價值觀清單，走到第一版 Self Concept。',
       collect: ['value_candidates', 'first_identity_statement', 'wanted_state'],
-      landing_q: '所以——你是一個什麼樣的人？用你自己的話說出來。'
+      landing_q: '你會怎麼形容這樣的人？'
     },
     2: {
       goal: '定義確認，排序，建立願景。讓學員說清楚每個詞的定義，再兩兩配對排序，最後從身份出發建立願景。',
@@ -18,7 +18,7 @@ const WEEK_GOALS = {
     3: {
       goal: '找到家族語錄，看見它保護什麼，讓學員自己說出新的可能方向。不重寫信念，只讓它被看見。',
       collect: ['family_phrases', 'old_belief', 'protected_self', 'new_belief_direction'],
-      landing_q: '那個讓你一直這樣選的聲音，它在保護的是哪一個你？'
+      landing_q: '那個聲音，在保護的是哪一個你？'
     },
     4: {
       goal: '整合三週素材，說出新的 Self Concept。不是新的挖掘，是讓學員看見自己走了多遠。',
@@ -30,7 +30,7 @@ const WEEK_GOALS = {
     1: {
       goal: '同時挖金錢和事業。從「你值得嗎、你夠好嗎」這個底層進去，不從外部成果進去。',
       collect: ['value_candidates', 'first_identity_statement', 'money_belief', 'career_belief'],
-      landing_q: '在金錢和事業上，你是一個什麼樣的人？用你自己的話說出來。'
+      landing_q: '你會怎麼形容這樣的人？'
     },
     2: {
       goal: '成功定義覺察，定義確認，排序，願景。',
@@ -40,7 +40,7 @@ const WEEK_GOALS = {
     3: {
       goal: '找到家族金錢語錄，看見驕傲與羞愧的雙重束縛，讓學員自己說出新的可能。',
       collect: ['family_phrases', 'old_belief', 'double_bind', 'new_belief_direction'],
-      landing_q: '那個讓你一直待在原地的聲音，它在保護的是什麼？'
+      landing_q: '那個聲音，在保護的是哪一個你？'
     },
     4: {
       goal: '整合三週素材，說出新的 Self Concept，做 SC Transfer。',
@@ -52,7 +52,7 @@ const WEEK_GOALS = {
     1: {
       goal: '從「說不清楚的不對勁」切入，找到六個關係困境層次中學員最有能量的那個。',
       collect: ['value_candidates', 'needs_awareness', 'first_identity_statement'],
-      landing_q: '在你最重要的關係裡，你是一個什麼樣的人？用你自己的話說出來。'
+      landing_q: '你會怎麼形容這樣的人？'
     },
     2: {
       goal: '依附模式覺察，定義確認，排序，願景。',
@@ -62,7 +62,7 @@ const WEEK_GOALS = {
     3: {
       goal: '找到家族關係語錄，看見它如何影響你對自己需要的態度。',
       collect: ['family_phrases', 'old_belief', 'needs_suppression', 'new_belief_direction'],
-      landing_q: '那個讓你把需要藏起來的聲音，它在保護的是哪一個你？'
+      landing_q: '那個聲音，在保護的是哪一個你？'
     },
     4: {
       goal: '整合三週素材，說出新的 Self Concept，做 SC Transfer。',
@@ -72,8 +72,19 @@ const WEEK_GOALS = {
   }
 };
 
+// 偵測學員回答是否到達 Layer 4（身份層）
+function detectLayer4(text) {
+  if (!text) return false;
+  const layer4Patterns = [
+    '我是一個', '我是那種', '我覺得自己是', '我一直是',
+    '我本來就是', '我其實是', '我好像是', '我算是',
+    '我就是那種', '我是會', '我是喜歡', '我是不喜歡'
+  ];
+  return layer4Patterns.some(p => text.includes(p));
+}
+
 function buildSystemPrompt(state) {
-  const { studentId, module, week, day, sessionNotes, turnCount, yesterdayNote, shouldClose, timeUp, lastUserMessage } = state;
+  const { studentId, module, week, day, sessionNotes, turnCount, yesterdayNote, shouldClose, timeUp, lastUserMessage, layer4Detected } = state;
   const weekGoal = WEEK_GOALS[module]?.[week] || WEEK_GOALS.self[1];
   const isDay6 = day === 6;
   const isVideoDay = day === 1 || day === 2;
@@ -88,17 +99,30 @@ ${yesterdayNote}
 
   const turnsLeft = MAX_TURNS - turnCount;
 
+  // 收尾指令——Layer 4 偵測到或回合數用盡
   let closureInstruction = '';
-  if (shouldClose || timeUp) {
+  if (layer4Detected) {
     closureInstruction = `
 
-# 收尾指令（現在立刻執行）
+# 收尾指令（學員剛說出了身份層的答案）
+學員剛才說了：「${lastUserMessage || ''}」
+這句話已經是身份層（Layer 4）的答案了。
+現在執行收尾，順序如下：
+1. Reflection：「你說的是『___』。」（把學員的話完整回給他）
+2. 說：「我聽到了。」
+3. 說：「今天先到這裡。把這句話留下來。🌿」
+不要再問任何問題。不要再問落地問句。直接說結束語。`;
+  } else if (shouldClose || timeUp) {
+    closureInstruction = `
+
+# 收尾指令（回合數或時間已到）
 學員剛才說了：「${lastUserMessage || ''}」
 這是今天最後一輪。請按這個順序：
 1. Reflection：「你說的是『___』。」
 2. 說「我聽到了。」
 3. 問落地問句：「${weekGoal.landing_q}」
-不要再問其他問題。就這三步。`;
+落地問句問完後，等學員回答，然後說：「今天先到這裡。把這句話留下來。🌿」
+不要再問其他問題。`;
   }
 
   return `你是一個 Adaptive Coaching Engine，使用 Damon Cart 的 Self Concept 框架。
@@ -115,7 +139,7 @@ ${weekGoal.goal}
 # 要收集的材料
 ${weekGoal.collect.join('、')}
 
-# 落地問句（走到 Layer 4 或回合用盡時使用）
+# 落地問句（回合用盡時使用）
 「${weekGoal.landing_q}」
 
 ${isVideoDay ? `# 今天是影片日（Day ${day}）
@@ -138,13 +162,15 @@ ${isVideoDay ? `# 今天是影片日（Day ${day}）
 - Layer 1（表層）：講外部事件、狀況、別人 → PROBE_DEEPER
 - Layer 2（感受）：講情緒、「我覺得很___」→ STAY_AND_EXPAND
 - Layer 3（價值）：講「我想要___」「我在乎___」→ PROBE_DEEPER
-- Layer 4（身份）⭐：講「我是___樣的人」→ SLOW_DOWN 然後收尾
+- Layer 4（身份）⭐：講「我是___的人」「我是那種___」→ 立刻收尾，說結束語，不再問問題
 - Layer 5（信念）：講底層規則、家族語錄 → STAY_AND_EXPAND
 
-# 收尾條件（任一觸發，在學員回答後執行）
-1. 學員到達 Layer 4 → Reflection + 落地問句
-2. 回合數用盡 → Reflection + 落地問句
-3. 落地問句回答後說：「今天先到這裡。把這句話留下來。🌿」
+# 收尾規則（非常重要）
+當學員說出任何「我是一個___」「我是那種___」「我就是___」的句型：
+→ 這是 Layer 4，立刻收尾
+→ 做 Reflection 然後說「今天先到這裡。把這句話留下來。🌿」
+→ 不要再問落地問句
+→ 不要繼續往下挖
 
 # 偵測機制
 - 逃避（不知道/還好/沒差）→「如果不是『不知道』，最接近的感覺是什麼？」
@@ -172,7 +198,7 @@ Step 3｜神級問題：「你這週最不想承認的是什麼？」
 Step 4｜SC 問句：「如果把這些放在一起——你覺得你是一個什麼樣的人？」學員回答後只說：「我聽到了。」
 Step 5｜關鍵一刀：「但這裡有一個地方，我們這一週還沒有碰到。」
 Step 6｜指出未看見：「你現在看到的，是你怎麼選擇。但還沒看到的是——你為什麼一直這樣選。」
-Step 7｜張力＋方向：「如果沒有看見那一層，很多選擇，會慢慢回到原本的樣子。下一週，我們會往那一層走。」今天先到這裡。🌿
+Step 7｜張力＋方向：「如果沒有看見那一層，很多選擇，會慢慢回到原本的樣子。下一週，我們會往那一層走。今天先到這裡。🌿」
 
 # 守則
 - 每步等學員回應再繼續
@@ -188,7 +214,6 @@ async function generateDamonNote(sql, sessionId, module, week, day) {
         AND role IN ('user', 'assistant')
       ORDER BY created_at ASC
     `;
-
     if (messages.length < 2) return null;
 
     const moduleLabel = module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係';
@@ -236,11 +261,7 @@ async function generateDamonNote(sql, sessionId, module, week, day) {
       })
     });
 
-    if (!response.ok) {
-      console.error('Damon Note API error:', response.status, await response.text());
-      return null;
-    }
-
+    if (!response.ok) return null;
     const data = await response.json();
     const fullNote = data.content[0].text;
 
@@ -258,7 +279,6 @@ async function generateDamonNote(sql, sessionId, module, week, day) {
       WHERE id = ${sessionId}
     `;
 
-    console.log('Damon Note generated for session', sessionId);
     return { fullNote, publicNote };
   } catch (e) {
     console.error('Damon Note error:', e);
@@ -295,16 +315,11 @@ async function advanceStudentDay(sql, studentId, module, week, day) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { messages, studentId, module, week, day, sessionNotes, today } = req.body;
-  if (!messages || !studentId) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
+  if (!messages || !studentId) return res.status(400).json({ error: 'Missing required fields' });
 
-  // 使用前端傳來的本地日期，若沒有則用 UTC
   const sessionDate = today || new Date().toLocaleDateString('sv');
   const isDay6 = day === 6;
 
@@ -314,26 +329,21 @@ export default async function handler(req, res) {
     // 取得昨天的 Damon Note
     let yesterdayNote = null;
     try {
-      const yesterdayNotes = await sql`
+      const notes = await sql`
         SELECT damon_note FROM sessions
-        WHERE student_id = ${studentId}
-          AND module = ${module}
-          AND week = ${parseInt(week)}
-          AND session_date < ${sessionDate}
+        WHERE student_id = ${studentId} AND module = ${module}
+          AND week = ${parseInt(week)} AND session_date < ${sessionDate}
           AND damon_note IS NOT NULL
-        ORDER BY session_date DESC
-        LIMIT 1
+        ORDER BY session_date DESC LIMIT 1
       `;
-      if (yesterdayNotes.length > 0) yesterdayNote = yesterdayNotes[0].damon_note;
-    } catch(e) { console.error('Yesterday note error:', e); }
+      if (notes.length > 0) yesterdayNote = notes[0].damon_note;
+    } catch(e) {}
 
     // 找或建立今天的 session
     let sessions = await sql`
       SELECT id, questions_today, created_at FROM sessions
-      WHERE student_id = ${studentId}
-        AND module = ${module}
-        AND week = ${parseInt(week)}
-        AND session_date = ${sessionDate}
+      WHERE student_id = ${studentId} AND module = ${module}
+        AND week = ${parseInt(week)} AND session_date = ${sessionDate}
       LIMIT 1
     `;
 
@@ -359,6 +369,9 @@ export default async function handler(req, res) {
     const userMessage = messages[messages.length - 1];
     const lastUserMessage = userMessage?.role === 'user' ? userMessage.content : '';
 
+    // 偵測 Layer 4
+    const layer4Detected = !isDay6 && detectLayer4(lastUserMessage);
+
     if (userMessage?.role === 'user') {
       await sql`
         INSERT INTO messages (session_id, role, content, question_number)
@@ -378,7 +391,7 @@ export default async function handler(req, res) {
     const systemPrompt = buildSystemPrompt({
       studentId, module, week, day,
       sessionNotes, turnCount, yesterdayNote,
-      shouldClose, timeUp, lastUserMessage
+      shouldClose, timeUp, lastUserMessage, layer4Detected
     });
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -421,18 +434,14 @@ export default async function handler(req, res) {
     let damonNotePublic = null;
 
     if (dayComplete || day6Complete) {
-      await sql`
-        UPDATE sessions SET day_complete = TRUE, updated_at = NOW()
-        WHERE id = ${sessionId}
-      `;
+      await sql`UPDATE sessions SET day_complete = TRUE, updated_at = NOW() WHERE id = ${sessionId}`;
       const noteResult = await generateDamonNote(sql, sessionId, module, week, day);
       if (noteResult) damonNotePublic = noteResult.publicNote;
       await advanceStudentDay(sql, studentId, module, parseInt(week), day);
     }
 
     return res.status(200).json({
-      content,
-      turnCount,
+      content, turnCount,
       dayComplete: dayComplete || day6Complete,
       damonNotePublic,
       turnsLeft: Math.max(0, MAX_TURNS - turnCount)
