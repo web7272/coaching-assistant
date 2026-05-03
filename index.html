@@ -152,7 +152,11 @@
     <div class="form-group">
       <label class="form-label">你的專屬編號</label>
       <input type="text" class="form-input" id="studentId" placeholder="輸入教練給你的編號（例如 A001）" maxlength="4" oninput="onIdInput()">
-      <div class="form-error" id="idError">找不到這個編號，請確認後再試</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">你的 Email</label>
+      <input type="email" class="form-input" id="studentEmail" placeholder="輸入你的 email" oninput="onIdInput()">
+      <div class="form-error" id="idError">編號或 email 不正確，請確認後再試</div>
       <div class="form-info" id="studentInfo"></div>
     </div>
   </div>
@@ -274,16 +278,18 @@ function showDashboard() {
 // ==================== SETUP ====================
 function onIdInput() {
   const id = document.getElementById('studentId').value.trim().toUpperCase();
+  const email = document.getElementById('studentEmail').value.trim().toLowerCase();
   document.getElementById('idError').style.display = 'none';
   document.getElementById('studentInfo').style.display = 'none';
   document.getElementById('startBtn').disabled = true;
   studentData = null;
   if (!/^[A-Za-z]\d{3}$/.test(id)) return;
+  if (!email || !email.includes('@')) return;
   clearTimeout(lookupTimer);
-  lookupTimer = setTimeout(() => lookupStudent(id), 500);
+  lookupTimer = setTimeout(() => lookupStudent(id, email), 500);
 }
 
-async function lookupStudent(id) {
+async function lookupStudent(id, email) {
   try {
     const res = await fetch(`/api/students?studentId=${id}`);
     if (!res.ok) {
@@ -291,6 +297,13 @@ async function lookupStudent(id) {
       return;
     }
     const data = await res.json();
+    // 比對 email（不分大小寫）
+    const storedEmail = (data.student.email || '').toLowerCase().trim();
+    const inputEmail = (email || '').toLowerCase().trim();
+    if (storedEmail && storedEmail !== inputEmail) {
+      document.getElementById('idError').style.display = 'block';
+      return;
+    }
     studentData = data.student;
     const moduleLabel = MODULE_LABELS[studentData.current_module] || studentData.current_module;
     const infoEl = document.getElementById('studentInfo');
@@ -709,6 +722,58 @@ function exportConvo() {
     text += `${m.role==='assistant'?'【助理】':'【學員】'}\n${m.content}\n\n`;
   });
   navigator.clipboard.writeText(text).then(() => alert('已複製！'));
+}
+
+let editingStudentId = null;
+
+function showEditModal(student) {
+  editingStudentId = student.student_id;
+  document.getElementById('editStudentId').textContent = `編輯學員：${student.student_id} · ${student.email || ''}`;
+  document.getElementById('editPlan').value = student.plan || 'trial';
+  document.getElementById('editTier').value = student.tier || 0;
+  document.getElementById('editModule').value = student.current_module || 'self';
+  document.getElementById('editWeek').value = student.current_week || 1;
+  document.getElementById('editDay').value = student.current_day || 1;
+  document.getElementById('editNotes').value = student.notes || '';
+  document.getElementById('editResult').style.display = 'none';
+  document.getElementById('editModal').classList.add('active');
+}
+
+function hideEditModal() {
+  document.getElementById('editModal').classList.remove('active');
+  editingStudentId = null;
+}
+
+async function saveStudent() {
+  if (!editingStudentId) return;
+  const resultEl = document.getElementById('editResult');
+  try {
+    const res = await fetch('/api/students', {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        studentId: editingStudentId,
+        plan: document.getElementById('editPlan').value,
+        tier: parseInt(document.getElementById('editTier').value),
+        current_module: document.getElementById('editModule').value,
+        current_week: parseInt(document.getElementById('editWeek').value),
+        current_day: parseInt(document.getElementById('editDay').value),
+        notes: document.getElementById('editNotes').value.trim()
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      resultEl.style.display = 'block';
+      resultEl.textContent = '✅ 儲存成功';
+      setTimeout(() => { hideEditModal(); loadDashboard(); }, 1500);
+    } else {
+      resultEl.style.display = 'block';
+      resultEl.textContent = '儲存失敗：' + (data.error || '未知錯誤');
+    }
+  } catch(e) {
+    resultEl.style.display = 'block';
+    resultEl.textContent = '連線錯誤，請稍後再試';
+  }
 }
 
 function closeConvo() {
