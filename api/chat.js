@@ -72,19 +72,43 @@ const WEEK_GOALS = {
   }
 };
 
-// 偵測學員回答是否到達 Layer 4（身份層）
+// 偵測學員回答是否到達 Layer 4（身份層）——擴展版
 function detectLayer4(text) {
   if (!text) return false;
   const layer4Patterns = [
+    // 「我是」開頭
     '我是一個', '我是那種', '我覺得自己是', '我一直是',
     '我本來就是', '我其實是', '我好像是', '我算是',
-    '我就是那種', '我是會', '我是喜歡', '我是不喜歡'
+    '我就是那種', '我是會', '我是喜歡', '我是不喜歡',
+    // 不含「我是」的身份陳述
+    '一個有', '一個很', '一個會', '一個喜歡', '一個不喜歡',
+    '一個能', '一個想', '那種會', '那種人', '那種喜歡',
+    '有愛的人', '有能力的人', '願意的人', '懂得的人',
+    // 形容詞型
+    '我很', '我挺', '我比較', '我算是比較'
   ];
   return layer4Patterns.some(p => text.includes(p));
 }
 
+// 偵測上一輪 Claude 是否已經問了落地問句
+function detectLandingQAsked(messages, landingQ) {
+  if (!messages || messages.length < 2) return false;
+  // 找最後一條 assistant 訊息（不含最新的）
+  const assistantMessages = messages
+    .filter(m => m.role === 'assistant')
+    .slice(0, -1); // 排除最新的
+  if (assistantMessages.length === 0) return false;
+  const lastAssistant = assistantMessages[assistantMessages.length - 1];
+  return lastAssistant.content.includes(landingQ) ||
+         lastAssistant.content.includes('你會怎麼形容') ||
+         lastAssistant.content.includes('說明了你是') ||
+         lastAssistant.content.includes('在保護的是哪一個你') ||
+         lastAssistant.content.includes('你是誰？用一句話');
+}
+
 function buildSystemPrompt(state) {
-  const { studentId, module, week, day, sessionNotes, turnCount, yesterdayNote, shouldClose, timeUp, lastUserMessage, layer4Detected } = state;
+  const { studentId, module, week, day, sessionNotes, turnCount, yesterdayNote,
+          shouldClose, timeUp, lastUserMessage, layer4Detected, landingQAsked } = state;
   const weekGoal = WEEK_GOALS[module]?.[week] || WEEK_GOALS.self[1];
   const isDay6 = day === 6;
   const isVideoDay = day === 1 || day === 2;
@@ -99,30 +123,41 @@ ${yesterdayNote}
 
   const turnsLeft = MAX_TURNS - turnCount;
 
-  // 收尾指令——Layer 4 偵測到或回合數用盡
   let closureInstruction = '';
-  if (layer4Detected) {
+
+  if (landingQAsked) {
+    // 落地問句已問過，學員剛回答了——直接說結束語
     closureInstruction = `
 
-# 收尾指令（學員剛說出了身份層的答案）
+# 收尾指令（落地問句已問過，現在說結束語）
+學員剛才回答了落地問句，說了：「${lastUserMessage || ''}」
+現在只做兩件事：
+1. Reflection：「你說的是『___』。」
+2. 說：「今天先到這裡。把這句話留下來。🌿」
+不要再問任何問題。`;
+
+  } else if (layer4Detected) {
+    // 偵測到 Layer 4 句型——接住然後問落地問句
+    closureInstruction = `
+
+# 收尾指令（偵測到 Layer 4）
 學員剛才說了：「${lastUserMessage || ''}」
-這句話已經是身份層（Layer 4）的答案了。
-現在執行收尾，順序如下：
-1. Reflection：「你說的是『___』。」（把學員的話完整回給他）
+這是身份層的答案。現在執行收尾：
+1. Reflection：「你說的是『___』。」
 2. 說：「我聽到了。」
-3. 說：「今天先到這裡。把這句話留下來。🌿」
-不要再問任何問題。不要再問落地問句。直接說結束語。`;
+3. 問落地問句：「${weekGoal.landing_q}」
+問完就停，等學員回答。下一輪收到回答後說結束語。`;
+
   } else if (shouldClose || timeUp) {
     closureInstruction = `
 
-# 收尾指令（回合數或時間已到）
+# 收尾指令（回合或時間已到）
 學員剛才說了：「${lastUserMessage || ''}」
 這是今天最後一輪。請按這個順序：
 1. Reflection：「你說的是『___』。」
 2. 說「我聽到了。」
 3. 問落地問句：「${weekGoal.landing_q}」
-落地問句問完後，等學員回答，然後說：「今天先到這裡。把這句話留下來。🌿」
-不要再問其他問題。`;
+問完就停，等學員回答。下一輪收到回答後說結束語。`;
   }
 
   return `你是一個 Adaptive Coaching Engine，使用 Damon Cart 的 Self Concept 框架。
@@ -139,7 +174,7 @@ ${weekGoal.goal}
 # 要收集的材料
 ${weekGoal.collect.join('、')}
 
-# 落地問句（回合用盡時使用）
+# 落地問句
 「${weekGoal.landing_q}」
 
 ${isVideoDay ? `# 今天是影片日（Day ${day}）
@@ -162,15 +197,15 @@ ${isVideoDay ? `# 今天是影片日（Day ${day}）
 - Layer 1（表層）：講外部事件、狀況、別人 → PROBE_DEEPER
 - Layer 2（感受）：講情緒、「我覺得很___」→ STAY_AND_EXPAND
 - Layer 3（價值）：講「我想要___」「我在乎___」→ PROBE_DEEPER
-- Layer 4（身份）⭐：講「我是___的人」「我是那種___」→ 立刻收尾，說結束語，不再問問題
+- Layer 4（身份）⭐：講「一個___的人」「我是___」→ 接住，問落地問句，然後收尾
 - Layer 5（信念）：講底層規則、家族語錄 → STAY_AND_EXPAND
 
-# 收尾規則（非常重要）
-當學員說出任何「我是一個___」「我是那種___」「我就是___」的句型：
-→ 這是 Layer 4，立刻收尾
-→ 做 Reflection 然後說「今天先到這裡。把這句話留下來。🌿」
-→ 不要再問落地問句
-→ 不要繼續往下挖
+# 收尾規則（重要）
+當學員說出身份層答案（「一個___的人」「我是___」）：
+→ Reflection + 「我聽到了。」+ 落地問句
+→ 落地問句問完，等學員回答
+→ 學員回答後：Reflection + 「今天先到這裡。把這句話留下來。🌿」
+→ 不要再問任何問題
 
 # 偵測機制
 - 逃避（不知道/還好/沒差）→「如果不是『不知道』，最接近的感覺是什麼？」
@@ -372,6 +407,10 @@ export default async function handler(req, res) {
     // 偵測 Layer 4
     const layer4Detected = !isDay6 && detectLayer4(lastUserMessage);
 
+    // 偵測落地問句是否已問過
+    const weekGoal = WEEK_GOALS[module]?.[week] || WEEK_GOALS.self[1];
+    const landingQAsked = !isDay6 && detectLandingQAsked(messages, weekGoal.landing_q);
+
     if (userMessage?.role === 'user') {
       await sql`
         INSERT INTO messages (session_id, role, content, question_number)
@@ -391,7 +430,8 @@ export default async function handler(req, res) {
     const systemPrompt = buildSystemPrompt({
       studentId, module, week, day,
       sessionNotes, turnCount, yesterdayNote,
-      shouldClose, timeUp, lastUserMessage, layer4Detected
+      shouldClose, timeUp, lastUserMessage,
+      layer4Detected, landingQAsked
     });
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
