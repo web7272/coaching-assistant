@@ -97,25 +97,24 @@ function buildSystemPrompt(state) {
   const damonContext = yesterdayNote ? `\n\n# 昨天的 Damon Note（上下文記憶）
 ${yesterdayNote}
 
-今天從「明天的入口」那個問句開始，承接昨天的脈絡繼續深挖。` : '';
+今天從「明天的入口」那個問句開始，承接昨天的脈絡繼續深挖。不要說「你好」或重新介紹自己。直接說：「歡迎回來。」然後從昨天的入口問句進去。` : '';
 
   if (isDay6) return buildDay6Prompt(state, weekGoal, damonContext);
 
   const turnsLeft = MAX_TURNS - turnCount;
 
-  // 收尾指令——在學員回答完之後才觸發，讓 Claude 做 Reflection 再問落地問句
- let closureInstruction = '';
-if (shouldClose || timeUp) {
-  closureInstruction = `
+  let closureInstruction = '';
+  if (shouldClose || timeUp) {
+    closureInstruction = `
 
 # 收尾指令（現在立刻執行）
-你已經問過落地問句了。學員剛才說了：「${lastUserMessage || ''}」
-這是今天的答案。
-現在只需要做兩件事：
-1. 說「你說的是『___』。」（Reflection）
-2. 說「今天先到這裡。把這句話留下來。🌿」
-不要再問任何問題。不要再問落地問句。直接說結束語。`;
-}
+學員剛才說了：「${lastUserMessage || ''}」
+這是今天最後一輪。請按這個順序：
+1. Reflection：「你說的是『___』。」
+2. 說「我聽到了。」
+3. 問落地問句：「${weekGoal.landing_q}」
+不要再問其他問題。就這三步。`;
+  }
 
   return `你是一個 Adaptive Coaching Engine，使用 Damon Cart 的 Self Concept 框架。
 
@@ -135,7 +134,7 @@ ${weekGoal.collect.join('、')}
 「${weekGoal.landing_q}」
 
 ${isVideoDay ? `# 今天是影片日（Day ${day}）
-學員今天先看了課程影片。第一個問題要承接影片主題。
+學員今天先看了課程影片。如果沒有昨天的 Damon Note，第一個問題要承接影片主題。
 ` : ''}
 
 # 核心守則（永遠不能違反）
@@ -158,8 +157,8 @@ ${isVideoDay ? `# 今天是影片日（Day ${day}）
 - Layer 5（信念）：講底層規則、家族語錄 → STAY_AND_EXPAND
 
 # 收尾條件（任一觸發，在學員回答後執行）
-1. 學員到達 Layer 4 → 做 Reflection + 落地問句
-2. 回合數用盡 → 做 Reflection + 落地問句
+1. 學員到達 Layer 4 → Reflection + 落地問句
+2. 回合數用盡 → Reflection + 落地問句
 3. 落地問句回答後說：「今天先到這裡。把這句話留下來。🌿」
 
 # 偵測機制
@@ -174,7 +173,6 @@ ${isVideoDay ? `# 今天是影片日（Day ${day}）
 
 function buildDay6Prompt(state, weekGoal, damonContext) {
   const { studentId, module, week } = state;
-
   return `你是一個 Adaptive Coaching Engine，現在執行 Day 6 整合日。
 
 # 學員資訊
@@ -189,7 +187,7 @@ Step 3｜神級問題：「你這週最不想承認的是什麼？」
 Step 4｜SC 問句：「如果把這些放在一起——你覺得你是一個什麼樣的人？」學員回答後只說：「我聽到了。」
 Step 5｜關鍵一刀：「但這裡有一個地方，我們這一週還沒有碰到。」
 Step 6｜指出未看見：「你現在看到的，是你怎麼選擇。但還沒看到的是——你為什麼一直這樣選。」
-Step 7｜張力＋方向：「如果沒有看見那一層，很多選擇，會慢慢回到原本的樣子。下一週，我們會往那一層走。」
+Step 7｜張力＋方向：「如果沒有看見那一層，很多選擇，會慢慢回到原本的樣子。下一週，我們會往那一層走。」今天先到這裡。🌿
 
 # 守則
 - 每步等學員回應再繼續
@@ -224,10 +222,9 @@ async function generateDamonNote(sql, sessionId, module, week, day) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 800,
-        system: `你是 Damon Cart，一個 Self Concept 教練。
-你剛完成了一段和學員的對話。
+        system: `你是 Damon Cart，一個 Self Concept 教練。你剛完成了一段和學員的對話。請用教練的視角寫下今天的 Damon Note。
 
-請用教練的視角寫下今天的 Damon Note，格式如下：
+格式（嚴格按照，每個標題獨立一行）：
 
 【今天的模式】
 學員今天反覆出現的詞或主題（2-3句）
@@ -255,7 +252,10 @@ async function generateDamonNote(sql, sessionId, module, week, day) {
       })
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error('Damon Note API error:', response.status);
+      return null;
+    }
 
     const data = await response.json();
     const fullNote = data.content[0].text;
@@ -270,14 +270,57 @@ async function generateDamonNote(sql, sessionId, module, week, day) {
 
     await sql`
       UPDATE sessions
-      SET damon_note = ${fullNote}, damon_note_public = ${publicNote}, updated_at = NOW()
+      SET damon_note = ${fullNote},
+          damon_note_public = ${publicNote},
+          updated_at = NOW()
       WHERE id = ${sessionId}
     `;
 
+    console.log('Damon Note generated successfully for session', sessionId);
     return { fullNote, publicNote };
   } catch (e) {
-    console.error('Damon Note error:', e);
+    console.error('Damon Note generation error:', e);
     return null;
+  }
+}
+
+async function advanceStudentDay(sql, studentId, module, week, day) {
+  try {
+    const nextDay = day + 1;
+    const isWeekComplete = day === 6;
+
+    if (isWeekComplete) {
+      // 第六天完成 → 推進到下一週第一天
+      const nextWeek = week + 1;
+      if (nextWeek > 4) {
+        // 模組完成
+        await sql`
+          UPDATE students
+          SET self_week_completed = CASE WHEN ${module} = 'self' THEN 4 ELSE self_week_completed END,
+              updated_at = NOW()
+          WHERE student_id = ${studentId}
+        `;
+      } else {
+        await sql`
+          UPDATE students
+          SET current_week = ${nextWeek},
+              current_day = 1,
+              updated_at = NOW()
+          WHERE student_id = ${studentId}
+        `;
+      }
+    } else {
+      // 推進到下一天
+      await sql`
+        UPDATE students
+        SET current_day = ${nextDay},
+            updated_at = NOW()
+        WHERE student_id = ${studentId}
+      `;
+    }
+    console.log(`Advanced student ${studentId} to day ${nextDay}`);
+  } catch (e) {
+    console.error('Advance student day error:', e);
   }
 }
 
@@ -311,7 +354,7 @@ export default async function handler(req, res) {
         LIMIT 1
       `;
       if (yesterdayNotes.length > 0) yesterdayNote = yesterdayNotes[0].damon_note;
-    } catch(e) {}
+    } catch(e) { console.error('Yesterday note error:', e); }
 
     // 找或建立今天的 session
     let sessions = await sql`
@@ -357,7 +400,7 @@ export default async function handler(req, res) {
           UPDATE sessions SET questions_today = questions_today + 1, updated_at = NOW()
           WHERE id = ${sessionId}
         `;
-        turnCount++; // 學員回答後才算一回合
+        turnCount++;
       }
     }
 
@@ -401,7 +444,6 @@ export default async function handler(req, res) {
     `;
 
     // 偵測今天是否完成
-    // 收尾關鍵詞：落地問句問完、說了結束語
     const dayComplete = !isDay6 && (
       content.includes('今天先到這裡') ||
       content.includes('把這句話留下來') ||
@@ -409,21 +451,33 @@ export default async function handler(req, res) {
       content.includes('今天就到這裡')
     );
 
+    // Day 6 完成偵測
+    const day6Complete = isDay6 && (
+      content.includes('今天先到這裡') ||
+      content.includes('下一週，我們會往那一層走')
+    );
+
     let damonNotePublic = null;
 
-    if (dayComplete) {
+    if (dayComplete || day6Complete) {
+      // 標記完成
       await sql`
         UPDATE sessions SET day_complete = TRUE, updated_at = NOW()
         WHERE id = ${sessionId}
       `;
+
+      // 生成 Damon Note
       const noteResult = await generateDamonNote(sql, sessionId, module, week, day);
       if (noteResult) damonNotePublic = noteResult.publicNote;
+
+      // 推進學員天數
+      await advanceStudentDay(sql, studentId, module, parseInt(week), day);
     }
 
     return res.status(200).json({
       content,
       turnCount,
-      dayComplete,
+      dayComplete: dayComplete || day6Complete,
       damonNotePublic,
       turnsLeft: Math.max(0, MAX_TURNS - turnCount)
     });
