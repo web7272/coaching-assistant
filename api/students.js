@@ -182,25 +182,23 @@ export default async function handler(req, res) {
       }
 
       // ---------- 後台列表 ----------
-      // 先取 students 主表（這個一定能成功）
-      const students = await sql`
-        SELECT
-          student_id, email, plan, tier,
-          current_module, current_week, current_day,
-          notes, created_at
-        FROM students
-        ORDER BY created_at DESC
-      `;
+      // 主表用 SELECT * 避開欄位猜測——學員列表一定能出來
+      let students = [];
+      try {
+        students = await sql`SELECT * FROM students ORDER BY created_at DESC`;
+      } catch (e0) {
+        // 連 created_at 都可能不存在，最後降級：完全不排序
+        console.warn('students ORDER BY created_at failed, falling back:', e0.message);
+        students = await sql`SELECT * FROM students`;
+      }
 
       // 再嘗試補 sessions 統計（schema 可能不同，失敗就降級不補）
-      // 兼容兩種可能 schema：
-      //   - 有 status 欄位 → 用 status='completed' 算
-      //   - 沒 status 欄位 → 退回用 dayN 欄位 / completed_at / 純粹 count
+      // 實際 schema：sessions 表用 day_complete (boolean) 標記完成
       let stats = {};
       try {
         const rows = await sql`
           SELECT student_id,
-                 COUNT(*) FILTER (WHERE status = 'completed') AS days_completed,
+                 COUNT(*) FILTER (WHERE day_complete = TRUE) AS days_completed,
                  MAX(updated_at) AS last_active
           FROM sessions
           GROUP BY student_id
@@ -212,7 +210,7 @@ export default async function handler(req, res) {
           };
         }
       } catch (e1) {
-        // 第一種 schema 不對，試第二種：用 created_at 當 last_active
+        // schema 不符，最後降級用 created_at
         try {
           const rows = await sql`
             SELECT student_id,
@@ -228,7 +226,6 @@ export default async function handler(req, res) {
             };
           }
         } catch (e2) {
-          // 兩種都失敗就純粹不補統計，列表還是會顯示出來
           console.warn('sessions stats query failed:', e2.message);
         }
       }
