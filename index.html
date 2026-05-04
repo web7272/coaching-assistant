@@ -12,13 +12,13 @@
   .screen{display:none;flex-direction:column;min-height:100vh;}
   .screen.active{display:flex;}
 
-  #welcome{background:linear-gradient(160deg,#3d5c40 0%,#2d4030 40%,#1a2a1c 100%);justify-content:flex-end;padding:40px 28px 56px;position:relative;overflow:hidden;}
+  #welcome{background:linear-gradient(160deg,#3d5c40 0%,#2d4030 40%,#1a2a1c 100%);justify-content:center;align-items:center;text-align:center;padding:40px 28px 56px;position:relative;overflow:hidden;}
   #welcome::before{content:'';position:absolute;top:-20%;right:-20%;width:70vw;height:70vw;background:radial-gradient(circle,rgba(122,158,126,0.15) 0%,transparent 70%);border-radius:50%;}
   .welcome-eyebrow{font-size:11px;letter-spacing:3px;color:#7a9e7e;text-transform:uppercase;margin-bottom:16px;}
   .welcome-title{font-family:'Noto Serif TC',serif;font-size:36px;font-weight:300;line-height:1.3;color:#f0ede8;margin-bottom:12px;}
   .welcome-title span{color:#a8c5ab;}
   .welcome-sub{font-size:14px;color:#8aaa8e;line-height:1.8;margin-bottom:48px;}
-  .welcome-buttons{display:flex;flex-direction:column;gap:12px;}
+  .welcome-buttons{display:flex;flex-direction:column;gap:12px;width:100%;max-width:420px;}
   .btn-primary{background:linear-gradient(135deg,#7a9e7e,#5a7e5e);color:white;border:none;padding:18px 28px;border-radius:16px;font-size:16px;font-weight:500;font-family:inherit;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 16px rgba(90,126,94,0.4);}
   .btn-secondary{background:rgba(255,255,255,0.06);color:#a8c5ab;border:1px solid rgba(122,158,126,0.3);padding:16px 28px;border-radius:16px;font-size:14px;font-family:inherit;cursor:pointer;text-align:left;}
   .disclaimer{font-size:11px;color:#8aaa8e;text-align:center;padding:16px 20px 0;line-height:1.6;}
@@ -73,6 +73,13 @@
   .day-complete-sub{font-size:14px;color:var(--mid);line-height:1.7;margin-bottom:20px;}
   .btn-complete{background:linear-gradient(135deg,#7a9e7e,#5a7e5e);color:white;border:none;padding:14px 28px;border-radius:14px;font-size:15px;font-family:inherit;cursor:pointer;}
   .already-done-card{background:#f0f7f0;border-radius:20px;padding:24px;margin:8px 0;text-align:center;}
+
+  /* 影片嵌入 card（Day 1 / Day 2 影片日專用）*/
+  .video-card{background:white;border-radius:16px;padding:16px;margin:8px 0;box-shadow:0 2px 12px rgba(0,0,0,0.06);animation:fadeUp 0.4s ease;}
+  .video-card-label{font-size:11px;color:var(--mid);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase;}
+  .video-wrapper{position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;background:#000;}
+  .video-wrapper iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0;}
+  .video-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;background:#f5f5f0;border-radius:12px;color:var(--mid);font-size:13px;text-align:center;line-height:1.7;}
   .typing-indicator{display:flex;align-items:center;gap:8px;padding:12px 16px;background:white;border-radius:18px;border-bottom-left-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,0.06);max-width:80px;}
   .dot{width:7px;height:7px;background:var(--sage-light);border-radius:50%;animation:bounce 1.2s infinite;}
   .dot:nth-child(2){animation-delay:0.2s;}
@@ -312,6 +319,67 @@ const MODULE_LABELS = {self:'🌿 自我關係',money:'💰 金錢關係',relati
 const PLAN_LABELS = {trial:'免費試用',self_only:'自我關係',self_money:'自我+金錢',self_relationship:'自我+伴侶',all:'全套'};
 const TIER_LABELS = {0:'免費試用',1:'自學系統',2:'陪跑版',3:'1對1教練'};
 
+// ============================================================
+// 🎬 影片 ID 對照表（YouTube video ID）
+// 影片錄完後把每格的 'PLACEHOLDER' 換成實際 YouTube ID
+// 例如：https://www.youtube.com/watch?v=dQw4w9WgXcQ → 'dQw4w9WgXcQ'
+// 設成空字串 '' 或 null 會顯示「影片準備中」placeholder
+// ============================================================
+const DEMO_VIDEO_ID = 'dQw4w9WgXcQ'; // demo placeholder（Rick Roll 😅）
+const VIDEO_URLS = {
+  self: {
+    1: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    2: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    3: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    4: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+  },
+  money: {
+    1: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    2: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    3: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    4: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+  },
+  relationship: {
+    1: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    2: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    3: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+    4: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
+  },
+};
+
+function getVideoId(module, week, day) {
+  return VIDEO_URLS[module]?.[week]?.[day] || null;
+}
+
+function renderVideoEmbed() {
+  const isVideoDay = state.day === 1 || state.day === 2;
+  if (!isVideoDay) return;
+  const videoId = getVideoId(state.module, state.week, state.day);
+  const msgs = document.getElementById('chatMessages');
+  const card = document.createElement('div');
+  card.className = 'video-card';
+  if (videoId) {
+    card.innerHTML = `
+      <div class="video-card-label">📺 今天的影片</div>
+      <div class="video-wrapper">
+        <iframe src="https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1"
+                frameborder="0"
+                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen></iframe>
+      </div>
+    `;
+  } else {
+    card.innerHTML = `
+      <div class="video-card-label">📺 今天的影片</div>
+      <div class="video-placeholder">
+        影片準備中<br><span style="font-size:11px;color:var(--light)">請直接打「我準備好了」開始今天的對話</span>
+      </div>
+    `;
+  }
+  msgs.appendChild(card);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 let state = {studentId:'',module:'',week:0,day:0,messages:[],isLoading:false,dayComplete:false};
 let currentConvoData = null;
 let currentTab = 'messages';
@@ -415,7 +483,7 @@ async function loadTodaySession() {
 
     if (!data.messages || data.messages.length === 0) {
       // 完全沒有對話記錄，開始全新的
-      setTimeout(() => addMessage('assistant', getOpeningMessage(), true), 500);
+      setTimeout(() => { addMessage('assistant', getOpeningMessage(), true); renderVideoEmbed(); }, 500);
       return;
     }
 
@@ -458,11 +526,11 @@ async function loadTodaySession() {
     // 找最近一天的 damon_note_public
     const lastSession = data.sessions?.[data.sessions.length - 1];
     const yesterdayNotePublic = lastSession?.damon_note_public || null;
-    setTimeout(() => addMessage('assistant', getOpeningMessage(yesterdayNotePublic), true), 500);
+    setTimeout(() => { addMessage('assistant', getOpeningMessage(yesterdayNotePublic), true); renderVideoEmbed(); }, 500);
 
   } catch(e) {
     console.log('Load session error:', e);
-    setTimeout(() => addMessage('assistant', getOpeningMessage(), true), 500);
+    setTimeout(() => { addMessage('assistant', getOpeningMessage(), true); renderVideoEmbed(); }, 500);
   }
 }
 
