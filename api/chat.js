@@ -191,16 +191,22 @@ function buildSystemPrompt(state) {
   const turnsLeft = MAX_TURNS - turnCount;
 
   // 從昨天的 Damon Note 抽出「明天的入口」字串——直接給 AI 用，AI 不需要自己 parse
+  // 因為 yesterdayNote 現在可能是多筆累積，要抓最後一個「明天的入口」（最近一天的）
   let tomorrowEntry = null;
   if (yesterdayNote) {
-    const m = yesterdayNote.match(/【明天的入口】\s*\n?([\s\S]*?)(?=\n【|$)/);
-    if (m) tomorrowEntry = m[1].trim();
+    const matches = [...yesterdayNote.matchAll(/【明天的入口】\s*\n?([\s\S]*?)(?=\n【|\n---|$)/g)];
+    if (matches.length > 0) {
+      tomorrowEntry = matches[matches.length - 1][1].trim();
+    }
   }
 
   // 第一回合 + 有昨天入口問句 → 給 AI 強制指令：第一個回應直接拋這個問句
   const isFirstTurnAfterYesterday = turnCount <= 1 && tomorrowEntry;
 
-  const damonContext = yesterdayNote ? `\n\n# 昨天的觀察（Damon Note，僅供你參考脈絡，不要對學員複述）
+  const damonContext = yesterdayNote ? `\n\n# 之前的觀察（Damon Notes，僅供你參考脈絡，不要對學員複述）
+以下是這位學員之前每天的 Damon Note 累積。最新的在最下面。
+從中觀察學員反覆出現的詞、卡住的地方、走到哪一層，幫助你今天的對話更深入。
+
 ${yesterdayNote}` : '';
 
   const openingDirective = isFirstTurnAfterYesterday ? `
@@ -414,21 +420,61 @@ export default async function handler(req, res) {
 
     let yesterdayNote = null;
     try {
-      // 找「上一個有 Damon Note 的 session」——用 (week, day) 比較，不靠 session_date
-      // 這樣同一天連測 Day 1 → Day 2 也能正確找到 Day 1 的 Note
-      const notes = await sql`
-        SELECT damon_note FROM sessions
+      // ===========================================================
+      // Damon Note 累積策略（v26）
+      //   本週累積：當前 week 內、day < 當前 day 的所有 Note（最多 5 筆）
+      //   上週 SC Transfer：上週 Day 6 的 Note（該週整合日的成果）
+      //
+      // 教練學設計理由：
+      //   一週六天是一個完整單元，AI 看到本週軌跡才能做反覆出現詞的鏡像
+      //   Day 6 整合日尤其需要看完本週才能做鏡像/認領/神級問題
+      //   上週 SC Transfer 帶過來能讓跨週承接自然，不會像重新認識學員
+      // ===========================================================
+
+      const currentWeek = parseInt(week);
+      const currentDay = day || 1;
+
+      // 1. 本週累積：當前 week 內、day < 當前 day 的所有 Note
+      const thisWeekNotes = await sql`
+        SELECT day, damon_note FROM sessions
         WHERE student_id = ${studentId} AND module = ${module}
+          AND week = ${currentWeek}
+          AND day < ${currentDay}
           AND damon_note IS NOT NULL
-          AND (
-            week < ${parseInt(week)}
-            OR (week = ${parseInt(week)} AND day < ${day || 1})
-          )
-        ORDER BY week DESC, day DESC
-        LIMIT 1
+        ORDER BY day ASC
       `;
-      if (notes.length > 0) yesterdayNote = notes[0].damon_note;
-    } catch(e) {}
+
+      // 2. 上週 SC Transfer：上週 Day 6 的 Note（如果存在）
+      let lastWeekTransfer = null;
+      if (currentWeek > 1) {
+        const lastWeekDay6 = await sql`
+          SELECT damon_note FROM sessions
+          WHERE student_id = ${studentId} AND module = ${module}
+            AND week = ${currentWeek - 1}
+            AND day = 6
+            AND damon_note IS NOT NULL
+          LIMIT 1
+        `;
+        if (lastWeekDay6.length > 0) {
+          lastWeekTransfer = lastWeekDay6[0].damon_note;
+        }
+      }
+
+      // 組合：上週 Transfer 在前 + 本週累積
+      const parts = [];
+      if (lastWeekTransfer) {
+        parts.push(`【上週 Day 6 整合日 Note（SC Transfer）】\n${lastWeekTransfer}`);
+      }
+      thisWeekNotes.forEach(n => {
+        parts.push(`【本週 Day ${n.day} Note】\n${n.damon_note}`);
+      });
+
+      if (parts.length > 0) {
+        yesterdayNote = parts.join('\n\n---\n\n');
+      }
+    } catch(e) {
+      console.warn('Damon Note accumulation query failed:', e.message);
+    }
 
     // 找今天這個 day 的 session
     // ⚠️ 必須同時看 day——否則同一天連測 Day 1 → Day 2 會被塞進同一個 session row，
