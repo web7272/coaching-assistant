@@ -325,7 +325,7 @@ const TIER_LABELS = {0:'免費試用',1:'自學系統',2:'陪跑版',3:'1對1教
 // 例如：https://www.youtube.com/watch?v=dQw4w9WgXcQ → 'dQw4w9WgXcQ'
 // 設成空字串 '' 或 null 會顯示「影片準備中」placeholder
 // ============================================================
-const DEMO_VIDEO_ID = 'dQw4w9WgXcQ'; // demo placeholder（Rick Roll 😅）
+const DEMO_VIDEO_ID = 'BgTy8pnITA4'; // demo（測試用 YouTube 影片）
 const VIDEO_URLS = {
   self: {
     1: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
@@ -377,7 +377,9 @@ function renderVideoEmbed() {
     `;
   }
   msgs.appendChild(card);
-  msgs.scrollTop = msgs.scrollHeight;
+  // 影片插入後 scroll 回容器頂端——讓學員先看到開場訊息（含影片提示），
+  // 而不是直接被影片糊一臉
+  setTimeout(() => { msgs.scrollTop = 0; }, 50);
 }
 
 let state = {studentId:'',module:'',week:0,day:0,messages:[],isLoading:false,dayComplete:false};
