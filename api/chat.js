@@ -441,6 +441,37 @@ export default async function handler(req, res) {
       }
     }
 
+    // ============================================================
+    // 影片日 Ready Gate（Day 1 / Day 2）
+    // 學員第一句若不含「準備好/看完了/可以開始」等字眼 → 直接回 gate 訊息
+    // 不打 Anthropic API（省 token + 邏輯穩定）
+    // 學員打第二句若含 ready signal → 跳過 gate 走正常流程
+    // ============================================================
+    const isVideoDay = !isDay6 && (day === 1 || day === 2);
+    const userMsg = userMessage?.content || '';
+    const isReadySignal = /準備好|看完|看好|可以開始|可以了|ready/i.test(userMsg);
+    const isFirstTurn = turnCount === 1; // INSERT 後 turnCount 從 0 變 1，代表這是學員第一句
+
+    if (isVideoDay && isFirstTurn && !isReadySignal) {
+      const gateResponse = day === 1
+        ? '今天先去看影片。\n\n看完之後，跟我說「我準備好了」，我們再開始。🌿'
+        : '先看完今天的影片。\n\n看完之後，跟我說「我準備好了」，我們再從昨天的地方繼續。🌿';
+
+      await sql`
+        INSERT INTO messages (session_id, role, content, question_number)
+        VALUES (${sessionId}, 'assistant', ${gateResponse}, ${turnCount})
+      `;
+
+      return res.status(200).json({
+        content: gateResponse,
+        turnCount,
+        dayComplete: false,
+        damonNotePublic: null,
+        turnsLeft: Math.max(0, MAX_TURNS - turnCount),
+      });
+    }
+    // ============================================================
+
     const systemPrompt = buildSystemPrompt({
       studentId, module, week, day,
       sessionNotes, turnCount, yesterdayNote,
