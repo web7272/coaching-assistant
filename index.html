@@ -556,37 +556,44 @@ function getOpeningMessage(yesterdayNotePublic) {
 
   if (isDay6) return `今天是整合日。\n\n這週你說了很多重要的事。讓我們把這週放在一起看。`;
 
-  // 有昨天的 Damon Note——承接昨天
+  // ---- 隔天：有昨天 Note ----
   if (state.day > 1 && yesterdayNotePublic) {
-    // 抽取昨天的關鍵句
     const lines = yesterdayNotePublic.split('\n');
     const keyLine = lines.find(l => l.startsWith('「') || l.includes('「')) || '';
     const keyPhrase = keyLine.trim();
 
     if (isVideoDay) {
-      return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n我們等等繼續往那裡走。\n\n今天也有一支影片——先去看完，看完回來告訴我有沒有什麼讓你停下來的地方。`;
+      // Day 2 影片日：簡短提醒影片 + 信號詞「看完」
+      return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n今天 Day ${state.day} 也有一支影片。\n\n📺 看完下面的影片，回覆「看完」，我們從昨天的地方繼續。`;
     } else {
+      // Day 3-5 純對話日
       return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n今天我們從這裡繼續往更深處走。`;
     }
   }
 
-  // 第一天或沒有昨天的 Note
+  // ---- 隔天：沒有昨天 Note（罕見 case，但備援）----
   if (state.day > 1) {
-    return `歡迎回來。\n\n昨天你走到了很重要的地方。今天我們繼續往更深處走。\n\n${isVideoDay ? '今天先去看今天的影片，看完回來告訴我讓你停下來的地方。' : '今天從哪裡開始，你說。'}`;
+    if (isVideoDay) {
+      return `歡迎回來。\n\n今天 Day ${state.day} 有一支影片。\n\n📺 看完下面的影片，回覆「看完」，我們繼續往更深處走。`;
+    }
+    return `歡迎回來。\n\n昨天你走到了很重要的地方。今天我們繼續往更深處走。`;
   }
 
-  const openings = {
-    self: isVideoDay
-      ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？`
-      : `你好，很高興今天可以陪你探索。\n\n在你的生活裡，有什麼地方讓你感覺不對勁？或者有什麼你覺得應該不是這樣的？`,
-    money: isVideoDay
-      ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？`
-      : `你好，很高興今天可以陪你探索。\n\n在你的金錢和事業上，有什麼地方讓你感覺不對勁？`,
-    relationship: isVideoDay
-      ? `你好，很高興今天可以陪你探索。\n\n今天先去看影片，看完回來告訴我：有沒有什麼讓你停下來？`
-      : `你好，很高興今天可以陪你探索。\n\n在你最重要的關係裡，有什麼地方讓你感覺不對勁？不用整理，說那個感覺。`
+  // ---- Day 1 第一次進來（新學員）----
+  const intros = {
+    self: '你好，很高興今天可以陪你探索自我關係。',
+    money: '你好，很高興今天可以陪你探索金錢和事業。',
+    relationship: '你好，很高興今天可以陪你探索你最重要的關係。',
   };
-  return openings[state.module] || openings.self;
+  const intro = intros[state.module] || intros.self;
+
+  if (isVideoDay) {
+    // Day 1：規則前置講清楚
+    return `${intro}\n\n這週的前兩天都有一支影片要看。\n\n📺 今天是 Day 1——看完下面的影片，回覆「看完」，我們就開始。`;
+  }
+
+  // Day 1 但不是影片日（理論上不會發生，備援）
+  return intro;
 }
 
 function updateDayIndicator() {
