@@ -378,12 +378,18 @@ export default async function handler(req, res) {
 
     let yesterdayNote = null;
     try {
+      // 找「上一個有 Damon Note 的 session」——用 (week, day) 比較，不靠 session_date
+      // 這樣同一天連測 Day 1 → Day 2 也能正確找到 Day 1 的 Note
       const notes = await sql`
         SELECT damon_note FROM sessions
         WHERE student_id = ${studentId} AND module = ${module}
-          AND week = ${parseInt(week)} AND session_date < ${sessionDate}
           AND damon_note IS NOT NULL
-        ORDER BY session_date DESC LIMIT 1
+          AND (
+            week < ${parseInt(week)}
+            OR (week = ${parseInt(week)} AND day < ${day || 1})
+          )
+        ORDER BY week DESC, day DESC
+        LIMIT 1
       `;
       if (notes.length > 0) yesterdayNote = notes[0].damon_note;
     } catch(e) {}
