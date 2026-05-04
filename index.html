@@ -85,7 +85,7 @@
   .dot:nth-child(2){animation-delay:0.2s;}
   .dot:nth-child(3){animation-delay:0.4s;}
   @keyframes bounce{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-6px);}}
-  .chat-input-area{background:white;border-top:1px solid #ede8e0;padding:12px 16px;display:flex;align-items:flex-end;gap:10px;flex-shrink:0;width:min(100%,720px);}
+  .chat-input-area{background:white;border-top:1px solid #ede8e0;padding:12px 16px;display:flex;align-items:flex-end;gap:10px;flex-shrink:0;width:min(100%,720px);position:relative;}
   #userInput{flex:1;border:1.5px solid #e0dbd4;border-radius:22px;padding:12px 18px;font-size:15px;font-family:inherit;color:var(--charcoal);outline:none;resize:none;min-height:46px;max-height:120px;line-height:1.5;-webkit-appearance:none;}
   #userInput:focus{border-color:var(--sage);}
   #userInput:disabled{background:#f5f5f5;}
@@ -184,7 +184,8 @@
   <div class="day-indicator" id="dayIndicator"></div>
   <div class="chat-messages" id="chatMessages"></div>
   <div class="chat-input-area">
-    <textarea id="userInput" placeholder="輸入你的回答..." rows="1" oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+    <div id="charCount" style="display:none;position:absolute;top:-22px;right:16px;font-size:11px;color:var(--mid);background:var(--cream);padding:2px 8px;border-radius:8px;">0/500</div>
+    <textarea id="userInput" placeholder="輸入你的回答..." rows="1" maxlength="500" oninput="autoResize(this);updateCharCount(this)" onkeydown="handleKey(event)"></textarea>
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
   </div>
 </div>
@@ -720,6 +721,18 @@ async function sendMessage() {
 
 function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
 function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+function updateCharCount(el) {
+  const len = el.value.length;
+  const counter = document.getElementById('charCount');
+  // 超過 350 才顯示字數，避免常態打擾學員
+  if (len >= 350) {
+    counter.style.display = 'block';
+    counter.textContent = `${len}/500`;
+    counter.style.color = len >= 480 ? '#c0392b' : 'var(--mid)';
+  } else {
+    counter.style.display = 'none';
+  }
+}
 
 // ==================== DASHBOARD ====================
 async function loadDashboard() {
