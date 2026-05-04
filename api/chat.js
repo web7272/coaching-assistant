@@ -154,15 +154,38 @@ function buildSystemPrompt(state) {
   const notes = sessionNotes ? `\n\n教練備注：${sessionNotes}` : '';
   const turnsLeft = MAX_TURNS - turnCount;
 
-  const damonContext = yesterdayNote ? `\n\n# 昨天的觀察（Damon Note）
-${yesterdayNote}
+  // 從昨天的 Damon Note 抽出「明天的入口」字串——直接給 AI 用，AI 不需要自己 parse
+  let tomorrowEntry = null;
+  if (yesterdayNote) {
+    const m = yesterdayNote.match(/【明天的入口】\s*\n?([\s\S]*?)(?=\n【|$)/);
+    if (m) tomorrowEntry = m[1].trim();
+  }
 
-⚠️ 開場處理規則（很重要）：
-1. 學員的 App 介面已經顯示過「歡迎回來，昨天你說了___」這段，所以你不需要重複「歡迎回來」、不需要回顧昨天說了什麼。
-2. 學員的第一句訊息可能只是「ok」「好」「準備好了」這種短確認——這代表他看完開場示意可以開始。
-3. 你的第一個回應就是直接問「明天的入口」那個問句，不加任何前綴。
-4. 絕對不要問「昨天我們停在哪裡？」「昨天聊到什麼？」這類回問——學員會覺得你沒記住。
-5. 也不要說「歡迎回來」「我們繼續」這類過渡語。直接、乾淨地問入口問句。` : '';
+  // 第一回合 + 有昨天入口問句 → 給 AI 強制指令：第一個回應直接拋這個問句
+  const isFirstTurnAfterYesterday = turnCount <= 1 && tomorrowEntry;
+
+  const damonContext = yesterdayNote ? `\n\n# 昨天的觀察（Damon Note，僅供你參考脈絡，不要對學員複述）
+${yesterdayNote}` : '';
+
+  const openingDirective = isFirstTurnAfterYesterday ? `
+
+# ⚡ 你這回合的第一個回應（最高優先指令，覆蓋其他規則）
+
+學員的 App 介面已經顯示過「歡迎回來，昨天你說了___」這段開場了。學員剛才的回應（可能只是「ok」「好」「嗯」「準備好了」）代表他看完開場、準備開始。
+
+你這一回合的回應就是下面這個問句，**一字不改**：
+
+「${tomorrowEntry}」
+
+規則：
+- 不要說「歡迎回來」「我們繼續」這類過渡語
+- 不要說「嗯」「好」這類前綴
+- 不要問「昨天我們停在哪裡」「那句話你還記得嗎」這類確認/回問
+- 不要解釋為什麼問這個
+- 直接、乾淨地把上面那個問句拋出來，問完就停
+
+如果你發現上面這個問句不適合直接拋（例如太長、太抽象），可以用同樣意思的更短版本，但仍然必須是**主動發問**而不是回問學員昨天的記憶。
+` : '';
 
   if (isDay6) return buildDay6Prompt(state, weekGoal, damonContext);
 
@@ -179,7 +202,7 @@ ${yesterdayNote}
 編號：${studentId}
 模組：${module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係'}
 第 ${week} 週 第 ${day} 天
-已進行 ${turnCount} 個回合，剩餘 ${turnsLeft} 個回合${notes}${damonContext}
+已進行 ${turnCount} 個回合，剩餘 ${turnsLeft} 個回合${notes}${damonContext}${openingDirective}
 
 # 這週的方向
 ${weekGoal.direction}
