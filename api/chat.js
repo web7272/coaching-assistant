@@ -665,6 +665,10 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Server error:', error);
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({
+      error: 'Server error',
+      message: error?.message || String(error),
+      stack: error?.stack?.split('\n').slice(0, 5).join('\n') || null,
+    });
   }
 }
