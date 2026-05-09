@@ -290,6 +290,11 @@ ${yesterdayNote}` : '';
 這個指令只在 Week 1 Day 1 第一個 AI 回應觸發。學員回應後，回到 Damon 標準流程（觸發 #1-#10）。
 ` : '';
 
+  return `${DAMON_CORE}
+
+---
+
+# 今天的學員資訊
 編號：${studentId}
 模組：${module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係'}
 第 ${week} 週 第 ${day} 天
@@ -665,10 +670,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Server error:', error);
-    return res.status(500).json({
-      error: 'Server error',
-      message: error?.message || String(error),
-      stack: error?.stack?.split('\n').slice(0, 5).join('\n') || null,
-    });
+    return res.status(500).json({ error: 'Server error' });
   }
 }
