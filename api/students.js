@@ -12,6 +12,9 @@
 
 import { neon } from '@neondatabase/serverless';
 
+// v3.0 雙方案 plan enum（對齊 migration 007 + DB CHECK constraint students_plan_check）
+const VALID_PLANS = new Set(['trial', 'plan_a', 'plan_b']);
+
 export default async function handler(req, res) {
   const sql = neon(process.env.DATABASE_URL);
 
@@ -72,6 +75,14 @@ export default async function handler(req, res) {
       const tier = parseInt(req.body.tier ?? 0, 10);
       const notes = String(req.body.notes || '').trim();
 
+      // v3.0: plan enum 驗證（DB CHECK 也擋、這層拒絕舊值給 friendly 400）
+      if (!VALID_PLANS.has(plan)) {
+        return res.status(400).json({
+          error: 'INVALID_PLAN',
+          message: `plan 必須是 trial / plan_a / plan_b 其中之一（收到：${plan}）`,
+        });
+      }
+
       // email 重複檢查
       if (email) {
         const dup = await sql`
@@ -129,6 +140,14 @@ export default async function handler(req, res) {
       const notes = notesRaw === undefined
         ? undefined
         : (String(notesRaw).trim() || null);
+
+      // v3.0: plan 如果有送、必須是合法 enum（PATCH 是 partial update、沒送就略過）
+      if (plan !== undefined && !VALID_PLANS.has(plan)) {
+        return res.status(400).json({
+          error: 'INVALID_PLAN',
+          message: `plan 必須是 trial / plan_a / plan_b 其中之一（收到：${plan}）`,
+        });
+      }
 
       // 確認學員存在
       const exists = await sql`SELECT student_id FROM students WHERE student_id = ${studentId}`;

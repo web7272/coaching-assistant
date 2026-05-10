@@ -251,19 +251,8 @@
       <label class="modal-label">方案</label>
       <select class="modal-select" id="newPlan">
         <option value="trial">免費試用</option>
-        <option value="self_only">自我關係（NT$2,000）</option>
-        <option value="self_money">自我+金錢（NT$3,500）</option>
-        <option value="self_relationship">自我+伴侶（NT$3,500）</option>
-        <option value="all">全套（NT$5,000）</option>
-      </select>
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">層級</label>
-      <select class="modal-select" id="newTier">
-        <option value="0">免費試用</option>
-        <option value="1">自學系統</option>
-        <option value="2">陪跑版</option>
-        <option value="3">1對1教練</option>
+        <option value="plan_a">自我關係版（NT$3,000）</option>
+        <option value="plan_b">完整版（NT$4,500）</option>
       </select>
     </div>
     <div class="modal-field">
@@ -285,19 +274,8 @@
       <label class="modal-label">方案</label>
       <select class="modal-select" id="editPlan">
         <option value="trial">免費試用</option>
-        <option value="self_only">自我關係（NT$2,000）</option>
-        <option value="self_money">自我+金錢（NT$3,500）</option>
-        <option value="self_relationship">自我+伴侶（NT$3,500）</option>
-        <option value="all">全套（NT$5,000）</option>
-      </select>
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">層級</label>
-      <select class="modal-select" id="editTier">
-        <option value="0">免費試用</option>
-        <option value="1">自學系統</option>
-        <option value="2">陪跑版</option>
-        <option value="3">1對1教練</option>
+        <option value="plan_a">自我關係版（NT$3,000）</option>
+        <option value="plan_b">完整版（NT$4,500）</option>
       </select>
     </div>
     <div class="modal-field">
@@ -343,8 +321,8 @@
 
 <script>
 const MODULE_LABELS = {self:'🌿 自我關係',money:'💰 金錢關係',relationship:'💫 伴侶關係'};
-const PLAN_LABELS = {trial:'免費試用',self_only:'自我關係',self_money:'自我+金錢',self_relationship:'自我+伴侶',all:'全套'};
-const TIER_LABELS = {0:'免費試用',1:'自學系統',2:'陪跑版',3:'1對1教練'};
+// v3.0 雙方案
+const PLAN_LABELS = {trial:'免費試用', plan_a:'自我關係版', plan_b:'完整版'};
 
 let state = {studentId:'',module:'',week:0,day:0,messages:[],isLoading:false,dayComplete:false};
 let currentConvoData = null;
@@ -538,12 +516,12 @@ function getOpeningMessage(yesterdayNotePublic) {
   }
 
   // ---- Day 1 第一次進來（新學員）----
-  // v30：拿掉影片、純 App。前端只打招呼，「給類別」directive 由 chat.js
-  // buildSystemPrompt 的 week1Day1Directive 處理（不在前端重複拋）。
+  // v30：拿掉影片、純 App。前端只打招呼，Day 1 首句（慾望問句）由 chat.js
+  // buildSystemPrompt 的 week1Day1Directive 處理（不在前端重複拋、避免衝突）。
   const intros = {
-    self: '你好，很高興今天可以陪你探索自我關係。\n\n我們從今天最有感覺的地方開始。',
-    money: '你好，很高興今天可以陪你探索金錢和事業。\n\n我們從今天最有感覺的地方開始。',
-    relationship: '你好，很高興今天可以陪你探索你最重要的關係。\n\n我們從今天最有感覺的地方開始。',
+    self: '你好，很高興今天可以陪你探索自我關係。',
+    money: '你好，很高興今天可以陪你探索金錢和事業。',
+    relationship: '你好，很高興今天可以陪你探索你最重要的關係。',
   };
   return intros[state.module] || intros.self;
 }
@@ -720,7 +698,6 @@ async function loadDashboard() {
     container.innerHTML = data.students.map(s => {
       const moduleLabel = MODULE_LABELS[s.current_module] || s.current_module;
       const planLabel = PLAN_LABELS[s.plan] || s.plan;
-      const tierLabel = TIER_LABELS[s.tier] || s.tier;
       const lastActive = s.last_active ? new Date(s.last_active).toLocaleDateString('zh-TW') : '尚未開始';
       const studentJson = JSON.stringify(s).replace(/"/g, '&quot;');
       return `<div class="student-card">
@@ -730,7 +707,7 @@ async function loadDashboard() {
         </div>
         <div onclick="showConvo('${s.student_id}','${s.current_module}',${s.current_week})" style="cursor:pointer;">
           <div class="student-meta">${moduleLabel} Week ${s.current_week} Day ${s.current_day} · 最後活躍 ${lastActive}</div>
-          <div class="student-plan">${planLabel} · ${tierLabel} · 完成 ${s.days_completed || 0} 天</div>
+          <div class="student-plan">${planLabel} · 完成 ${s.days_completed || 0} 天</div>
           ${s.notes ? `<div class="student-preview">${s.notes}</div>` : ''}
         </div>
       </div>`;
@@ -751,13 +728,12 @@ function hideAddModal() { document.getElementById('addModal').classList.remove('
 async function addStudent() {
   const email = document.getElementById('newEmail').value.trim();
   const plan = document.getElementById('newPlan').value;
-  const tier = parseInt(document.getElementById('newTier').value);
   const notes = document.getElementById('newNotes').value.trim();
   try {
     const res = await fetch('/api/students', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, plan, tier, notes})
+      body: JSON.stringify({email, plan, notes})
     });
     const data = await res.json();
     const resultEl = document.getElementById('addResult');
@@ -865,7 +841,6 @@ function showEditModal(student) {
   editingStudentId = student.student_id;
   document.getElementById('editStudentId').textContent = `編輯學員：${student.student_id} · ${student.email || ''}`;
   document.getElementById('editPlan').value = student.plan || 'trial';
-  document.getElementById('editTier').value = student.tier || 0;
   document.getElementById('editModule').value = student.current_module || 'self';
   document.getElementById('editWeek').value = student.current_week || 1;
   document.getElementById('editDay').value = student.current_day || 1;
@@ -889,7 +864,6 @@ async function saveStudent() {
       body: JSON.stringify({
         studentId: editingStudentId,
         plan: document.getElementById('editPlan').value,
-        tier: parseInt(document.getElementById('editTier').value),
         current_module: document.getElementById('editModule').value,
         current_week: parseInt(document.getElementById('editWeek').value),
         current_day: parseInt(document.getElementById('editDay').value),

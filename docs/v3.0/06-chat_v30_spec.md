@@ -264,20 +264,43 @@ const isWeek1Day1FirstQuestion = week === 1 && day === 1 && turnCount <= 1 && !y
 const isWeek1Day1FirstQuestion = week === 1 && day === 1 && turnCount === 0 && !yesterdayNote;
 ```
 
-#### C. week1Day1Directive 文字保留 + 一處措辭對齊（v27 設計、Cathy 認可當第 4 層備援、但實際是 Week 1 Day 1 首句）
-✅ Line 267-291 整段保留、僅一處措辭對齊（影片拿掉後「看完」措辭錯位）：
+#### C. week1Day1Directive 改成 Cathy 工具一慾望問句（v30 hotfix、原 v27 給類別降級為第 4 層備援）
 
-**改前**（v29 既有）：
-```
-學員剛回覆「看完」，準備開始第一次對話。**你的第一個回應就是下面這段話，一字不改**：
-```
+⚠️ **本節 v30 上線後 hotfix**：原 spec v1.0 寫「保留 v27 給類別 directive」是錯的、跟 Cathy 自我模組三週手冊 + Cathy Q1/Q2/Q5 不對齊。Day 1 首句應該是工具一慾望問句、v27 給類別變成第 4 層備援（學員卡住才用）。
 
-**改後**（v30、影片拿掉後對齊）：
-```
+**改後**（v30 hotfix 定稿）：
+
+```javascript
+const week1Day1Directive = isWeek1Day1FirstQuestion ? `
+
+# ⚡ 今天是 Week 1 Day 1，這是學員的第一次對話（最高優先指令，覆蓋其他規則）
+
 學員剛打開 App、準備開始第一次對話。**你的第一個回應就是下面這段話，一字不改**：
+
+「你好。
+
+在你的生命裡、你想要什麼？
+
+第一個冒出來的、說出來。」
+
+理由：
+- Cathy 自我模組三週手冊「工具一｜慾望問句」是 Day 1 首句
+- 從渴望切入、往 L4-L5 挖、最直接、最 Damon
+
+如果學員卡住（連續三輪沒能量訊號）、再切：
+- 工具二 12 句身份句（主力備援）
+- 工具三 自我關係「你喜歡你自己這個人嗎？」
+- 工具四 不對勁
+- 第 4 層備援：v27 給類別（工作/人際/自己/家庭）
+
+這個指令只在 Week 1 Day 1 第一個 AI 回應觸發。學員回應後，回到 Damon 標準流程（觸發 #1-#10）。
+\` : '';
 ```
 
-理由：影片邏輯移除後、「學員剛回覆『看完』」措辭錯位。對 LLM 影響小（看實際 messages）、人類 read 邏輯不通。
+**前端對齊**（index.html `getOpeningMessage`）：
+- 拿掉「我們從今天最有感覺的地方開始」這種半句
+- 前端只打招呼「你好，很高興今天可以陪你探索自我關係。」
+- Day 1 首句由後端 directive 拋、前端不重複
 
 #### D. 影片日相關移除後的整體 system prompt 結構（Line 293-307 改寫）
 **改前**：
