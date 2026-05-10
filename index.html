@@ -74,12 +74,10 @@
   .btn-complete{background:linear-gradient(135deg,#7a9e7e,#5a7e5e);color:white;border:none;padding:14px 28px;border-radius:14px;font-size:15px;font-family:inherit;cursor:pointer;}
   .already-done-card{background:#f0f7f0;border-radius:20px;padding:24px;margin:8px 0;text-align:center;}
 
-  /* 影片嵌入 card（Day 1 / Day 2 影片日專用）*/
-  .video-card{background:white;border-radius:16px;padding:16px;margin:8px 0;box-shadow:0 2px 12px rgba(0,0,0,0.06);animation:fadeUp 0.4s ease;}
-  .video-card-label{font-size:11px;color:var(--mid);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase;}
-  .video-wrapper{position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;background:#000;}
-  .video-wrapper iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0;}
-  .video-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;background:#f5f5f0;border-radius:12px;color:var(--mid);font-size:13px;text-align:center;line-height:1.7;}
+  /* v30: Vivi 教練筆記本（紙張感）*/
+  .notebook-page{background:#FAF5E8;border-radius:14px;padding:28px 26px;margin:8px 0;box-shadow:0 4px 24px rgba(45,45,45,0.08);animation:fadeUp 0.5s ease;border:1px solid #ede5cf;}
+  .notebook-header{font-family:'Noto Serif TC',serif;font-size:13px;color:#7a6e4a;letter-spacing:1.5px;margin-bottom:18px;line-height:1.7;border-bottom:1px solid #e8dfc4;padding-bottom:12px;}
+  .notebook-content{font-family:'Noto Serif TC',serif;font-size:15px;color:#3a3528;line-height:2;white-space:pre-wrap;word-break:break-word;}
   .typing-indicator{display:flex;align-items:center;gap:8px;padding:12px 16px;background:white;border-radius:18px;border-bottom-left-radius:4px;box-shadow:0 2px 12px rgba(0,0,0,0.06);max-width:80px;}
   .dot{width:7px;height:7px;background:var(--sage-light);border-radius:50%;animation:bounce 1.2s infinite;}
   .dot:nth-child(2){animation-delay:0.2s;}
@@ -91,6 +89,19 @@
   #userInput:disabled{background:#f5f5f5;}
   .send-btn{width:46px;height:46px;min-width:46px;border-radius:50%;background:linear-gradient(135deg,#7a9e7e,#5a7e5e);border:none;color:white;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(90,126,94,0.4);flex-shrink:0;}
   .send-btn:disabled{background:#c8c0b8;box-shadow:none;cursor:not-allowed;}
+
+  /* v30: 「我的筆記本」軌跡頁 */
+  #notebook{background:var(--cream);min-height:100vh;}
+  .notebook-list{padding:20px 16px 60px;max-width:720px;margin:0 auto;}
+  .notebook-day-card{background:white;border-radius:14px;padding:18px 20px;margin-bottom:12px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.05);transition:transform 0.15s;}
+  .notebook-day-card:hover{transform:translateY(-1px);}
+  .notebook-day-label{font-family:'Noto Serif TC',serif;font-size:14px;color:var(--sage-dark);margin-bottom:6px;}
+  .notebook-day-preview{font-family:'Noto Serif TC',serif;font-size:13px;color:var(--mid);line-height:1.7;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .notebook-reader{display:none;flex-direction:column;height:100vh;background:var(--cream);position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;}
+  .notebook-reader.active{display:flex;}
+  .notebook-reader-header{background:white;padding:16px 20px;border-bottom:1px solid #ede8e0;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+  .notebook-reader-title{font-family:'Noto Serif TC',serif;font-size:16px;flex:1;}
+  .notebook-reader-body{flex:1;overflow-y:auto;padding:20px 16px 40px;max-width:720px;margin:0 auto;width:100%;}
 
   #dashboard{background:#1a2a1c;color:#e8f0e8;min-height:100vh;}
   .dash-header{padding:20px 24px 16px;border-bottom:1px solid #2d3f2f;display:flex;align-items:center;justify-content:space-between;}
@@ -145,6 +156,7 @@
   <div class="welcome-sub">透過每天的對話<br>看見驅動你的那個核心</div>
   <div class="welcome-buttons">
     <button class="btn-primary" onclick="showScreen('setup')"><span>開始探索</span><span>→</span></button>
+    <button class="btn-secondary" onclick="showNotebookEntry()">📓 我的筆記本</button>
     <button class="btn-secondary" onclick="showDashboard()">📋 教練後台</button>
   </div>
   <div class="disclaimer">本工具為教練輔助工具，不提供心理治療或醫療建議。</div>
@@ -187,6 +199,21 @@
     <div id="charCount" style="display:none;position:absolute;top:-22px;right:16px;font-size:11px;color:var(--mid);background:var(--cream);padding:2px 8px;border-radius:8px;">0/500</div>
     <textarea id="userInput" placeholder="輸入你的回答..." rows="1" maxlength="500" oninput="autoResize(this);updateCharCount(this)" onkeydown="handleKey(event)"></textarea>
     <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
+  </div>
+</div>
+
+<div id="notebook" class="screen">
+  <div class="screen-header">
+    <button class="icon-btn" onclick="showScreen('welcome')">←</button>
+    <span class="screen-title">我的筆記本</span>
+  </div>
+  <div id="notebookList" class="notebook-list"></div>
+  <div id="notebookReader" class="notebook-reader">
+    <div class="notebook-reader-header">
+      <button class="icon-btn" onclick="closeNotebookReader()">←</button>
+      <div class="notebook-reader-title" id="notebookReaderTitle">—</div>
+    </div>
+    <div class="notebook-reader-body" id="notebookReaderBody"></div>
   </div>
 </div>
 
@@ -288,7 +315,6 @@
           <option value="1">Week 1</option>
           <option value="2">Week 2</option>
           <option value="3">Week 3</option>
-          <option value="4">Week 4</option>
         </select>
       </div>
       <div style="flex:1;">
@@ -319,69 +345,6 @@
 const MODULE_LABELS = {self:'🌿 自我關係',money:'💰 金錢關係',relationship:'💫 伴侶關係'};
 const PLAN_LABELS = {trial:'免費試用',self_only:'自我關係',self_money:'自我+金錢',self_relationship:'自我+伴侶',all:'全套'};
 const TIER_LABELS = {0:'免費試用',1:'自學系統',2:'陪跑版',3:'1對1教練'};
-
-// ============================================================
-// 🎬 影片 ID 對照表（YouTube video ID）
-// 影片錄完後把每格的 'PLACEHOLDER' 換成實際 YouTube ID
-// 例如：https://www.youtube.com/watch?v=dQw4w9WgXcQ → 'dQw4w9WgXcQ'
-// 設成空字串 '' 或 null 會顯示「影片準備中」placeholder
-// ============================================================
-const DEMO_VIDEO_ID = 'BgTy8pnITA4'; // demo（測試用 YouTube 影片）
-const VIDEO_URLS = {
-  self: {
-    1: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    2: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    3: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    4: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-  },
-  money: {
-    1: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    2: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    3: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    4: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-  },
-  relationship: {
-    1: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    2: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    3: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-    4: { 1: DEMO_VIDEO_ID, 2: DEMO_VIDEO_ID },
-  },
-};
-
-function getVideoId(module, week, day) {
-  return VIDEO_URLS[module]?.[week]?.[day] || null;
-}
-
-function renderVideoEmbed() {
-  const isVideoDay = state.day === 1 || state.day === 2;
-  if (!isVideoDay) return;
-  const videoId = getVideoId(state.module, state.week, state.day);
-  const msgs = document.getElementById('chatMessages');
-  const card = document.createElement('div');
-  card.className = 'video-card';
-  if (videoId) {
-    card.innerHTML = `
-      <div class="video-card-label">📺 今天的影片</div>
-      <div class="video-wrapper">
-        <iframe src="https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1"
-                frameborder="0"
-                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen></iframe>
-      </div>
-    `;
-  } else {
-    card.innerHTML = `
-      <div class="video-card-label">📺 今天的影片</div>
-      <div class="video-placeholder">
-        影片準備中<br><span style="font-size:11px;color:var(--light)">請直接打「我準備好了」開始今天的對話</span>
-      </div>
-    `;
-  }
-  msgs.appendChild(card);
-  // 影片插入後 scroll 回容器頂端——讓學員先看到開場訊息（含影片提示），
-  // 而不是直接被影片糊一臉
-  setTimeout(() => { msgs.scrollTop = 0; }, 50);
-}
 
 let state = {studentId:'',module:'',week:0,day:0,messages:[],isLoading:false,dayComplete:false};
 let currentConvoData = null;
@@ -486,7 +449,7 @@ async function loadTodaySession() {
 
     if (!data.messages || data.messages.length === 0) {
       // 完全沒有對話記錄，開始全新的
-      setTimeout(() => { addMessage('assistant', getOpeningMessage(), true); renderVideoEmbed(); }, 500);
+      setTimeout(() => { addMessage('assistant', getOpeningMessage(), true); }, 500);
       return;
     }
 
@@ -516,7 +479,10 @@ async function loadTodaySession() {
 
       if (isDoneToday) {
         // 今天已完成，顯示完成卡，鎖定輸入
-        if (todaySession?.damon_note_public) {
+        // v30: 優先 render notebook_page；fallback damon_note_public
+        if (todaySession?.notebook_page) {
+          showNotebookPage(todaySession.notebook_page);
+        } else if (todaySession?.damon_note_public) {
           showDamonNote(todaySession.damon_note_public);
         }
         showAlreadyDone();
@@ -529,11 +495,11 @@ async function loadTodaySession() {
     // 找最近一天的 damon_note_public
     const lastSession = data.sessions?.[data.sessions.length - 1];
     const yesterdayNotePublic = lastSession?.damon_note_public || null;
-    setTimeout(() => { addMessage('assistant', getOpeningMessage(yesterdayNotePublic), true); renderVideoEmbed(); }, 500);
+    setTimeout(() => { addMessage('assistant', getOpeningMessage(yesterdayNotePublic), true); }, 500);
 
   } catch(e) {
     console.log('Load session error:', e);
-    setTimeout(() => { addMessage('assistant', getOpeningMessage(), true); renderVideoEmbed(); }, 500);
+    setTimeout(() => { addMessage('assistant', getOpeningMessage(), true); }, 500);
   }
 }
 
@@ -554,7 +520,6 @@ function showAlreadyDone() {
 }
 
 function getOpeningMessage(yesterdayNotePublic) {
-  const isVideoDay = state.day === 1 || state.day === 2;
   const isDay6 = state.day === 6;
 
   if (isDay6) return `今天是整合日。\n\n這週你說了很多重要的事。讓我們把這週放在一起看。`;
@@ -564,39 +529,23 @@ function getOpeningMessage(yesterdayNotePublic) {
     const lines = yesterdayNotePublic.split('\n');
     const keyLine = lines.find(l => l.startsWith('「') || l.includes('「')) || '';
     const keyPhrase = keyLine.trim();
-
-    if (isVideoDay) {
-      // Day 2 影片日：簡短提醒影片 + 信號詞「看完」
-      return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n今天 Day ${state.day} 也有一支影片。\n\n📺 看完下面的影片，回覆「看完」，我們從昨天的地方繼續。`;
-    } else {
-      // Day 3-5 純對話日
-      return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n今天我們從這裡繼續往更深處走。`;
-    }
+    return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n今天我們從這裡繼續往更深處走。`;
   }
 
   // ---- 隔天：沒有昨天 Note（罕見 case，但備援）----
   if (state.day > 1) {
-    if (isVideoDay) {
-      return `歡迎回來。\n\n今天 Day ${state.day} 有一支影片。\n\n📺 看完下面的影片，回覆「看完」，我們繼續往更深處走。`;
-    }
     return `歡迎回來。\n\n昨天你走到了很重要的地方。今天我們繼續往更深處走。`;
   }
 
   // ---- Day 1 第一次進來（新學員）----
+  // v30：拿掉影片、純 App。前端只打招呼，「給類別」directive 由 chat.js
+  // buildSystemPrompt 的 week1Day1Directive 處理（不在前端重複拋）。
   const intros = {
-    self: '你好，很高興今天可以陪你探索自我關係。',
-    money: '你好，很高興今天可以陪你探索金錢和事業。',
-    relationship: '你好，很高興今天可以陪你探索你最重要的關係。',
+    self: '你好，很高興今天可以陪你探索自我關係。\n\n我們從今天最有感覺的地方開始。',
+    money: '你好，很高興今天可以陪你探索金錢和事業。\n\n我們從今天最有感覺的地方開始。',
+    relationship: '你好，很高興今天可以陪你探索你最重要的關係。\n\n我們從今天最有感覺的地方開始。',
   };
-  const intro = intros[state.module] || intros.self;
-
-  if (isVideoDay) {
-    // Day 1：規則前置講清楚
-    return `${intro}\n\n這週的前兩天都有一支影片要看。\n\n📺 今天是 Day 1——看完下面的影片，回覆「看完」，我們就開始。`;
-  }
-
-  // Day 1 但不是影片日（理論上不會發生，備援）
-  return intro;
+  return intros[state.module] || intros.self;
 }
 
 function updateDayIndicator() {
@@ -631,6 +580,24 @@ function addMessage(role, text, isOpening = false) {
   if (!isOpening) state.messages.push({role, content: text});
 }
 
+// v30: render Vivi 教練筆記本（紙張感）
+function showNotebookPage(notebookText) {
+  if (!notebookText) return;
+  const msgs = document.getElementById('chatMessages');
+  const today = new Date().toLocaleDateString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit'});
+  const card = document.createElement('div');
+  card.className = 'notebook-page';
+  card.innerHTML = `
+    <div class="notebook-header">✦ ${today} ｜ Day ${state.day}<br/>Vivi 教練的筆記本</div>
+    <div class="notebook-content"></div>
+  `;
+  // 用 textContent 安全注入，避免學員 quote 含 < > 被當 HTML
+  card.querySelector('.notebook-content').textContent = notebookText;
+  msgs.appendChild(card);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// v30 fallback: 舊 publicNote 格式（notebook 生成失敗時用）
 function showDamonNote(notePublic) {
   if (!notePublic) return;
   const msgs = document.getElementById('chatMessages');
@@ -708,7 +675,12 @@ async function sendMessage() {
 
     if (data.dayComplete) {
       setTimeout(() => {
-        if (data.damonNotePublic) showDamonNote(data.damonNotePublic);
+        // v30: 優先 render Vivi 教練筆記本；生成失敗時 fallback 到舊版 publicNote
+        if (data.notebookPage) {
+          showNotebookPage(data.notebookPage);
+        } else if (data.damonNotePublic) {
+          showDamonNote(data.damonNotePublic);
+        }
         setTimeout(() => showDayComplete(), 1500);
       }, 800);
     }
@@ -937,6 +909,85 @@ async function saveStudent() {
     resultEl.style.display = 'block';
     resultEl.textContent = '連線錯誤，請稍後再試';
   }
+}
+
+// ==================== 我的筆記本（學員軌跡頁，v30）====================
+async function showNotebookEntry() {
+  const id = prompt('請輸入你的編號（例如 A001）：');
+  if (!id) return;
+  const email = prompt('請輸入你的 email：');
+  if (!email) return;
+  const studentId = id.trim().toUpperCase();
+  try {
+    const loginRes = await fetch('/api/students', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'login', studentId, email: email.trim().toLowerCase()})
+    });
+    if (!loginRes.ok) { alert('編號或 email 不正確'); return; }
+    const loginData = await loginRes.json();
+    showScreen('notebook');
+    await loadNotebookList(studentId, loginData.student?.current_module || 'self');
+  } catch (e) {
+    alert('連線錯誤，請稍後再試');
+  }
+}
+
+async function loadNotebookList(studentId, module) {
+  const container = document.getElementById('notebookList');
+  container.innerHTML = '<div class="loading" style="color:var(--mid)">載入中...</div>';
+  try {
+    // 抓所有週的 sessions（這位學員、目前模組）
+    const allWeeks = [1, 2, 3];
+    const all = [];
+    for (const w of allWeeks) {
+      const res = await fetch(`/api/sessions?action=history&studentId=${studentId}&module=${encodeURIComponent(module)}&week=${w}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      (data.sessions || []).forEach(s => {
+        if (s.notebook_page || s.damon_note_public) {
+          all.push({...s, _week: w});
+        }
+      });
+    }
+    all.sort((a, b) => {
+      const da = a.session_date || ''; const db = b.session_date || '';
+      if (da !== db) return da.localeCompare(db);
+      return (a.day || 0) - (b.day || 0);
+    });
+    if (all.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:60px 24px;color:var(--mid);font-family:'Noto Serif TC',serif">還沒有筆記。<br>第一天結束後，這裡會出現一頁。</div>`;
+      return;
+    }
+    container.innerHTML = all.map(s => {
+      const text = s.notebook_page || s.damon_note_public || '';
+      const preview = text.replace(/[\n\r]+/g, ' ').slice(0, 80);
+      const dataAttr = encodeURIComponent(JSON.stringify({
+        day: s.day, week: s._week, date: s.session_date,
+        notebook_page: s.notebook_page, damon_note_public: s.damon_note_public
+      }));
+      return `<div class="notebook-day-card" onclick="openNotebookReader('${dataAttr}')">
+        <div class="notebook-day-label">✦ ${s.session_date || ''} ｜ Week ${s._week} · Day ${s.day}</div>
+        <div class="notebook-day-preview">${preview}${text.length > 80 ? '…' : ''}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = `<div style="text-align:center;padding:60px 24px;color:var(--mid)">載入失敗，請稍後再試</div>`;
+  }
+}
+
+function openNotebookReader(dataAttr) {
+  const s = JSON.parse(decodeURIComponent(dataAttr));
+  document.getElementById('notebookReaderTitle').textContent = `${s.date || ''} ｜ Week ${s.week} · Day ${s.day}`;
+  const body = document.getElementById('notebookReaderBody');
+  const text = s.notebook_page || s.damon_note_public || '';
+  body.innerHTML = `<div class="notebook-page"><div class="notebook-header">✦ ${s.date || ''} ｜ Day ${s.day}<br/>Vivi 教練的筆記本</div><div class="notebook-content"></div></div>`;
+  body.querySelector('.notebook-content').textContent = text;
+  document.getElementById('notebookReader').classList.add('active');
+}
+
+function closeNotebookReader() {
+  document.getElementById('notebookReader').classList.remove('active');
 }
 
 function closeConvo() {

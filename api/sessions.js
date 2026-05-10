@@ -42,7 +42,7 @@ export default async function handler(req, res) {
       if (action === 'history' && studentId && module && week) {
         const allSessions = await sql`
           SELECT s.id, s.day, s.session_date, s.questions_today,
-                 s.day_complete, s.damon_note, s.damon_note_public
+                 s.day_complete, s.damon_note, s.damon_note_public, s.notebook_page
           FROM sessions s
           WHERE s.student_id = ${studentId}
             AND s.module = ${module}
