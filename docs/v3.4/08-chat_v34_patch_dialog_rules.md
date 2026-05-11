@@ -319,3 +319,42 @@ AI 把守則二「橫向問題」（找時間錨點）誤用到觸發 #3 鏈式�
 **Pattern 觀察**：兩次 hotfix 都指向同一個現象——v34 上 7500 token system prompt 規則密度太高、AI 選最直觀但教練學錯位的問句。如果 hotfix 2 後又抓到第三類似 bug、可能要考慮：
 - 把「觸發 #3 鏈式追問是 default」這個 priority rule 拉到 DAMON_CORE 最頂部
 - 或重構規則層次、把 priority 0 / priority 1 規則明確分層
+
+---
+
+## 🔟 v34 hotfix 3 紀錄（2026-05-11）
+
+**問題**：A001 Day 2 開場、Vivi 抓到 UX 斷層 bug（跟 v30 hotfix 2 修的 Day 1 同類）——
+
+```
+Frontend：「歡迎回來。昨天你說了『付出讓我感到滿足。』今天我們從這裡繼續往更深處走。」
+（就停、沒問句、學員不知打什麼）
+
+學員必須先打一句字、backend isFirstTurnAfterYesterday 才拋「明天的入口」問句、UX 斷層。
+```
+
+**Root cause**：Day 2+ 開場跟 Day 1 一樣的設計缺陷——backend directive 拋的問句要等學員打第一句、學員看不到問句就不知道從哪打字。
+
+**修法**（minimal、兩處改動、對齊 v30 hotfix 2 Day 1 修法）：
+
+1. **index.html**：
+   - `loadTodaySession` 改傳整個 `lastSession` 給 `getOpeningMessage`（不再只傳 `damon_note_public`）
+   - `getOpeningMessage` Day 2+ 分支從 `lastSession.damon_note` 用同 backend regex parse【關鍵句】+【明天的入口】
+   - 合併顯示：「歡迎回來。\\n\\n昨天你說了「___」。\\n\\n[明天的入口問句]」
+   - 保留 fallback：舊資料只有 `damon_note_public` 時走 v30 既有 flow
+
+2. **api/chat.js buildSystemPrompt**：
+   - 整段移除 `openingDirective`（含 `tomorrowEntry` parsing + `isFirstTurnAfterYesterday` gate + 強制指令 prompt 段）
+   - 移除 return template 裡的 `${openingDirective}` 引用
+   - `damonContext`（Damon Notes 累積給 AI 看）保留不動
+
+**位置**：兩處檔案、共 ~30 行改動。
+
+**驗證**：A001 接著走 Day 2、看開場是否直接顯示完整「歡迎回來 + 昨天關鍵句 + 明天入口問句」、學員看得到問句就能直接答。
+
+**未做 reset**：Vivi 接著走 Day 2、不洗資料。
+
+**Pattern 對齊**：
+- v30 hotfix 2 修了 Day 1 UX 斷層（前端拋慾望問句、移除 backend Week 1 Day 1 directive）
+- v34 hotfix 3 修了 Day 2+ UX 斷層（前端拋昨天關鍵句+明天入口、移除 backend openingDirective）
+- 統一原則：學員打開 App 就要看得到下一句 AI 想問的話、不能等學員先打字

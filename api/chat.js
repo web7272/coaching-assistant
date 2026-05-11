@@ -751,44 +751,16 @@ function buildSystemPrompt(state) {
   const notes = sessionNotes ? `\n\n教練備注：${sessionNotes}` : '';
   const turnsLeft = MAX_TURNS - turnCount;
 
-  // 從昨天的 Damon Note 抽出「明天的入口」字串——直接給 AI 用，AI 不需要自己 parse
-  // 因為 yesterdayNote 現在可能是多筆累積，要抓最後一個「明天的入口」（最近一天的）
-  let tomorrowEntry = null;
-  if (yesterdayNote) {
-    const matches = [...yesterdayNote.matchAll(/【明天的入口】\s*\n?([\s\S]*?)(?=\n【|\n---|$)/g)];
-    if (matches.length > 0) {
-      tomorrowEntry = matches[matches.length - 1][1].trim();
-    }
-  }
-
-  // 第一回合 + 有昨天入口問句 → 給 AI 強制指令：第一個回應直接拋這個問句
-  const isFirstTurnAfterYesterday = turnCount <= 1 && tomorrowEntry;
+  // v34 hotfix 3：Day 2+ openingDirective 整段移除。
+  // 改由前端 getOpeningMessage 直接從 lastSession.damon_note parse【關鍵句】+【明天的入口】、
+  // 合併顯示為「歡迎回來。\n昨天你說了「___」。\n[明天的入口問句]」、學員一打開就看到問句、無 UX 斷層。
+  // 學員第一句回答（任何答案）→ DAMON_CORE 觸發 #3 鏈式追問自然繼續。
 
   const damonContext = yesterdayNote ? `\n\n# 之前的觀察（Damon Notes，僅供你參考脈絡，不要對學員複述）
 以下是這位學員之前每天的 Damon Note 累積。最新的在最下面。
 從中觀察學員反覆出現的詞、卡住的地方、走到哪一層，幫助你今天的對話更深入。
 
 ${yesterdayNote}` : '';
-
-  const openingDirective = isFirstTurnAfterYesterday ? `
-
-# ⚡ 你這回合的第一個回應（最高優先指令，覆蓋其他規則）
-
-學員的 App 介面已經顯示過「歡迎回來，昨天你說了___」這段開場了。學員剛才的回應（可能只是「ok」「好」「嗯」「準備好了」）代表他看完開場、準備開始。
-
-你這一回合的回應就是下面這個問句，**一字不改**：
-
-「${tomorrowEntry}」
-
-規則：
-- 不要說「歡迎回來」「我們繼續」這類過渡語
-- 不要說「嗯」「好」這類前綴
-- 不要問「昨天我們停在哪裡」「那句話你還記得嗎」這類確認/回問
-- 不要解釋為什麼問這個
-- 直接、乾淨地把上面那個問句拋出來，問完就停
-
-如果你發現上面這個問句不適合直接拋（例如太長、太抽象），可以用同樣意思的更短版本，但仍然必須是**主動發問**而不是回問學員昨天的記憶。
-` : '';
 
   if (isDay6) return buildDay6Prompt(state, weekGoal, damonContext);
 
@@ -863,7 +835,7 @@ ${yesterdayNote}` : '';
 編號：${studentId}
 模組：${module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係'}
 第 ${week} 週 第 ${day} 天
-已進行 ${turnCount} 個回合，剩餘 ${turnsLeft} 個回合${notes}${damonContext}${openingDirective}
+已進行 ${turnCount} 個回合，剩餘 ${turnsLeft} 個回合${notes}${damonContext}
 
 # 這週的方向
 ${weekGoal.direction}${tool2Section}${week3Day5Section}

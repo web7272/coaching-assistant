@@ -470,10 +470,10 @@ async function loadTodaySession() {
     }
 
     // 今天沒有對話，但之前有——開始今天的新對話
-    // 找最近一天的 damon_note_public
+    // v34 hotfix 3：傳整個 lastSession（含 damon_note 完整 Note）給 getOpeningMessage
+    // 由 frontend 直接 parse【關鍵句】+【明天的入口】、合併顯示、消 Day 2+ UX 斷層
     const lastSession = data.sessions?.[data.sessions.length - 1];
-    const yesterdayNotePublic = lastSession?.damon_note_public || null;
-    setTimeout(() => { addMessage('assistant', getOpeningMessage(yesterdayNotePublic), true); }, 500);
+    setTimeout(() => { addMessage('assistant', getOpeningMessage(lastSession), true); }, 500);
 
   } catch(e) {
     console.log('Load session error:', e);
@@ -497,20 +497,41 @@ function showAlreadyDone() {
   state.dayComplete = true;
 }
 
-function getOpeningMessage(yesterdayNotePublic) {
+function getOpeningMessage(lastSession) {
   const isDay6 = state.day === 6;
 
   if (isDay6) return `今天是整合日。\n\n這週你說了很多重要的事。讓我們把這週放在一起看。`;
 
-  // ---- 隔天：有昨天 Note ----
-  if (state.day > 1 && yesterdayNotePublic) {
-    const lines = yesterdayNotePublic.split('\n');
+  // ---- Day 2+：有昨天 Damon Note（v34 hotfix 3：合併關鍵句 + 明天的入口、消 UX 斷層） ----
+  if (state.day > 1 && lastSession?.damon_note) {
+    const note = lastSession.damon_note;
+    // 跟 backend buildSystemPrompt 既有 regex 一致
+    const tomorrowMatches = [...note.matchAll(/【明天的入口】\s*\n?([\s\S]*?)(?=\n【|\n---|$)/g)];
+    const tomorrowEntry = tomorrowMatches.length > 0
+      ? tomorrowMatches[tomorrowMatches.length - 1][1].trim()
+      : '';
+    const keyMatches = [...note.matchAll(/【關鍵句】\s*\n?([\s\S]*?)(?=\n【|\n---|$)/g)];
+    let keyPhrase = keyMatches.length > 0
+      ? keyMatches[keyMatches.length - 1][1].trim()
+      : '';
+    // 去除前後引號（不同 quote style 都接、避免雙重括號）
+    keyPhrase = keyPhrase.replace(/^[「『"']+|[」』"']+$/g, '').trim();
+
+    let opening = '歡迎回來。';
+    if (keyPhrase) opening += `\n\n昨天你說了「${keyPhrase}」。`;
+    if (tomorrowEntry) opening += `\n\n${tomorrowEntry}`;
+    return opening;
+  }
+
+  // ---- Day 2+：fallback 只有 damon_note_public（舊資料、罕見）----
+  if (state.day > 1 && lastSession?.damon_note_public) {
+    const lines = lastSession.damon_note_public.split('\n');
     const keyLine = lines.find(l => l.startsWith('「') || l.includes('「')) || '';
     const keyPhrase = keyLine.trim();
     return `歡迎回來。\n\n昨天你說了 ${keyPhrase}\n\n今天我們從這裡繼續往更深處走。`;
   }
 
-  // ---- 隔天：沒有昨天 Note（罕見 case，但備援）----
+  // ---- Day 2+：沒昨天 Note（罕見、備援）----
   if (state.day > 1) {
     return `歡迎回來。\n\n昨天你走到了很重要的地方。今天我們繼續往更深處走。`;
   }
