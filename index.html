@@ -462,6 +462,12 @@ async function loadTodaySession() {
           showNotebookPage(todaySession.notebook_page);
         } else if (todaySession?.damon_note_public) {
           showDamonNote(todaySession.damon_note_public);
+        } else if (todaySession?.id) {
+          // v34 hotfix 4 #1 lazy-trigger：day_complete=true 但 notes 都 NULL
+          // → 上次 finalize HTTP 中斷（學員打完關 App、retry 上限後 graceful fail 等場景）
+          // 補生成、UX 跟 dayComplete 即時生成同套（placeholder + finalize call）
+          const placeholderId = showNotebookGenerating();
+          triggerFinalize(todaySession.id, placeholderId);
         }
         showAlreadyDone();
       }
@@ -574,6 +580,72 @@ function addMessage(role, text, isOpening = false) {
   if (!isOpening) state.messages.push({role, content: text});
 }
 
+// v34 hotfix 4 (Option C): notebook 生成中 placeholder
+// backend chat.js 在 dayComplete 立即 return notesGenerating: true、
+// frontend show 這個 placeholder + 同步 fire /api/finalize-day、
+// 回來後用 swapPlaceholderWithNotebook() 把 placeholder 替換成真筆記本。
+function showNotebookGenerating() {
+  const msgs = document.getElementById('chatMessages');
+  const today = new Date().toLocaleDateString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit'});
+  const placeholderId = 'notebook-pending-' + Date.now();
+  const card = document.createElement('div');
+  card.id = placeholderId;
+  card.className = 'notebook-page';
+  card.innerHTML = `
+    <div class="notebook-header">✦ ${today} ｜ Day ${state.day}<br/>Vivi 教練的筆記本</div>
+    <div class="notebook-content" style="color:var(--mid);font-style:italic;line-height:1.9;">
+      今天結束。<br/><br/>
+      筆記本正在整理中——<br/>
+      大概 30 秒、Vivi 寫好就會出現在這裡。<br/><br/>
+      你也可以先關掉 App、明天再回來看。
+    </div>
+  `;
+  msgs.appendChild(card);
+  msgs.scrollTop = msgs.scrollHeight;
+  return placeholderId;
+}
+
+function swapPlaceholderWithNotebook(placeholderId, notebookText, damonNotePublicFallback) {
+  const el = document.getElementById(placeholderId);
+  if (!el) return; // 學員可能已離開、找不到節點就算了
+  if (notebookText) {
+    el.querySelector('.notebook-content').textContent = notebookText;
+  } else if (damonNotePublicFallback) {
+    // 罕見：notebook page 生成失敗、retry 拿到 damon_note_public、降級顯示
+    el.querySelector('.notebook-content').textContent = damonNotePublicFallback;
+  } else {
+    el.querySelector('.notebook-content').innerHTML =
+      '<span style="color:var(--mid);">筆記本生成失敗。下次打開 App 會自動補上。</span>';
+  }
+}
+
+async function triggerFinalize(sessionId, placeholderId, attempt = 1) {
+  if (!sessionId) return;
+  try {
+    const res = await fetch('/api/finalize-day', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        sessionId,
+        module: state.module,
+        week: state.week,
+        day: state.day,
+      })
+    });
+    if (!res.ok) throw new Error('finalize HTTP ' + res.status);
+    const data = await res.json();
+    swapPlaceholderWithNotebook(placeholderId, data.notebookPage, data.damonNotePublic);
+  } catch(e) {
+    console.warn('finalize attempt', attempt, 'failed:', e.message);
+    // 最多 retry 一次（額外 60s window）、再失敗就 graceful 顯示
+    if (attempt < 2) {
+      setTimeout(() => triggerFinalize(sessionId, placeholderId, attempt + 1), 5000);
+    } else {
+      swapPlaceholderWithNotebook(placeholderId, null, null);
+    }
+  }
+}
+
 // v30: render Vivi 教練筆記本（紙張感）
 function showNotebookPage(notebookText) {
   if (!notebookText) return;
@@ -669,13 +741,21 @@ async function sendMessage() {
 
     if (data.dayComplete) {
       setTimeout(() => {
-        // v30: 優先 render Vivi 教練筆記本；生成失敗時 fallback 到舊版 publicNote
-        if (data.notebookPage) {
-          showNotebookPage(data.notebookPage);
-        } else if (data.damonNotePublic) {
-          showDamonNote(data.damonNotePublic);
+        if (data.notesGenerating) {
+          // v34 hotfix 4 (Option C)：async fire-and-forget Damon Note + Notebook 生成
+          // backend chat.js 立即 return 不阻塞、frontend 拿到 notesGenerating: true 才 fire finalize
+          const placeholderId = showNotebookGenerating();
+          setTimeout(() => showDayComplete(), 1500);
+          triggerFinalize(data.sessionId, placeholderId);
+        } else {
+          // v30 既有 path：backend 已生成好（升 Pro 前的舊行為、保留 fallback）
+          if (data.notebookPage) {
+            showNotebookPage(data.notebookPage);
+          } else if (data.damonNotePublic) {
+            showDamonNote(data.damonNotePublic);
+          }
+          setTimeout(() => showDayComplete(), 1500);
         }
-        setTimeout(() => showDayComplete(), 1500);
       }, 800);
     }
   } catch(e) {

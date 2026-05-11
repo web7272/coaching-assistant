@@ -1,5 +1,9 @@
 import { neon } from '@neondatabase/serverless';
 
+// v34 hotfix 6: Vercel Pro 預設 15s timeout、明寫 60s 才會用滿
+// 跟 vercel.json 的 functions config 雙寫保險、避免 default 改變或 config 沒讀到
+export const maxDuration = 60;
+
 const MAX_TURNS = 10;
 const MAX_MINUTES = 15;
 
@@ -906,7 +910,9 @@ ${weekGoal.direction}
 ${weekSpecificTask}`;
 }
 
-async function generateDamonNote(sql, sessionId, module, week, day) {
+// v34 hotfix 4：generateDamonNote 加 export、讓 api/finalize-day.js 共用
+// （Day 6 收尾改 async fire-and-forget、不阻塞主回應）
+export async function generateDamonNote(sql, sessionId, module, week, day) {
   try {
     const messages = await sql`
       SELECT role, content FROM messages
@@ -1061,7 +1067,7 @@ async function generateDamonNote(sql, sessionId, module, week, day) {
   }
 }
 
-async function generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis) {
+export async function generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis) {
   try {
     const moduleLabel = module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係';
 
@@ -1447,24 +1453,28 @@ export default async function handler(req, res) {
       content.includes('下一週，我們會往那一層走')
     );
 
-    let damonNotePublic = null;
-    let notebookPage = null;
-
+    // ============================================================
+    // v34 hotfix 4 (Option C)：Day 6 收尾改 async fire-and-forget
+    // - 主回應 fetch（line ~1407）跑完就 return、不再等 Damon Note + Notebook 兩個 Sonnet call
+    // - 仍 mark day_complete=TRUE + advanceStudentDay（快、純 DB UPDATE、不阻塞）
+    // - 回 notesGenerating: true、frontend 顯示「今天結束、筆記稍後送達」placeholder
+    //   → frontend 收到後 fire 一個 POST /api/finalize-day 觸發 Damon Note + Notebook 生成
+    // - 好處：主回應 5-8s 返回（單 Sonnet call）、不會踩 Vercel function timeout 邊緣
+    // ============================================================
+    let notesGenerating = false;
     if (dayComplete || day6Complete) {
       await sql`UPDATE sessions SET day_complete = TRUE, updated_at = NOW() WHERE id = ${sessionId}`;
-      const noteResult = await generateDamonNote(sql, sessionId, module, week, day);
-      if (noteResult) {
-        damonNotePublic = noteResult.publicNote;
-        notebookPage = noteResult.notebookPage;
-      }
       await advanceStudentDay(sql, studentId, module, parseInt(week), day);
+      notesGenerating = true;
     }
 
     return res.status(200).json({
       content, turnCount,
       dayComplete: dayComplete || day6Complete,
-      damonNotePublic,
-      notebookPage,
+      notesGenerating,
+      sessionId,                                    // frontend finalize 時要傳回
+      damonNotePublic: null,                        // v34 hotfix 4：移交 /api/finalize-day 生成
+      notebookPage: null,                           // 同上
       turnsLeft: Math.max(0, MAX_TURNS - turnCount)
     });
 
