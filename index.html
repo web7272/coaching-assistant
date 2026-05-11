@@ -516,14 +516,9 @@ function getOpeningMessage(yesterdayNotePublic) {
   }
 
   // ---- Day 1 第一次進來（新學員）----
-  // v30：拿掉影片、純 App。前端只打招呼，Day 1 首句（慾望問句）由 chat.js
-  // buildSystemPrompt 的 week1Day1Directive 處理（不在前端重複拋、避免衝突）。
-  const intros = {
-    self: '你好，很高興今天可以陪你探索自我關係。',
-    money: '你好，很高興今天可以陪你探索金錢和事業。',
-    relationship: '你好，很高興今天可以陪你探索你最重要的關係。',
-  };
-  return intros[state.module] || intros.self;
+  // v30 hotfix 2：前端直接拋 Cathy 工具一慾望問句、學員一打開 App 就看到問句、無 UX 斷層。
+  // backend 的 week1Day1Directive 已拿掉、避免重複拋。
+  return '你好。\n\n在你的生命裡、你想要什麼？\n第一個冒出來的、說出來。';
 }
 
 function updateDayIndicator() {

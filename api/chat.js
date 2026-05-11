@@ -401,34 +401,9 @@ ${yesterdayNote}` : '';
 現在是收尾的時機（觸發 #8）。如果學員已經說出了關於自己是誰的答案，說：「好，我想我們今天可以停在這裡。把這句話留下來。今天先到這裡。🌿」`
     : '';
 
-  // Week 1 Day 1 第一個問句指令——避免「不對勁」這種太抽象的開頭，給學員具體的進入點
-  // Bug 修復（v30）：A001 Day 1 親測時、學員「看完」回了兩次、AI 拋了兩次相同 directive
-  // 修法：只在 turnCount === 0 觸發、不在 turnCount === 1 觸發
-  const isWeek1Day1FirstQuestion = week === 1 && day === 1 && turnCount === 0 && !yesterdayNote;
-  const week1Day1Directive = isWeek1Day1FirstQuestion ? `
-
-# ⚡ 今天是 Week 1 Day 1，這是學員的第一次對話（最高優先指令，覆蓋其他規則）
-
-學員剛打開 App、準備開始第一次對話。**你的第一個回應就是下面這段話，一字不改**：
-
-「你好。
-
-在你的生命裡、你想要什麼？
-
-第一個冒出來的、說出來。」
-
-理由：
-- Cathy 自我模組三週手冊「工具一｜慾望問句」是 Day 1 首句
-- 從渴望切入、往 L4-L5 挖、最直接、最 Damon
-
-如果學員卡住（連續三輪沒能量訊號）、再切：
-- 工具二 12 句身份句（主力備援）
-- 工具三 自我關係「你喜歡你自己這個人嗎？」
-- 工具四 不對勁
-- 第 4 層備援：v27 給類別（工作/人際/自己/家庭）
-
-這個指令只在 Week 1 Day 1 第一個 AI 回應觸發。學員回應後，回到 Damon 標準流程（觸發 #1-#10）。
-` : '';
+  // v30 hotfix 2：Week 1 Day 1 directive 整段移除。
+  // 改由前端 getOpeningMessage 直接拋 Cathy 工具一慾望問句、學員打開 App 就看到、無 UX 斷層。
+  // 學員第一句回答（任何答案）→ DAMON_CORE 觸發 #3 正向往上挖、自然繼續。
 
   return `${DAMON_CORE}
 
@@ -438,7 +413,7 @@ ${yesterdayNote}` : '';
 編號：${studentId}
 模組：${module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係'}
 第 ${week} 週 第 ${day} 天
-已進行 ${turnCount} 個回合，剩餘 ${turnsLeft} 個回合${notes}${damonContext}${openingDirective}${week1Day1Directive}
+已進行 ${turnCount} 個回合，剩餘 ${turnsLeft} 個回合${notes}${damonContext}${openingDirective}
 
 # 這週的方向
 ${weekGoal.direction}
