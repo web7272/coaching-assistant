@@ -7,6 +7,7 @@
     "migrate": "node scripts/run-migration.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.2",
     "@neondatabase/serverless": "^0.9.0"
   }
 }
