@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v4.0 Metrics — See Yourself Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif;
+    background: #1a1f2e;
+    color: #d8dde6;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 { font-size: 22px; color: #e8eef8; margin-bottom: 6px; }
+  .subtitle { font-size: 13px; color: #8a93a8; margin-bottom: 24px; }
+  .panel {
+    background: #232938;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #2d3548;
+  }
+  .panel-title {
+    font-size: 16px; font-weight: 500; color: #c8d2e6;
+    margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .panel-sub {
+    font-size: 12px; color: #6e7a92; margin-bottom: 16px;
+  }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px; color: #d8dde6;
+  }
+  th, td {
+    text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid #2d3548;
+  }
+  th { color: #8a93a8; font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sticky-note {
+    background: #3d3520; border-left: 3px solid #d4b04a;
+    padding: 12px 14px; border-radius: 4px; margin-top: 12px;
+    font-size: 12px; color: #e8d99a; line-height: 1.7;
+  }
+  .warning { color: #ff8a65; font-weight: 500; }
+  .ok { color: #7fd1a0; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 500;
+  }
+  .pill.on { background: #2d5d3d; color: #7fd1a0; }
+  .pill.off { background: #5d2d2d; color: #ff8a65; }
+  .miss-row {
+    background: #1c2230; border-radius: 6px; padding: 10px 12px;
+    margin-bottom: 8px; font-size: 12px; line-height: 1.6;
+  }
+  .miss-meta { color: #6e7a92; margin-bottom: 4px; font-size: 11px; }
+  .miss-msg { color: #c8d2e6; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; }
+  .miss-ai { color: #ffb380; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; margin-top: 4px; }
+  .miss-tags { font-size: 10px; color: #8a93a8; margin-top: 4px; }
+  .flag-row {
+    padding: 14px 0; border-bottom: 1px solid #2d3548;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .flag-row:last-child { border-bottom: none; }
+  .flag-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+  .flag-key { font-family: 'SF Mono', Monaco, monospace; color: #e8eef8; font-size: 13px; }
+  .flag-warn { color: #d4b04a; font-size: 11px; margin-top: 4px; line-height: 1.6; }
+  button {
+    background: #3a4258; border: 1px solid #4a5470;
+    color: #e8eef8; padding: 6px 14px; border-radius: 6px;
+    font-size: 12px; font-family: inherit; cursor: pointer;
+  }
+  button:hover { background: #45506b; }
+  button.toggle-on { background: #2d5d3d; border-color: #3a7d52; }
+  button.toggle-off { background: #5d2d2d; border-color: #7d3a3a; }
+  .empty { color: #6e7a92; font-style: italic; padding: 20px 0; text-align: center; }
+  .footer {
+    margin-top: 24px; text-align: center; font-size: 11px; color: #6e7a92;
+  }
+  .refresh-indicator {
+    position: fixed; top: 16px; right: 24px;
+    font-size: 11px; color: #6e7a92; padding: 4px 10px;
+    background: #232938; border-radius: 10px;
+  }
+  .leak-word {
+    display: inline-block; background: #2d3548; padding: 4px 10px;
+    border-radius: 12px; font-size: 11px; margin: 3px;
+    color: #c8d2e6;
+  }
+  .leak-word .count { color: #ffb380; margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<div class="refresh-indicator" id="refreshIndicator">—</div>
+
+<h1>v4.0 Metrics Dashboard</h1>
+<div class="subtitle">See Yourself · Prompt Engineering Observability · 60s 自動 refresh</div>
+
+<!-- Panel 1: Caching -->
+<div class="panel">
+  <div class="panel-title">① Caching Hit Rate（過去 24h）</div>
+  <div class="panel-sub">每 chat call 一筆 log、依 caching_enabled 分組</div>
+  <div id="cachingPanel"><div class="empty">載入中...</div></div>
+  <div class="sticky-note">
+    ⚠️ 翻 PROMPT_CACHING flag → ON 的決策條件（全部要滿足）：<br>
+    (1) 過去 48h hit_rate > 65%　(2) 過去 48h hotfix < 2 次　(3) Patrick / Vivi review chat_usage_log 50 筆樣本
+  </div>
+</div>
+
+<!-- Panel 2: Trigger Stats -->
+<div class="panel">
+  <div class="panel-title">② Reverse Example Trigger Stats（過去 7 天）</div>
+  <div class="panel-sub">3 個 detector 抓到的 miss、Patrick / Vivi 後台 review、確認 true_miss 才升級 regex trigger</div>
+  <div id="triggerPanel"><div class="empty">載入中...</div></div>
+
+  <div class="panel-title" style="margin-top: 24px; font-size: 14px;">最近 20 筆未 review samples</div>
+  <div id="recentMissesPanel"><div class="empty">載入中...</div></div>
+
+  <div class="panel-title" style="margin-top: 24px; font-size: 14px;">高頻 leak words（regex 候補、過去 14d）</div>
+  <div class="panel-sub">這些詞 detector 抓到 ai_asked_body_user_no_body 但 emotion_state regex 沒命中、可能要加進 regex</div>
+  <div id="leakWordsPanel"><div class="empty">載入中...</div></div>
+</div>
+
+<!-- Panel 3: Damon Slim Health -->
+<div class="panel">
+  <div class="panel-title">③ Damon Note Slim Health（過去 14 天）</div>
+  <div class="panel-sub">per student × day damon_context size、approx_tokens > 2,500 警報（slim 失效訊號）</div>
+  <div id="damonSizePanel"><div class="empty">載入中...</div></div>
+</div>
+
+<!-- Panel 4: Feature Flags -->
+<div class="panel">
+  <div class="panel-title">④ Feature Flags（即時切換）</div>
+  <div class="panel-sub">Toggle 後 chat.js _flagsCache TTL 30s、最多 30 秒 cluster converge</div>
+  <div id="flagsPanel"><div class="empty">載入中...</div></div>
+</div>
+
+<div class="footer">
+  v4.0 Metrics · 每 60 秒 refresh · <a href="#" onclick="resetToken(); return false;" style="color:#6e7a92">重設 token</a>
+</div>
+
+<script>
+const REFRESH_INTERVAL_MS = 60000;
+const ENDPOINT_METRICS = '/api/admin/v4-metrics';
+const ENDPOINT_TOGGLE = '/api/admin/feature-flag-toggle';
+
+function getToken() {
+  let token = localStorage.getItem('adminToken');
+  if (!token) {
+    token = prompt('請輸入 ADMIN_TOKEN（Vercel env var）：');
+    if (token) localStorage.setItem('adminToken', token.trim());
+  }
+  return token;
+}
+
+function resetToken() {
+  localStorage.removeItem('adminToken');
+  alert('Token 已清除、重新整理後會再 prompt');
+  location.reload();
+}
+
+function fmtNum(n) {
+  if (n == null) return '—';
+  if (typeof n === 'string') n = Number(n);
+  if (!isFinite(n)) return '—';
+  return n.toLocaleString();
+}
+
+function fmtTime(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('zh-TW', { hour12: false });
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function fetchMetrics() {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(ENDPOINT_METRICS, {
+      headers: { 'x-admin-token': token }
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('adminToken');
+      alert('Token 無效、請重新輸入');
+      location.reload();
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error('HTTP ' + res.status);
+    }
+    return await res.json();
+  } catch (e) {
+    console.error('fetchMetrics failed:', e);
+    document.getElementById('refreshIndicator').textContent = '⚠️ fetch failed: ' + e.message;
+    return null;
+  }
+}
+
+function renderCachingPanel(data) {
+  const el = document.getElementById('cachingPanel');
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">過去 24h 無 chat call</div>'; return; }
+  let html = `<table>
+    <thead><tr>
+      <th>Caching</th><th class="num">Turns</th><th class="num">Hit Rate %</th>
+      <th class="num">Cache Writes</th><th class="num">Cache Reads</th><th class="num">Uncached Input</th>
+      <th class="num">Cost USD</th><th class="num">Avg Duration ms</th>
+    </tr></thead><tbody>`;
+  for (const row of data) {
+    html += `<tr>
+      <td><span class="pill ${row.caching_enabled ? 'on' : 'off'}">${row.caching_enabled ? 'ON' : 'OFF'}</span></td>
+      <td class="num">${fmtNum(row.turns)}</td>
+      <td class="num">${row.hit_rate_pct ?? '—'}</td>
+      <td class="num">${fmtNum(row.total_cache_writes)}</td>
+      <td class="num">${fmtNum(row.total_cache_reads)}</td>
+      <td class="num">${fmtNum(row.total_uncached_input)}</td>
+      <td class="num">$${row.estimated_cost_usd ?? '—'}</td>
+      <td class="num">${fmtNum(row.avg_duration_ms)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderTriggerPanel(data) {
+  const el = document.getElementById('triggerPanel');
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">過去 7d 無 miss（detector 沒抓到、或對話品質好）</div>'; return; }
+  let html = `<table>
+    <thead><tr>
+      <th>Detector</th><th>Miss Type</th>
+      <th class="num">Occurrences</th><th class="num">Unreviewed</th>
+      <th class="num">Confirmed</th><th class="num">False Alarm</th><th class="num">Promoted</th>
+    </tr></thead><tbody>`;
+  for (const row of data) {
+    html += `<tr>
+      <td><code>${escapeHtml(row.detector)}</code></td>
+      <td>${escapeHtml(row.miss_type)}</td>
+      <td class="num">${fmtNum(row.occurrences)}</td>
+      <td class="num">${fmtNum(row.unreviewed)}</td>
+      <td class="num ${row.confirmed_misses > 0 ? 'warning' : ''}">${fmtNum(row.confirmed_misses)}</td>
+      <td class="num">${fmtNum(row.false_alarms)}</td>
+      <td class="num ok">${fmtNum(row.promoted)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderRecentMisses(data) {
+  const el = document.getElementById('recentMissesPanel');
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">無未 review samples</div>'; return; }
+  let html = '';
+  for (const m of data) {
+    const triggers = Array.isArray(m.triggers_hit) ? m.triggers_hit.join(', ') : '';
+    html += `<div class="miss-row">
+      <div class="miss-meta">#${m.id} · ${fmtTime(m.created_at)} · ${escapeHtml(m.student_id)} · W${m.week} D${m.day} · turn ${m.turn_count} · <strong>${escapeHtml(m.detector)}</strong></div>
+      <div class="miss-msg">學員：${escapeHtml(m.user_message || '')}</div>
+      <div class="miss-ai">AI：${escapeHtml(m.ai_response || '')}</div>
+      ${triggers ? `<div class="miss-tags">triggers_hit: ${escapeHtml(triggers)}</div>` : ''}
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderLeakWords(data) {
+  const el = document.getElementById('leakWordsPanel');
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">無 leak words candidate</div>'; return; }
+  el.innerHTML = data.map(w =>
+    `<span class="leak-word">${escapeHtml(w.word || '?')}<span class="count">×${fmtNum(w.occurrences)}</span></span>`
+  ).join('');
+}
+
+function renderDamonSize(data) {
+  const el = document.getElementById('damonSizePanel');
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">過去 14d 無 chat usage log</div>'; return; }
+  let html = `<table>
+    <thead><tr>
+      <th>Student</th><th>Module</th><th class="num">W</th><th class="num">D</th>
+      <th class="num">Max chars</th><th class="num">Approx tokens</th>
+    </tr></thead><tbody>`;
+  for (const row of data) {
+    const tokens = Number(row.approx_max_tokens) || 0;
+    const cls = tokens > 2500 ? 'warning' : '';
+    html += `<tr>
+      <td>${escapeHtml(row.student_id)}</td>
+      <td>${escapeHtml(row.module)}</td>
+      <td class="num">${row.week}</td>
+      <td class="num">${row.day}</td>
+      <td class="num">${fmtNum(row.max_chars)}</td>
+      <td class="num ${cls}">${fmtNum(tokens)}${tokens > 2500 ? ' ⚠️' : ''}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderFlagsPanel(data) {
+  const el = document.getElementById('flagsPanel');
+  if (!data || data.length === 0) { el.innerHTML = '<div class="empty">無 feature flags</div>'; return; }
+  let html = '';
+  for (const f of data) {
+    const btnClass = f.enabled ? 'toggle-on' : 'toggle-off';
+    const btnLabel = f.enabled ? 'ON · 點擊關閉' : 'OFF · 點擊開啟';
+    html += `<div class="flag-row">
+      <div class="flag-head">
+        <div>
+          <span class="flag-key">${escapeHtml(f.key)}</span>
+          <span class="pill ${f.enabled ? 'on' : 'off'}" style="margin-left:8px;">${f.enabled ? 'ON' : 'OFF'}</span>
+          <span class="miss-meta" style="margin-left:8px;">default: ${f.default_enabled ? 'ON' : 'OFF'}</span>
+        </div>
+        <button class="${btnClass}" onclick="toggleFlag('${escapeHtml(f.key)}', ${f.enabled})">${btnLabel}</button>
+      </div>
+      ${f.guard_warning ? `<div class="flag-warn">${escapeHtml(f.guard_warning)}</div>` : ''}
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function toggleFlag(key, currentEnabled) {
+  const reason = prompt(`翻 ${key} flag（${currentEnabled ? 'ON → OFF' : 'OFF → ON'}）。\n請寫翻 flag 的理由（≥ 5 字）：`);
+  if (!reason || reason.trim().length < 5) {
+    alert('reason 必須 ≥ 5 字、取消');
+    return;
+  }
+  const confirmed = confirm(`再次確認：\n\nKey: ${key}\n動作: ${currentEnabled ? 'ON → OFF' : 'OFF → ON'}\nReason: ${reason.trim()}\n\n確定翻嗎？`);
+  if (!confirmed) return;
+
+  const token = getToken();
+  try {
+    const res = await fetch(ENDPOINT_TOGGLE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-token': token,
+      },
+      body: JSON.stringify({ key, reason: reason.trim() }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      alert(`✅ ${key} 已翻：${data.oldVal ? 'ON' : 'OFF'} → ${data.newVal ? 'ON' : 'OFF'}\n\n${data.note || ''}`);
+      loadAll();
+    } else {
+      alert('❌ 翻 flag 失敗：' + (data.message || data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('❌ 翻 flag 失敗：' + e.message);
+  }
+}
+
+async function loadAll() {
+  const data = await fetchMetrics();
+  if (!data) return;
+  renderCachingPanel(data.cachingStats);
+  renderTriggerPanel(data.triggerStats);
+  renderRecentMisses(data.recentMisses);
+  renderLeakWords(data.leakWords);
+  renderDamonSize(data.damonSize);
+  renderFlagsPanel(data.flags);
+  document.getElementById('refreshIndicator').textContent = '✓ ' + new Date().toLocaleTimeString('zh-TW', { hour12: false });
+}
+
+// 初次 load + 60s refresh
+loadAll();
+setInterval(loadAll, REFRESH_INTERVAL_MS);
+</script>
+</body>
+</html>
