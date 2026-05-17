@@ -1321,7 +1321,8 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
     // 1. 取 student_id（damon_notes INSERT 跟 yesterdaySCHypothesis lookup 都要用）
     // 2. INSERT INTO damon_notes（主寫入、UNIQUE 衝突 UPDATE、idempotent）
     // 3. UPDATE sessions.damon_note_public（frontend backward compat、per Q1=b）
-    // 4. sessions.damon_note column 不寫（per blocker 1 a、保留現有 v3.4 資料）
+    // 4. v4.1 hotfix 2: dual-write sessions.damon_note（既有 admin UI / index.html 仍讀此 column）
+    //    權衡：違反 single-source-of-truth、alpha 階段 acceptable、admin UI 正規化遷移留 v5.0
     // ============================================================
     const studentRow = await sql`SELECT student_id FROM sessions WHERE id = ${sessionId} LIMIT 1`;
     const studentIdOfSession = studentRow[0]?.student_id;
@@ -1335,6 +1336,14 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
       VALUES (${studentIdOfSession}, ${module}, ${week}, ${day}, ${fullNote}, false)
       ON CONFLICT (student_id, module, week, day, is_week_summary)
       DO UPDATE SET note_text = EXCLUDED.note_text, updated_at = NOW()
+    `;
+
+    // v4.1 hotfix 2: dual-write 完整 note 回 sessions.damon_note
+    // 既有 admin UI / index.html 學員後台仍讀此 column、5.0c 後不再寫造成永遠顯示「還沒有 Damon Note」
+    await sql`
+      UPDATE sessions
+      SET damon_note = ${fullNote}, updated_at = NOW()
+      WHERE id = ${sessionId}
     `;
 
     await sql`
