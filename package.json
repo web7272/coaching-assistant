@@ -5,7 +5,7 @@
   "scripts": {
     "reset-test-data": "node scripts/reset-test-data.js",
     "migrate": "node scripts/run-migration.js",
-    "test": "node --test lib/state/state-manager.test.js lib/session/day-boundary.test.js lib/haiku-judge/_base.test.js"
+    "test": "node --test lib/state/state-manager.test.js lib/session/day-boundary.test.js lib/haiku-judge/_base.test.js lib/haiku-judge/_json.test.js lib/haiku-judge/sensory-detail.test.js lib/haiku-judge/depth-signal.test.js lib/haiku-judge/containment-logic.test.js lib/haiku-judge/takeaway-sentiment.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.2",
