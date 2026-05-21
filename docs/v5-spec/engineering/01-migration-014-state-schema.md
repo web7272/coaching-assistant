@@ -19,7 +19,7 @@ session_state（per-session ephemeral）
   → 學員努力產出的「過程狀態」、Day N+1 fresh
 
 user_profile_evolution（cross-session persistent）
-  → 新建 table、user_id PK
+  → 新建 table、student_id TEXT PK（errata 5/21、見 §2）
   → 跨 day / 跨 session 永不 reset
   → 學員努力產出的「資產」（starter kit、商業承諾）
 ```
@@ -101,9 +101,15 @@ CREATE INDEX IF NOT EXISTS idx_sessions_state_phase
 
 ## 2. user_profile_evolution 表（新建）
 
+> **Errata 2026-05-21（PR-2）**：v0.1 寫 `user_id INT REFERENCES students(id)`。
+> 落地時實測：`students` 表 PK 是 `student_id TEXT`（格式 `'A001'`...）、不存在 `students.id`。
+> 整個 codebase（damon_notes / sessions / chat.js）一律用 `student_id TEXT`。
+> → 對齊現實：column 名改 `student_id`、型別改 TEXT、FK 改指 `students(student_id)`。
+> lib/state API 一律用 `student_id`（如 `getUserProfile(student_id)`）。
+
 ```sql
 CREATE TABLE IF NOT EXISTS user_profile_evolution (
-  user_id           INT PRIMARY KEY REFERENCES students(id),
+  student_id        TEXT PRIMARY KEY REFERENCES students(student_id),
 
   -- 引擎 2：owned qualities 累積（starter kit 核心）
   anchors                       JSONB DEFAULT '[]'::jsonb,
@@ -229,7 +235,7 @@ function onNewSessionDay(session_state, user_profile) {
 2. `lib/session/state-manager.js`：session_state 讀寫 helper（getState / updateState / resetTransient）
 3. `lib/session/day-boundary.js`：new_session_day 偵測 + onNewSessionDay reset
 4. JSONB 操作用 Neon Postgres `jsonb_set` / `||` merge、避免整個 object 覆寫造成 race
-5. user_profile_evolution upsert pattern（`INSERT ... ON CONFLICT (user_id) DO UPDATE`）
+5. user_profile_evolution upsert pattern（`INSERT ... ON CONFLICT (student_id) DO UPDATE`）
 
 ---
 

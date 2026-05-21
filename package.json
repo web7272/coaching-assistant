@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "reset-test-data": "node scripts/reset-test-data.js",
-    "migrate": "node scripts/run-migration.js"
+    "migrate": "node scripts/run-migration.js",
+    "test": "node --test lib/state/state-manager.test.js lib/session/day-boundary.test.js lib/haiku-judge/_base.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.2",
