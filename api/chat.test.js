@@ -11,6 +11,9 @@ import {
   buildDynamicContext,
   buildSystemPromptArrayV5,
   collectDetectorOutput,
+  CLOSURE_MARKERS,
+  detectDayComplete,
+  buildClosureHint,
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 
@@ -205,4 +208,89 @@ test('collectDetectorOutput: later patch wins on key collision', () => {
     { id: 'b', ok: true, result: { patch: { router_phase: 'elicitation' } } },
   ]);
   assert.equal(out.patch.router_phase, 'elicitation');
+});
+
+// ═════════════════════════════════════════════════════════
+// PR-4c: detectDayComplete — v4 marker + hard-limit
+// ═════════════════════════════════════════════════════════
+
+test('CLOSURE_MARKERS: includes the 5 v4 closure markers, frozen', () => {
+  const expected = ['明天從這裡繼續', '今天先到這裡', '把這句話留下來', '明天我們繼續', '今天就到這裡'];
+  assert.deepEqual([...CLOSURE_MARKERS].sort(), expected.sort());
+  assert.ok(Object.isFrozen(CLOSURE_MARKERS));
+});
+
+test('detectDayComplete: any closure marker in content → true', () => {
+  for (const m of CLOSURE_MARKERS) {
+    assert.equal(
+      detectDayComplete({ content: `這個感覺很真實。${m}🌿`, turnCount: 8 }),
+      true,
+      `marker ${m} should trigger dayComplete`,
+    );
+  }
+});
+
+test('detectDayComplete: no marker, mid-session → false', () => {
+  assert.equal(
+    detectDayComplete({ content: '那你想要的是什麼？', turnCount: 10 }),
+    false,
+  );
+});
+
+test('🛑 detectDayComplete: hard-limit (turnCount >= 40) → true even without marker', () => {
+  assert.equal(detectDayComplete({ content: '繼續往下挖', turnCount: 40 }), true);
+  assert.equal(detectDayComplete({ content: '什麼？', turnCount: 41 }), true);
+});
+
+test('detectDayComplete: just-below hard-limit + no marker → false', () => {
+  assert.equal(detectDayComplete({ content: '什麼？', turnCount: 39 }), false);
+});
+
+test('detectDayComplete: custom hardLimit override', () => {
+  assert.equal(detectDayComplete({ content: '', turnCount: 10, hardLimit: 10 }), true);
+  assert.equal(detectDayComplete({ content: '', turnCount: 9, hardLimit: 10 }), false);
+});
+
+test('detectDayComplete: empty / nullish content + below limit → false', () => {
+  assert.equal(detectDayComplete({ content: '', turnCount: 5 }), false);
+  assert.equal(detectDayComplete({ content: null, turnCount: 5 }), false);
+  assert.equal(detectDayComplete({}), false);
+});
+
+// ═════════════════════════════════════════════════════════
+// PR-4c: buildClosureHint — soft-limit closure-guidance inject
+// ═════════════════════════════════════════════════════════
+
+test('buildClosureHint: below soft limit (24) → null (no inject)', () => {
+  assert.equal(buildClosureHint({ turnCount: 24 }), null);
+  assert.equal(buildClosureHint({ turnCount: 0 }), null);
+});
+
+test('buildClosureHint: at soft limit (25) → returns guidance text', () => {
+  const hint = buildClosureHint({ turnCount: 25 });
+  assert.ok(typeof hint === 'string' && hint.length > 0);
+  assert.match(hint, /Session 收尾接近/);
+  assert.match(hint, /turn count = 25/);
+  assert.match(hint, /soft limit 25/);
+  assert.match(hint, /hard limit 40/);
+  assert.match(hint, /距 hard 15/);
+});
+
+test('buildClosureHint: between soft and hard → turnsToHard decreases', () => {
+  assert.match(buildClosureHint({ turnCount: 35 }), /距 hard 5/);
+  assert.match(buildClosureHint({ turnCount: 39 }), /距 hard 1/);
+});
+
+test('buildClosureHint: at hard limit → distance 0', () => {
+  assert.match(buildClosureHint({ turnCount: 40 }), /距 hard 0/);
+});
+
+test('buildClosureHint: custom soft/hard limits', () => {
+  assert.equal(buildClosureHint({ turnCount: 9, softLimit: 10 }), null);
+  assert.match(buildClosureHint({ turnCount: 10, softLimit: 10, hardLimit: 15 }), /距 hard 5/);
+});
+
+test('buildClosureHint: non-number turnCount → null', () => {
+  assert.equal(buildClosureHint({}), null);
+  assert.equal(buildClosureHint({ turnCount: 'lots' }), null);
 });

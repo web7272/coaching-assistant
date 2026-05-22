@@ -41,6 +41,22 @@ export const maxDuration = 60;
 const MODEL = 'claude-sonnet-4-6';
 // Dashboard §2.4 hard limit：turn >= 40 → hard_limit_hit_this_session
 const HARD_LIMIT_TURNS = 40;
+// PR-4c session_end soft limit：turn >= 25 → inject closure-guidance（AI 開始往收尾走）
+const SOFT_LIMIT_TURNS = 25;
+
+/**
+ * v4 收尾 marker — v5 主對話 LLM 在引導下會自然輸出這些短語當作收尾訊號。
+ * 偵測這些 marker 在 AI response 中出現 → dayComplete true。
+ *
+ * spec：docs/v5-spec/engineering/07-pr4c-ui-integration-and-data-contract.md §4
+ */
+export const CLOSURE_MARKERS = Object.freeze([
+  '明天從這裡繼續',
+  '今天先到這裡',
+  '把這句話留下來',
+  '明天我們繼續',
+  '今天就到這裡',
+]);
 
 // ════════════════════════════════════════════════════════════════
 // Anthropic SDK — lazy singleton（讓本檔可在無 API key 環境被 import / unit test）
@@ -287,6 +303,45 @@ export function collectDetectorOutput(results) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// PR-4c session_end detection — pure functions（chat.js orchestration 用）
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * v5 session-end 偵測（PR-4c）。
+ *
+ * dayComplete = AI response 含 CLOSURE_MARKERS 任一 OR turn count 到 hard limit。
+ * （soft limit 不觸發 dayComplete、只觸發 closure-guidance inject、見 buildClosureHint）
+ *
+ * @param {{ content?: string, turnCount?: number, hardLimit?: number }} args
+ * @returns {boolean}
+ */
+export function detectDayComplete({ content, turnCount, hardLimit = HARD_LIMIT_TURNS } = {}) {
+  if (typeof turnCount === 'number' && turnCount >= hardLimit) return true;
+  if (typeof content !== 'string' || content.length === 0) return false;
+  return CLOSURE_MARKERS.some(m => content.includes(m));
+}
+
+/**
+ * Soft-limit closure-guidance hint —
+ * 在 buildSystemPromptArrayV5 的 conditionalInjects 加入此 hint 段、
+ * AI 看到後會開始往收尾走（採 takeaway + 用 CLOSURE_MARKERS 收尾話術）。
+ *
+ * 回傳 null 表示 turnCount 還沒到 softLimit、不需要 inject。
+ *
+ * @returns {string|null}
+ */
+export function buildClosureHint({ turnCount, softLimit = SOFT_LIMIT_TURNS, hardLimit = HARD_LIMIT_TURNS } = {}) {
+  if (typeof turnCount !== 'number' || turnCount < softLimit) return null;
+  const turnsToHard = Math.max(0, hardLimit - turnCount);
+  return `[SYSTEM HINT — Session 收尾接近]
+本場 turn count = ${turnCount}（soft limit ${softLimit}、hard limit ${hardLimit}、距 hard ${turnsToHard} turn）。
+今天的對話已足夠——從這一輪開始往收尾走、不再開新話題、不再追問新場景。
+若已採集到 takeaway（一個學員停下來的詞 / 一句真的話）、用收尾話術：
+「明天從這裡繼續。」或「今天先到這裡。把這句話留下來。」
+若還沒、用一個輕的問句讓學員自己給今天的一個詞、然後接收尾。`;
+}
+
+// ════════════════════════════════════════════════════════════════
 // v5.0 handler
 // ════════════════════════════════════════════════════════════════
 
@@ -388,6 +443,10 @@ export default async function handler(req, res) {
       console.error('user_turn dispatch failed:', e.message);
     }
 
+    // 7c — soft-limit closure-guidance（PR-4c session_end）
+    const closureHint = buildClosureHint({ turnCount });
+    if (closureHint) conditionalInjects.push(closureHint);
+
     // Step 8 — build system prompt array（cached prefix + dynamic）
     const stateForPrompt = { ...sessionState, ...detectorPatch };
     const systemParam = buildSystemPromptArrayV5({
@@ -438,6 +497,19 @@ export default async function handler(req, res) {
       console.error('updateState failed:', e.message);
     }
 
+    // Step 11b — session_end 偵測（PR-4c：dayComplete + day_complete=TRUE 持久化）
+    const dayComplete = detectDayComplete({ content, turnCount, hardLimit: HARD_LIMIT_TURNS });
+    if (dayComplete) {
+      try {
+        await sql`
+          UPDATE sessions SET day_complete = TRUE, updated_at = NOW()
+          WHERE id = ${sessionId}
+        `;
+      } catch (e) {
+        console.error('day_complete UPDATE failed:', e.message);
+      }
+    }
+
     // Step 12 — user_profile lifecycle + chat_usage_log（fail-soft）
     try {
       await incrementUserProfileCounters(studentId, { gapDays: gap_days, isNewDay: isNew });
@@ -472,9 +544,9 @@ export default async function handler(req, res) {
       phase: advance ? advance.to : stateForPrompt.current_phase,
       routerPhase: fullPatch.router_phase || sessionState.router_phase || null,
       phaseAdvanced: !!advance,
-      // v5.0 session_end / Damon Note 收尾 → PR-4c api/finalize-day.js 接手
-      dayComplete: false,
-      notesGenerating: false,
+      // PR-4c：session_end 寫活、frontend 依 dayComplete=true 觸發 §5.2 轉場 + POST /api/finalize-day
+      dayComplete,
+      notesGenerating: dayComplete,
       turnsLeft: Math.max(0, HARD_LIMIT_TURNS - turnCount),
     });
 

@@ -1,39 +1,100 @@
 // api/finalize-day.js
-// v34 hotfix 4 (Option C)：Day 6 收尾 Damon Note + Notebook async 生成 endpoint
+// v5.0 PR-4c：Damon Note + Notebook + per-week summary + Day 21 結業 async 生成 endpoint
 //
-// 用途：api/chat.js 在 dayComplete 時不再阻塞主回應、改由 frontend 拿到 notesGenerating: true 後
-// fire POST /api/finalize-day 觸發實際的 Damon Note + Notebook 生成。
+// 用途：api/chat.js 在 dayComplete 時不阻塞主回應、frontend 拿到 notesGenerating:true 後
+// fire POST /api/finalize-day 觸發 Damon Note 生成（+ 7/14/21 週報、+ Day 21 結業 / export）。
+//
+// PR-4c 變更：
+//   - request 入參 sessionDay (1-21)、week = ceil(sessionDay/7) 由後端算
+//   - 週報觸發從 v4 day===6 改 sessionDay ∈ {7,14,21}
+//   - 仍接收 legacy week+day 過渡相容（v5 7 天週映射）
+//   - response shape 對齊 docs/v5-spec/engineering/07-pr4c §3-B
 //
 // 設計：
-// - 幂等：如果該 session 已經有 damon_note、直接 return 既有結果、不重跑 Anthropic
-// - Pro plan 60s timeout 容得下兩個 Sonnet 4.6 call（~15-25s）
-// - 失敗時 frontend 可以 retry、學員下次打開該 Day 也可由前端 lazy 觸發
+// - 幂等：該天的 daily Damon Note + notebook_page 已存在 → 直接 return
+// - Pro plan 60s timeout（Damon Note + Notebook + 週報 + Day 21 結業 + export call、加總仍 < 60s）
 
 import { neon } from '@neondatabase/serverless';
 import Anthropic from '@anthropic-ai/sdk';
 import { generateDamonNote } from './chat.js';
 
-// v4.0 Phase 6: Anthropic SDK 用於 Day 6 per-week summary 生成
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Anthropic SDK（lazy、跟 chat.js 對齊、test-friendly）
+let _anthropic = null;
+function getAnthropic() {
+  if (_anthropic) return _anthropic;
+  _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return _anthropic;
+}
 
 // Vercel Pro 預設 60s、明寫保險
-// （Damon Note + Notebook 兩個 call ~15-25s、Phase 6 Day 6 多 1 個 summary call ~5-10s、加總仍 < 60s）
 export const config = {
   maxDuration: 60,
 };
 
+// ════════════════════════════════════════════════════════════════
+// PR-4c v5 day numbering — pure helpers（chat orchestration + tests 用）
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve sessionDay (1-21) from PR-4c request body.
+ *   - PR-4c shape：{ sessionDay: number }（preferred）
+ *   - legacy：    { week, day } → 映射 (week-1)*7 + day
+ *
+ * @param {object} body
+ * @returns {number|null}  1..N（無上限、validation 由 caller 做）；null 表無法 resolve
+ */
+export function resolveSessionDay(body = {}) {
+  const { sessionDay, week, day } = body || {};
+  if (typeof sessionDay === 'number' && Number.isFinite(sessionDay) && sessionDay >= 1) {
+    return Math.floor(sessionDay);
+  }
+  if (week != null && day != null) {
+    const w = parseInt(week);
+    const d = parseInt(day);
+    if (Number.isFinite(w) && Number.isFinite(d) && w >= 1 && d >= 1) {
+      return (w - 1) * 7 + d;
+    }
+  }
+  return null;
+}
+
+/** v5：sessionDay → 1-indexed week (1,2,3). */
+export function weekFromSessionDay(sessionDay) {
+  return Math.ceil(sessionDay / 7);
+}
+
+/** 週報觸發點：sessionDay ∈ {7, 14, 21}（07 §3-B 拍板）。 */
+export function isWeekBoundary(sessionDay) {
+  return sessionDay === 7 || sessionDay === 14 || sessionDay === 21;
+}
+
+/** Day 21 = graduation。 */
+export function isGraduationDay(sessionDay) {
+  return sessionDay === 21;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { sessionId, module, week, day } = req.body || {};
-  if (!sessionId || !module || week == null || day == null) {
-    return res.status(400).json({ error: 'Missing required fields: sessionId, module, week, day' });
+  const { sessionId, module } = req.body || {};
+  if (!sessionId || !module) {
+    return res.status(400).json({ error: 'Missing required fields: sessionId, module' });
   }
+
+  // PR-4c：sessionDay 1-21（preferred）；過渡接 legacy week+day（v5 7 天週映射）
+  const sessionDay = resolveSessionDay(req.body || {});
+  if (!sessionDay || sessionDay < 1 || sessionDay > 21) {
+    return res.status(400).json({ error: 'Missing or invalid sessionDay (1-21)' });
+  }
+  const week = weekFromSessionDay(sessionDay);
+  const day = sessionDay;
+  const weekBoundary = isWeekBoundary(sessionDay);
+  const graduation = isGraduationDay(sessionDay);
 
   try {
     const sql = neon(process.env.DATABASE_URL);
 
-    // 取現有 session 狀態（幂等檢查 + Phase 6 需要 student_id）
+    // 取現有 session 狀態（幂等檢查 + 需要 student_id）
     const sessionRows = await sql`
       SELECT id, student_id, damon_note_public, notebook_page, day_complete
       FROM sessions WHERE id = ${sessionId} LIMIT 1
@@ -43,15 +104,13 @@ export default async function handler(req, res) {
     }
     const existing = sessionRows[0];
 
-    // v4.0 Phase 6.1: 幂等檢查改讀 damon_notes 表
-    // （Phase 5.0c blocker 1 a 後 sessions.damon_note 不再寫、舊 check `existing.damon_note &&` 永遠 false、
-    //  每次 finalize-day call 都重跑 generateDamonNote、浪費 Anthropic call。改 check damon_notes 表 + notebook_page。）
+    // 幂等檢查：該天 daily note 已生成 + notebook_page 已寫 → 直接 return
     const existingNote = await sql`
       SELECT 1 FROM damon_notes
       WHERE student_id = ${existing.student_id}
         AND module = ${module}
-        AND week = ${parseInt(week)}
-        AND day = ${parseInt(day)}
+        AND week = ${week}
+        AND day = ${day}
         AND is_week_summary = false
       LIMIT 1
     `;
@@ -60,41 +119,49 @@ export default async function handler(req, res) {
         ok: true,
         alreadyDone: true,
         damonNotePublic: existing.damon_note_public,
-        notebookPage: existing.notebook_page,
+        notebookPage: existing.notebook_page,  // v4 index.html 過渡期仍讀（07 §3-B updated）
+        isWeekBoundary: weekBoundary,
+        isGraduation: graduation,
       });
     }
 
-    // 雖然 chat.js 已經 set day_complete=TRUE，這層也保險一下（finalize 直接被呼叫的 case）
+    // chat.js 已 set day_complete=TRUE，此處保險（finalize 直接被呼叫的 case）
     if (!existing.day_complete) {
       await sql`UPDATE sessions SET day_complete = TRUE, updated_at = NOW() WHERE id = ${sessionId}`;
     }
 
-    // 觸發完整生成（內含 Damon Note + yesterdaySCHypothesis lookup + Notebook page）
-    const noteResult = await generateDamonNote(sql, sessionId, module, parseInt(week), parseInt(day));
-
+    // Damon Note + yesterdaySCHypothesis lookup + Notebook page（內含的既有實作）
+    const noteResult = await generateDamonNote(sql, sessionId, module, week, day);
     if (!noteResult) {
       return res.status(500).json({ error: 'NOTE_GENERATION_FAILED' });
     }
 
     // ============================================================
-    // v4.0 Phase 6: Day 6 per-week summary 生成
-    // - 跑完既有 Damon Note + Notebook 後、額外跑一個 summary call
-    // - 寫進 damon_notes（is_week_summary=true）、跟 daily note (is_week_summary=false) UNIQUE 區分、可共存於 day=6
-    // - fail-soft：summary 失敗不影響既有 day complete return
+    // PR-4c：週報觸發從 day===6 改 sessionDay ∈ {7, 14, 21}
+    // - summary row 寫進 damon_notes（is_week_summary=true）
+    // - UNIQUE (student_id, module, week, day, is_week_summary) → daily + summary 共存於同天
+    // - fail-soft：summary 失敗不阻塞 daily return
     // ============================================================
-    if (parseInt(day) === 6) {
+    if (weekBoundary) {
       try {
-        await generateWeekSummary(sql, existing.student_id, module, parseInt(week));
+        await generateWeekSummary(sql, existing.student_id, module, week, sessionDay);
       } catch (e) {
-        console.error('[week-summary] generation failed (fail-soft、不阻塞 day complete):', e.message);
+        console.error('[week-summary] generation failed (fail-soft):', e.message);
       }
     }
+
+    // TODO PR-4c P0-4：sessionDay === 21 → 生結業內容 + export-personal-coach-prompt → email
+    //                  finalize-day 每天 append daily_takeaways（user_profile_evolution）
+    //                  本 PR (PR-4c-1) 範圍：只接通 v5 numbering + 週報邊界；
+    //                  daily_takeaways + 結業 export 留 PR-4c-2（migration 016 之後）。
 
     return res.status(200).json({
       ok: true,
       alreadyDone: false,
       damonNotePublic: noteResult.publicNote,
-      notebookPage: noteResult.notebookPage,
+      notebookPage: noteResult.notebookPage,  // v4 index.html 過渡期仍讀（07 §3-B updated）
+      isWeekBoundary: weekBoundary,
+      isGraduation: graduation,
     });
 
   } catch (e) {
@@ -104,12 +171,16 @@ export default async function handler(req, res) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// v4.0 Phase 6: generateWeekSummary
-// Day 6 跑完 Damon Note 後、撈該週 daily notes、Anthropic 濃縮成 per-week summary、寫進 damon_notes
+// generateWeekSummary —
+// 在 sessionDay ∈ {7,14,21} 邊界跑完 daily Damon Note 後、撈該週 daily notes、
+// Anthropic 濃縮成 per-week summary、寫進 damon_notes (is_week_summary=true)。
+//
+// PR-4c 改動：
+//   - summary row 的 `day` 欄位從 hardcoded 6 → summaryRowDay 參數（boundary 7/14/21）
+//   - prompt 加一行「第一行給一個 ≤12 字主題短句」（07 §3-E：GET /api/week-report.title 來源）
 // 對應 slim.js KEY_FIELDS_ALWAYS（關鍵句 / SC 觀察 / 還沒碰到的）+ 該週 conditional 欄位
-// 跨週後 slim.js buildSlimDamonContext 讀 is_week_summary=true 那筆（不是 6 天 daily 全部）
 // ════════════════════════════════════════════════════════════════
-async function generateWeekSummary(sql, studentId, module, week) {
+async function generateWeekSummary(sql, studentId, module, week, summaryRowDay) {
   // 1. 撈該週 daily Damon Note（is_week_summary=false）
   const weekDailyNotes = await sql`
     SELECT day, note_text FROM damon_notes
@@ -123,7 +194,8 @@ async function generateWeekSummary(sql, studentId, module, week) {
     return;
   }
 
-  // 2. 該週採集的 conditional 欄位提醒（依 week 動態）
+  // 2. 該週採集的 conditional 欄位提醒（依 week 動態、v4.0 6天週遺留語意；
+  //    v5.0 Damon Note prompt 重新設計留未來 task、PR-4c 不改）
   let conditionalHint = '';
   if (week === 1) {
     conditionalHint = '【Scope 證據】（Week 1 採集的具體事件原文、Week 3 Day 3 調用）';
@@ -136,9 +208,14 @@ async function generateWeekSummary(sql, studentId, module, week) {
 【宣言】（D6、完整宣言句 + 「你現在是誰？」原文）`;
   }
 
-  // 3. summary prompt（無 system、整段塞 user message、Advisor Phase 6 spec）
+  // 3. summary prompt（PR-4c：第一行加主題短句、供 GET /api/week-report .title）
   const summaryPrompt = `以下是學員 ${module} 模組 Week ${week} 的 ${weekDailyNotes.length} 天 Damon Note。
-請濃縮成 1 份 per-week summary、保留以下欄位（依該週採集情況）：
+請濃縮成 1 份 per-week summary。
+
+⚠️ 格式：第一行請給一個 ≤12 字的主題短句（不加標點、無引號、單獨成行）、之後空一行、再開始 body。
+範例第一行：「從不能停，到可以決定」
+
+之後 body 保留以下欄位（依該週採集情況）：
 
 【關鍵句】本週最有能量的 1-2 句、原文加引號
 【SC 觀察】本週 SC 輪廓、走到哪一層、反覆出現的詞（用「可能」「假設」「猜想」緩衝詞）
@@ -157,7 +234,7 @@ ${conditionalHint}
 ${weekDailyNotes.map(n => `[Day ${n.day}]\n${n.note_text}`).join('\n\n---\n\n')}`;
 
   // 4. Anthropic SDK call
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     messages: [{ role: 'user', content: summaryPrompt }],
@@ -166,13 +243,13 @@ ${weekDailyNotes.map(n => `[Day ${n.day}]\n${n.note_text}`).join('\n\n---\n\n')}
 
   // 5. INSERT INTO damon_notes (..., is_week_summary=true)
   // UNIQUE (student_id, module, week, day, is_week_summary)
-  // day=6 可同時有 daily (is_week_summary=false) + summary (is_week_summary=true) 兩 row
+  // 同天 daily (false) + summary (true) 兩 row 共存
   await sql`
     INSERT INTO damon_notes (student_id, module, week, day, note_text, is_week_summary)
-    VALUES (${studentId}, ${module}, ${week}, 6, ${summaryText}, true)
+    VALUES (${studentId}, ${module}, ${week}, ${summaryRowDay}, ${summaryText}, true)
     ON CONFLICT (student_id, module, week, day, is_week_summary)
     DO UPDATE SET note_text = EXCLUDED.note_text, updated_at = NOW()
   `;
 
-  console.log(`[week-summary] generated for ${studentId} ${module} W${week} (${summaryText.length} chars)`);
+  console.log(`[week-summary] generated for ${studentId} ${module} W${week} day=${summaryRowDay} (${summaryText.length} chars)`);
 }
