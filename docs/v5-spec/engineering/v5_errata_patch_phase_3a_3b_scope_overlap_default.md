@@ -1,4 +1,4 @@
-# Errata Patch:Phase 3a/3b Scope Overlap Default 化
+# Errata Patch:Phase 3a/3b Scope Overlap Default 化(v0.2)
 
 > **本檔角色**:對 `v5_checkpoint_1_daily_session_structure_turn_2.md` 的 errata patch、**不重寫**整個 Phase 3a/3b、只標修改點。
 >
@@ -11,6 +11,34 @@
 > **影響範圍**:5 個 patch sections、Patrick / Claude Code 照改 + merge PR-9。
 >
 > **不影響**:Phase 3a Step 2 / Step 3、Phase 3b Step 2-4(已是 Scope Overlap 路徑)、其他引擎、附錄 A 機制。
+
+---
+
+## v0.2 Changelog(2026-05-21、§3 real review 後同步)
+
+**觸發**:設計師 review §3 ship 版時、發現 errata patch v0.1 對「紅線 14」的 framing 過於泛化(寫成「跟著學員語言走、不替學員選 channel」)、跟 §3 ship 版第 14 條實際文字不 1:1 對齊。
+
+**§3 ship 版紅線 14 原文**:
+> 「不問『身體哪裡感覺到 / 畫面什麼樣』——除非學員自己用感官語言(亞洲學員多數對此無感)。」
+
+**v0.1 → v0.2 變更**:6 處「紅線 14」reference 全部精確化:
+- 移除泛化版「跟著學員語言走、不替學員選 channel」(我推論版本、非 Damon named 原則)
+- 替換為 §3 ship 版第 14 條具體文字「不問身體哪裡 / 畫面什麼樣、除非學員自己用感官語言」
+
+**v0.2 不影響的範圍**:
+- ✅ Patch 1-5 核心邏輯不變(B 傾向版設計決定不變)
+- ✅ migration 014 schema 不變
+- ✅ Patch 落地 sequence 不變
+- ✅ PR-9 範圍不變
+
+**僅文字精確化、無設計變更**——這個版本跟 §3 ship 版 1:1 對齊、避免將來 reader 質疑紅線 14 邊界。
+
+**§3 ship 版 v0.2 後續更新預告**(設計師 review §3 後 Vivi 全採納、不在本 errata 範圍):
+- §3 從 16 條紅線擴充為 20 條(補紅線 17 不排線性 / 18 不替學員填空 / 19 evidence 三準則 / 20 深創傷即停)
+- 紅線 9 措辭釐清(AI 內部分類合法、不對學員講分類)
+- 付費對等性「強勢」→「直接」
+- 紅線 14 編號不變、文字不變
+- 本 errata 引用紅線 14 不受 §3 編號擴充影響
 
 ---
 
@@ -66,7 +94,7 @@
 > 
 > 【若學員自發講畫面 / 身體 / 顏色 / 表情等視覺-身體 channel】:
 > AI 順著深化:「那個畫面裡你看到什麼?」/「身體哪裡感覺到?」
-> (對應紅線 14:跟著學員語言走、不替學員選 channel。Patrick ship 版 §3 第 14 條正式定義)
+> (對應紅線 14:不問『身體哪裡感覺到 / 畫面什麼樣』、除非學員自己用感官語言。Patrick ship 版 §3 第 14 條正式定義。)
 > 
 > 【若學員一直給概念 / 文字 / 場景】:
 > AI 不強推畫面、繼續 Scope Overlap 深化(問更多場景 / 對應關係)
@@ -181,7 +209,7 @@ exit_to_step_2:
 > 
 > 【若學員自發講身體感 / 顏色 / 溫度等 submodality channel】:
 > AI 順著深化:「那個感覺在身體哪裡?」/「跟[reference quality]比起來、顏色一樣嗎?」
-> (紅線 14:跟著學員語言走)
+> (紅線 14:不問『身體哪裡 / 畫面什麼樣』、除非學員自己用感官語言)
 > 
 > 【若學員一直給場景 / 故事】:
 > AI 不強推 submodality、繼續從場景比較深化
@@ -263,7 +291,7 @@ AI 過渡話術(由主對話 LLM 處理、不另起 inject):
   > 「『[top1_value]』(這個 expanded 版本)現在是你的。
   > 想想 3 個月後——
   > **你看到的畫面是什麼?跟誰見面?做哪些事?**」
-  → AI 順著學員既有 channel(對應紅線 14)
+  → AI 順著學員既有感官語言 channel(對應紅線 14 例外條件:學員自己用感官語言時 AI 順著)
 ```
 
 ### Phase 3a Simplified §8.5 修正
@@ -284,7 +312,7 @@ Phase 3a Simplified 只跑:
 - Step 3 Let it Work(直接 Future Pacing + takeaway)
 
 注意:simplified 版本不寫死「dissociated → associated」過渡、
-跟 Patrick ship 版 §3 紅線 14 對齊(跟著學員 channel 走)。
+跟 Patrick ship 版 §3 紅線 14 對齊(不主動問身體哪裡 / 畫面什麼樣、除非學員自己用感官語言)。
 ```
 
 ---
@@ -449,7 +477,7 @@ v5_original_ip_intent_correction:
 | Beta 數據 | 後續動作 |
 |---|---|
 | `visual_channel_self_surfaced_rate` < 10% + P10 < 10% | (B) 傾向版完全足夠、永久 default |
-| `visual_channel_self_surfaced_rate` 10-30% + P10 < 10% | (B) 傾向版仍是 default、紅線 14「順著走」設計正確 |
+| `visual_channel_self_surfaced_rate` 10-30% + P10 < 10% | (B) 傾向版仍是 default、紅線 14 例外條件(學員自己用感官語言時 AI 順著)設計正確 |
 | `visual_channel_self_surfaced_rate` >= 30%(cohort >= 50)| 評估升級 (C) 雙軌、加 A7 visual_capacity_judge |
 | `visual_channel_self_surfaced_rate` < 20% + P10 > 15% | 學員兩條 channel 都無感、phase 結構問題、需 redesign |
 
@@ -487,7 +515,7 @@ dashboard schema update:
 Tests:
 - A001 v5.0 重走 Day 4-6 場景 simulation
 - 確認 Phase 3a/3b Step 1 走 Scope Overlap default
-- 確認紅線 14「學員自發 surface 視覺 channel 時 AI 順著走」實作正確
+- 確認紅線 14「不問身體哪裡 / 畫面什麼樣、除非學員自己用感官語言」實作正確(Patrick ship 版 §3 第 14 條)
 ```
 
 ### 設計師端後續
@@ -503,5 +531,8 @@ errata patch ship 後、設計師端**不再有預定產出**——
 ## 文件版本
 
 - v0.1 (2026-05-21):errata patch 初版、5 patch sections
+- **v0.2 (2026-05-21):紅線 14 reference 精確化**(設計師 §3 real review 後同步)
+  - 6 處「紅線 14」reference 從泛化「跟著學員語言走、不替學員選 channel」精確化為 §3 ship 版第 14 條具體文字「不問身體哪裡 / 畫面什麼樣、除非學員自己用感官語言」
+  - 設計核心邏輯不變、僅文字精確化
 - **errata 來、Patrick 給 Claude Code 跟 Cat 1+4 一起落地 + merge PR-9**
 - **設計師端 errata patch 任務完成**
