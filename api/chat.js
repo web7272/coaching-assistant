@@ -334,6 +334,52 @@ export function maybeAutoTransitionRouterPhase({ stateForPrompt, detectorPatch =
 // PR-4c session_end detection — pure functions（chat.js orchestration 用）
 // ════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════
+// PR-4c-4c: session-start kickoff handshake（fixes Day 1 empty-screen bug）
+//
+// Anthropic API needs messages[0]=user. v5 chat.js was previously waiting for
+// the student to type something before emitting the AI's phase-1 opening, but
+// per UI spec + storyboard, the student opens the conversation page and the AI
+// 起手式 should already be there. Frontend now sends { kickoff: true } when
+// entering a fresh conversation (state.conversation empty); chat.js detects
+// the flag, synthesizes a sentinel user-role message Sonnet can respond to
+// (the phase-context opening variant in the system prompt does the actual
+// "say the 起手式" work), and ships back the AI opening. The synthetic
+// sentinel is NOT inserted into the messages table — keeps the audit clean
+// and Damon Note generation sees only real student content.
+//
+// Composes naturally with the opening-dup fix:
+//   kickoff turn — router_phase=opening → AI emits 起手式 →
+//   auto-transition (maybeAutoTransitionRouterPhase) flips to elicitation →
+//   student's real first message — router_phase=elicitation → chain-追問.
+// ════════════════════════════════════════════════════════════════
+
+export const KICKOFF_TRIGGER_CONTENT =
+  '[session-start trigger — 本場第一輪、請依當前 phase_context + router_phase'
+  + '（+ 若有 E4 day-opening inject）直接出開場問句、不 echo 此訊息、'
+  + '不解釋你正在做什麼、不前置「你好」「我們開始」這類客套。]';
+
+/**
+ * Did the frontend ask for a session-start AI opening?
+ * @param {object} body
+ * @returns {boolean}
+ */
+export function isKickoffRequest(body) {
+  return !!(body && body.kickoff === true);
+}
+
+/**
+ * The messages array Sonnet sees during a kickoff turn.
+ * Single user-role meta-instruction; the actual opening question comes from
+ * the system prompt's phase-context opening variant (+ E4 day-opening inject
+ * on Day N+1 if anchors exist).
+ *
+ * @returns {Array<{role:'user', content:string}>}
+ */
+export function buildKickoffMessages() {
+  return [{ role: 'user', content: KICKOFF_TRIGGER_CONTENT }];
+}
+
 /**
  * v5 session-end 偵測（PR-4c）。
  *
@@ -377,8 +423,17 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // Step 1 — parse（week/day 收下但 v5.0 不參與邏輯、僅過渡相容寫回 columns）
-  const { messages: rawMessages, studentId, module, week, day, sessionNotes, today } = req.body || {};
-  if (!rawMessages || !studentId || !module) {
+  const { messages: rawMessagesIn, studentId, module, week, day, sessionNotes, today } = req.body || {};
+  if (!studentId || !module) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // PR-4c-4c kickoff handshake — frontend signals "I want the AI opening".
+  // Synthesize a sentinel user message; rest of handler runs almost normally,
+  // with isKickoff gating the user-INSERT / turnCount / detector ctx branches.
+  const isKickoff = isKickoffRequest(req.body);
+  const rawMessages = isKickoff ? buildKickoffMessages() : rawMessagesIn;
+  if (!rawMessages) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -415,30 +470,38 @@ export default async function handler(req, res) {
     let { turnCount, sessionState } = sess;
 
     // Step 6 — INSERT user message + bump questions_today
+    // PR-4c-4c: skip both for kickoff (synthetic sentinel is not real student content)
     const userMessage = messages[messages.length - 1];
-    await sql`
-      INSERT INTO messages (session_id, role, content, question_number)
-      VALUES (${sessionId}, 'user', ${userMessage.content}, ${turnCount})
-    `;
-    await sql`
-      UPDATE sessions SET questions_today = questions_today + 1, updated_at = NOW()
-      WHERE id = ${sessionId}
-    `;
-    turnCount++;
+    if (!isKickoff) {
+      await sql`
+        INSERT INTO messages (session_id, role, content, question_number)
+        VALUES (${sessionId}, 'user', ${userMessage.content}, ${turnCount})
+      `;
+      await sql`
+        UPDATE sessions SET questions_today = questions_today + 1, updated_at = NOW()
+        WHERE id = ${sessionId}
+      `;
+      turnCount++;
+    }
 
     // last_ai_question = 最近一條 assistant message（detector ctx 用）
+    // last_user_response — for kickoff, leave as-is (sentinel is not real content)
     const lastAi = [...messages].reverse().find(m => m?.role === 'assistant');
     sessionState = {
       ...sessionState,
       last_ai_question: lastAi?.content ?? sessionState.last_ai_question ?? null,
-      last_user_response: userMessage.content,
+      last_user_response: isKickoff
+        ? (sessionState.last_user_response ?? '')
+        : userMessage.content,
     };
 
     // Step 7 — dispatch detectors
     const anchorsArr = Array.isArray(userProfile?.anchors) ? userProfile.anchors : [];
     const ctx = {
       session_state: sessionState,
-      user_response: userMessage.content,
+      // PR-4c-4c kickoff: pass empty user_response so detectors (E1/E2 etc.)
+      // don't fire on the synthetic sentinel content.
+      user_response: isKickoff ? '' : userMessage.content,
       user_profile: userProfile || {},
       anchors_top3: anchorsArr.slice(-3),
       last_3_turns: messages.slice(-6).map(m => m?.content || ''),
@@ -511,12 +574,16 @@ export default async function handler(req, res) {
     }
     const advancePatch = advance ? advance.patch : {};
 
-    const turnPatch = {
-      turn_count_this_session: (sessionState.turn_count_this_session || 0) + 1,
-      last_ai_question: content,
-      last_user_response: userMessage.content,
-      hard_limit_hit_this_session: turnCount >= HARD_LIMIT_TURNS,
-    };
+    // PR-4c-4c kickoff: persist only the AI opening as last_ai_question;
+    // do NOT bump turn_count_this_session or last_user_response (sentinel is meta).
+    const turnPatch = isKickoff
+      ? { last_ai_question: content }
+      : {
+          turn_count_this_session: (sessionState.turn_count_this_session || 0) + 1,
+          last_ai_question: content,
+          last_user_response: userMessage.content,
+          hard_limit_hit_this_session: turnCount >= HARD_LIMIT_TURNS,
+        };
 
     // PR-4c-1b：fix 開場重複 bug — phase_1 turn 1 結束後 router_phase opening→elicitation
     const autoRouterPatch = maybeAutoTransitionRouterPhase({
@@ -531,7 +598,11 @@ export default async function handler(req, res) {
     }
 
     // Step 11b — session_end 偵測（PR-4c：dayComplete + day_complete=TRUE 持久化）
-    const dayComplete = detectDayComplete({ content, turnCount, hardLimit: HARD_LIMIT_TURNS });
+    // PR-4c-4c: kickoff never triggers dayComplete — the AI shouldn't be
+    // emitting closure markers on its own opening, and turnCount is 0.
+    const dayComplete = isKickoff
+      ? false
+      : detectDayComplete({ content, turnCount, hardLimit: HARD_LIMIT_TURNS });
     if (dayComplete) {
       try {
         await sql`

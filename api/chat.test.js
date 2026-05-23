@@ -15,6 +15,9 @@ import {
   detectDayComplete,
   buildClosureHint,
   maybeAutoTransitionRouterPhase,
+  KICKOFF_TRIGGER_CONTENT,
+  isKickoffRequest,
+  buildKickoffMessages,
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 
@@ -388,4 +391,41 @@ test('auto-transition: router_phase already non-opening (e.g. deep_signal_handof
     }),
     null,
   );
+});
+
+// ═════════════════════════════════════════════════════════
+// PR-4c-4c: session-start kickoff handshake
+// (frontend → AI 起手式 first; fixes fresh-Day-1 blank-screen bug)
+// ═════════════════════════════════════════════════════════
+
+test('🛑 isKickoffRequest: true only when body.kickoff === true (strict)', () => {
+  assert.equal(isKickoffRequest({ kickoff: true }), true);
+  // strict: anything else is treated as a normal turn
+  assert.equal(isKickoffRequest({ kickoff: 'true' }), false, '"true" string is NOT kickoff');
+  assert.equal(isKickoffRequest({ kickoff: 1 }), false);
+  assert.equal(isKickoffRequest({ kickoff: false }), false);
+  assert.equal(isKickoffRequest({}), false);
+  assert.equal(isKickoffRequest(null), false);
+  assert.equal(isKickoffRequest(undefined), false);
+});
+
+test('buildKickoffMessages: single user-role meta-instruction message', () => {
+  const msgs = buildKickoffMessages();
+  assert.equal(msgs.length, 1);
+  assert.equal(msgs[0].role, 'user', 'Anthropic requires messages[0]=user');
+  assert.equal(msgs[0].content, KICKOFF_TRIGGER_CONTENT);
+});
+
+test('🛑 KICKOFF_TRIGGER_CONTENT: instructs AI to emit the opening WITHOUT echoing the sentinel', () => {
+  assert.match(KICKOFF_TRIGGER_CONTENT, /session-start trigger/,
+    'tag the sentinel so a designer/dev grepping production logs can identify it');
+  assert.match(KICKOFF_TRIGGER_CONTENT, /不 echo 此訊息/,
+    'must explicitly forbid the AI from echoing the sentinel back to the student');
+  assert.match(KICKOFF_TRIGGER_CONTENT, /phase_context/,
+    'AI should consult the phase-context opening variant (which has 起手式)');
+});
+
+test('🛑 KICKOFF_TRIGGER_CONTENT: 紅線 1 — sentinel itself does not contain 為什麼', () => {
+  assert.doesNotMatch(KICKOFF_TRIGGER_CONTENT, /為什麼/,
+    'sentinel feeds Sonnet directly — must not introduce a 紅線 1 violation by example');
 });

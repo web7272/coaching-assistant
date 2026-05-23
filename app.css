@@ -140,6 +140,14 @@ a { color: inherit; text-decoration: none; }
 
 .conv-input-bar.exiting { opacity: 0; transform: translateY(8px); transition: opacity 250ms ease-out, transform 250ms ease-out; }
 
+/* §五.四 兼容：fresh conversation 進場、AI 起手式還沒回到時、用 §4.4 同樣的「stillness」紙感 indicator
+   — 不是 typing dots / spinner、是「教練在打開今天」italic 米棕色提示 */
+.conv-waiting { display: flex; justify-content: center; align-items: center; margin: 40px 0 24px;
+  opacity: 0; animation: conv-waiting-fade 400ms ease-out 100ms forwards; }
+.conv-waiting .star { color: var(--accent-sage); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; }
+.conv-waiting .text { font-family: var(--font-serif); font-style: italic; font-size: 13px; letter-spacing: 1px; color: var(--text-secondary); }
+@keyframes conv-waiting-fade { to { opacity: 1; } }
+
 /* ─── §4.5 教練筆記 / §4.6 週報 / §4.7 結業 (共用 paper card 樣式) ─── */
 .paper-page { background: var(--bg-primary); align-items: center; padding: 52px 24px 48px; }
 .paper-card { background: var(--bg-card); border: 0.5px solid var(--border-revealed); border-radius: 10px;

@@ -22,18 +22,26 @@ function loadState() {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return;
     const o = JSON.parse(raw);
-    if (o && typeof o === 'object') Object.assign(state, o);
+    if (o && typeof o === 'object') {
+      Object.assign(state, o);
+      // ensure conversation always an array
+      if (!Array.isArray(state.conversation)) state.conversation = [];
+    }
   } catch {}
 }
 function saveState() {
   try {
-    const { studentId, email, module, currentDay } = state;
-    localStorage.setItem(LS_KEY, JSON.stringify({ studentId, email, module, currentDay }));
+    // PR-4c-4c: persist conversation too so refresh on the conversation page
+    // doesn't double-fire kickoff and re-emit the opening.
+    const { studentId, email, module, currentDay, conversation, _lastSessionId } = state;
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      studentId, email, module, currentDay, conversation, _lastSessionId,
+    }));
   } catch {}
 }
 function clearState() {
   try { localStorage.removeItem(LS_KEY); } catch {}
-  Object.assign(state, { studentId: null, email: null, currentDay: 0, conversation: [], closure: false, finalizing: false });
+  Object.assign(state, { studentId: null, email: null, currentDay: 0, conversation: [], closure: false, finalizing: false, _lastSessionId: null });
 }
 
 // ─── HTTP ──────────────────────────────────────────────────────────
@@ -257,17 +265,8 @@ async function renderConversation() {
   document.getElementById('conv-header-label').textContent = `看見自己 · 第${state.currentDay || 1}天`;
   const scroll = document.getElementById('conv-scroll');
   scroll.innerHTML = '';
-  // restore prior messages this session if any (in-memory only — page refresh resets)
+  // Re-render persisted conversation (localStorage survives refresh)
   for (const m of state.conversation) appendMessage(m.role, m.content, /*scroll=*/false);
-
-  // initial AI prompt? In v5 the AI emits the opening question when the student
-  // sends the first message. If we have no prior messages, prompt the student
-  // to type — UI does not auto-emit an AI message.
-  if (state.conversation.length === 0) {
-    // §4.3 placeholder text inviting — no autocomplete examples (§六)
-    const input = document.getElementById('conv-input');
-    input.placeholder = '寫一句、什麼都好';
-  }
 
   const inputBar = document.getElementById('conv-input-bar');
   const input = document.getElementById('conv-input');
@@ -277,6 +276,15 @@ async function renderConversation() {
   closure.classList.remove('shown');
   state.closure = false;
   state.finalizing = false;
+  input.placeholder = '寫一句、什麼都好';   // §六: no example placeholders
+
+  // PR-4c-4c: fresh conversation → kickoff handshake so AI 起手式 appears first
+  // (per UI spec + storyboard "Day 1 對話 第一個問句"). The 起手式 text comes from
+  // the phase-context opening variant in the server's system prompt — frontend
+  // does NOT hard-code the question.
+  if (state.conversation.length === 0) {
+    await requestKickoffOpening();
+  }
 
   // auto-resize textarea on input
   input.value = '';
@@ -345,6 +353,48 @@ async function sendUserMessage(text) {
     div.style.marginBottom = '22px';
     div.textContent = '沒能送出，我們再試一次。';
     document.getElementById('conv-scroll').appendChild(div);
+  }
+}
+
+/**
+ * PR-4c-4c — Fire the session-start kickoff so the AI 起手式 appears first.
+ *
+ * Renders a paper-aesthetic 「✦ 教練在打開今天」placeholder while waiting (no
+ * spinner, no typing dots — §五.四 / §六). Replaces the placeholder with the AI
+ * opening when it arrives. Persists the opening to state.conversation so refresh
+ * doesn't double-fire.
+ */
+async function requestKickoffOpening() {
+  const scroll = document.getElementById('conv-scroll');
+  const placeholder = document.createElement('div');
+  placeholder.className = 'conv-waiting';
+  placeholder.innerHTML = '<span class="star">✦</span><span class="text">教練在打開今天</span>';
+  scroll.appendChild(placeholder);
+
+  try {
+    const r = await api('/api/chat', {
+      method: 'POST',
+      body: {
+        kickoff: true,
+        // messages: [] — chat.js will synthesize the sentinel internally
+        studentId: state.studentId,
+        module: state.module,
+        today: new Date().toLocaleDateString('sv'),
+      },
+    });
+    if (r && r.sessionId) state._lastSessionId = r.sessionId;
+    const aiContent = r.content || '';
+    state.conversation.push({ role: 'assistant', content: aiContent });
+    saveState();
+    placeholder.remove();
+    appendMessage('assistant', aiContent);
+  } catch (e) {
+    placeholder.remove();
+    const div = document.createElement('div');
+    div.className = 'hint-italic';
+    div.style.marginBottom = '22px';
+    div.textContent = '沒能打開今天，待會再試。';
+    scroll.appendChild(div);
   }
 }
 
