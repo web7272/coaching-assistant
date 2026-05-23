@@ -31,7 +31,13 @@ export default async function handler(req, res) {
     let profile = null;
     try { profile = await getUserProfile(studentId); }
     catch (e) { console.warn('[journey] getUserProfile failed:', e.message); }
-    const currentDay = profile?.session_day_count || 0;
+    // Floor to ≥1：brand-new / reset student has session_day_count=0 (or no UPE row yet).
+    // UX-wise that student is "on Day 1, not yet started" — Day 1 cell must be active-empty
+    // (clickable, shows「今天」+✦) so they can begin. Without the floor the journey
+    // shows 21 future cells and the student can't start (PR-4c-4 preview bug, Patrick caught).
+    // chat.js incrementUserProfileCounters writes session_day_count=1 on the first chat,
+    // so this floor is purely the "before first message" UX, not a state lie post-first-turn.
+    const currentDay = Math.max(1, profile?.session_day_count || 0);
     const dailyTakeaways = Array.isArray(profile?.daily_takeaways) ? profile.daily_takeaways : [];
     const exportPromptGeneratedAt = profile?.export_prompt_generated_at || null;
 
