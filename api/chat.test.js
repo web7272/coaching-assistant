@@ -14,6 +14,7 @@ import {
   CLOSURE_MARKERS,
   detectDayComplete,
   buildClosureHint,
+  maybeAutoTransitionRouterPhase,
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 
@@ -120,6 +121,23 @@ test('buildDynamicContext: Integration Retention conditional only when active', 
   );
   assert.match(on, /Integration Retention 階段/);
   assert.match(on, /reinforce 而非 explore/);
+});
+
+test('🛑 buildDynamicContext: phase_1 router_phase-aware (fixes 開場重複 bug)', () => {
+  // Turn 1：router_phase='opening' → 起手式變體
+  const turn1 = buildDynamicContext(
+    { current_phase: 'phase_1', router_phase: 'opening' }, {}, 0,
+  );
+  assert.match(turn1, /起手式/);
+  assert.match(turn1, /在你的生命裡、你想要什麼\?/);
+
+  // Turn 2+：router_phase='elicitation' → 鏈式追問變體、不重複起手式
+  const turn2 = buildDynamicContext(
+    { current_phase: 'phase_1', router_phase: 'elicitation' }, {}, 0,
+  );
+  assert.match(turn2, /擁有這個對你有什麼重要/);
+  assert.match(turn2, /不重複起手式/);
+  assert.doesNotMatch(turn2, /為什麼/, '紅線 1：elicitation 變體不可含「為什麼」');
 });
 
 test('buildDynamicContext: anchors fallback text when none', () => {
@@ -293,4 +311,81 @@ test('buildClosureHint: custom soft/hard limits', () => {
 test('buildClosureHint: non-number turnCount → null', () => {
   assert.equal(buildClosureHint({}), null);
   assert.equal(buildClosureHint({ turnCount: 'lots' }), null);
+});
+
+// ═════════════════════════════════════════════════════════
+// PR-4c-1b: maybeAutoTransitionRouterPhase — 開場重複 bug fix
+// ═════════════════════════════════════════════════════════
+
+test('🛑 auto-transition: phase_1 + opening + no other touches → { router_phase: elicitation }', () => {
+  const out = maybeAutoTransitionRouterPhase({
+    stateForPrompt: { current_phase: 'phase_1', router_phase: 'opening' },
+  });
+  assert.deepEqual(out, { router_phase: 'elicitation' });
+});
+
+test('🛑 auto-transition: idempotent — already elicitation → null (turn 2+ no re-fire)', () => {
+  assert.equal(
+    maybeAutoTransitionRouterPhase({
+      stateForPrompt: { current_phase: 'phase_1', router_phase: 'elicitation' },
+    }),
+    null,
+  );
+});
+
+test('auto-transition: outside phase_1 → null (no opening→elicitation outside Phase 1)', () => {
+  for (const phase of ['phase_2', 'phase_3a', 'phase_3b', 'phase_4', 'phase_5',
+                       'integration_retention', 'program_completed']) {
+    assert.equal(
+      maybeAutoTransitionRouterPhase({
+        stateForPrompt: { current_phase: phase, router_phase: 'opening' },
+      }),
+      null,
+      `${phase} must NOT auto-transition`,
+    );
+  }
+});
+
+test('🛑 auto-transition: detector already moved router_phase this turn → respect it, no override', () => {
+  // E3_opening_branch_router on stuck/flip/worth → sets router_phase=elicitation itself
+  assert.equal(
+    maybeAutoTransitionRouterPhase({
+      stateForPrompt: { current_phase: 'phase_1', router_phase: 'opening' },
+      detectorPatch: { router_phase: 'elicitation' },
+    }),
+    null,
+  );
+  // E3_deep_signal_detector → sets router_phase=deep_signal_handoff
+  assert.equal(
+    maybeAutoTransitionRouterPhase({
+      stateForPrompt: { current_phase: 'phase_1', router_phase: 'opening' },
+      detectorPatch: { router_phase: 'deep_signal_handoff' },
+    }),
+    null,
+  );
+});
+
+test('auto-transition: advance patch already moved router_phase → respect it', () => {
+  assert.equal(
+    maybeAutoTransitionRouterPhase({
+      stateForPrompt: { current_phase: 'phase_1', router_phase: 'opening' },
+      advancePatch: { router_phase: 'top1_determination' },
+    }),
+    null,
+  );
+});
+
+test('auto-transition: nullish input → null (defensive)', () => {
+  assert.equal(maybeAutoTransitionRouterPhase(), null);
+  assert.equal(maybeAutoTransitionRouterPhase({}), null);
+  assert.equal(maybeAutoTransitionRouterPhase({ stateForPrompt: null }), null);
+});
+
+test('auto-transition: router_phase already non-opening (e.g. deep_signal_handoff) → null', () => {
+  assert.equal(
+    maybeAutoTransitionRouterPhase({
+      stateForPrompt: { current_phase: 'phase_1', router_phase: 'deep_signal_handoff' },
+    }),
+    null,
+  );
 });

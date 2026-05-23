@@ -232,8 +232,9 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
     ? `owned qualities（最近 3 個 anchor）：${anchorTerms.join('、')}`
     : 'owned qualities：（尚無、從零採集）');
 
-  // {{current_phase_context}}
-  const phaseCtx = contextFor(phase);
+  // {{current_phase_context}} — PR-4c-1b：phase_1 router_phase-aware
+  // (opening 變體含起手式 / elicitation 變體用鏈式追問、避免開場重複)
+  const phaseCtx = contextFor(phase, sessionState.router_phase);
   if (phaseCtx) lines.push('\n' + phaseCtx);
 
   // Integration Retention conditional（spec 04 §5）
@@ -300,6 +301,33 @@ export function collectDetectorOutput(results) {
     }
   }
   return { injects, patch };
+}
+
+// ════════════════════════════════════════════════════════════════
+// PR-4c-1b: router_phase auto-transition（fixes 開場重複 bug）
+//
+// phase_1 phase-context 是 router_phase-aware 兩變體（opening / elicitation）。
+// `e3OpeningBranchHandler` 只對 stuck / flip / worth 觸發詞動 router_phase，
+// 普通開場流（A001 Day 1 親測場景）不會 fire → router_phase 一直停在 'opening' →
+// AI 每 turn 看到 phase_1 opening 變體含「起手式」→ 重複 emit。
+//
+// 修復：handler 在 phase_1 + router_phase='opening' + 本 turn 沒有 detector/advance
+// 動過 router_phase 時，post-response auto-transition 'opening' → 'elicitation'。
+// 持久化進 session_state、turn 2 載到 elicitation 變體（用鏈式追問、不重複起手式）。
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * @param {{ stateForPrompt: object, detectorPatch?: object, advancePatch?: object }} args
+ * @returns {{ router_phase: 'elicitation' } | null}
+ */
+export function maybeAutoTransitionRouterPhase({ stateForPrompt, detectorPatch = {}, advancePatch = {} } = {}) {
+  if (!stateForPrompt || typeof stateForPrompt !== 'object') return null;
+  if (stateForPrompt.current_phase !== 'phase_1') return null;
+  if (stateForPrompt.router_phase !== 'opening') return null;
+  // detector 或 phase-advance 已動過 router_phase → 尊重它、不覆寫
+  if (detectorPatch && detectorPatch.router_phase != null) return null;
+  if (advancePatch  && advancePatch.router_phase  != null) return null;
+  return { router_phase: 'elicitation' };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -490,7 +518,12 @@ export default async function handler(req, res) {
       hard_limit_hit_this_session: turnCount >= HARD_LIMIT_TURNS,
     };
 
-    const fullPatch = { ...detectorPatch, ...advancePatch, ...turnPatch };
+    // PR-4c-1b：fix 開場重複 bug — phase_1 turn 1 結束後 router_phase opening→elicitation
+    const autoRouterPatch = maybeAutoTransitionRouterPhase({
+      stateForPrompt, detectorPatch, advancePatch,
+    }) || {};
+
+    const fullPatch = { ...detectorPatch, ...advancePatch, ...turnPatch, ...autoRouterPatch };
     try {
       await updateState(sessionId, fullPatch);
     } catch (e) {
