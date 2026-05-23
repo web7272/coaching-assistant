@@ -125,7 +125,11 @@ async function renderStudent(sid) {
     btn.addEventListener('click', async () => {
       noteEl.textContent = '讀取中…';
       try {
-        const n = await api(`/api/note?studentId=${encodeURIComponent(sid)}&module=self&day=${d.day}`);
+        // B1 (PR-4c-4d): coach side reads fullNote via audience=coach (returns
+        // damon_notes.note_text with all coach-internal sections — what coaches
+        // are supposed to see). Student /api/note default path returns the
+        // Vivi-warm notebook_page + sanitised — student must NEVER see fullNote.
+        const n = await api(`/api/note?studentId=${encodeURIComponent(sid)}&module=self&day=${d.day}&audience=coach`);
         noteEl.textContent = n.exists ? n.noteText : `（Day ${d.day} 還沒有筆記。）`;
       } catch (e) {
         noteEl.textContent = '沒能取回筆記：' + e.message;

@@ -22,6 +22,9 @@ import {
   getUserProfile,
 } from '../lib/state/state-manager.js';
 import { sendExportEmail } from '../lib/email/brevo.js';
+import {
+  sanitizeStudentNote, containsForbiddenContent,
+} from '../lib/api/student-note-safe.js';
 
 // Anthropic SDK（lazy、跟 chat.js 對齊、test-friendly）
 let _anthropic = null;
@@ -100,6 +103,32 @@ export function extractKeyPhrase(fullNote) {
   // Strip CJK + ASCII quotes from both ends
   const cleaned = firstLine.replace(/^[「『"'\s]+|[」』"'\s]+$/g, '').trim();
   return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
+ * Extract a SHORT anchor (1-2 詞 / ≤ ~12 chars) for daily_takeaways — the
+ * 結業 21 句詩 seed and the takeaway-planter spec's "1-2 個字 anchor".
+ *
+ * PR-4c-4d B2 fix: prior implementation stored the entire 【關鍵句】 sentence
+ * which overflowed cells in the journey grid and made the 21-poem unreadable.
+ * Heuristic (no LLM call): take the 【關鍵句】, slice at the first sentence
+ * boundary, strip quotes, cap at 12 chars defensively. Without LLM-assisted
+ * summarisation this can't guarantee 1-2 chars on every input, but defends
+ * against the long-paragraph overflow Vivi saw.
+ *
+ * @param {string} fullNote
+ * @returns {string|null}
+ */
+export function extractTakeawayAnchor(fullNote) {
+  const keyPhrase = extractKeyPhrase(fullNote);
+  if (!keyPhrase) return null;
+  // Slice at first sentence-ending punctuation (CJK + ASCII)
+  const firstChunk = keyPhrase.split(/[。，、！？\s,.!?\n]/)[0];
+  // Re-strip surrounding quotes defensively
+  const cleaned = (firstChunk || '').replace(/^[「『"'\s]+|[」』"'\s]+$/g, '').trim();
+  if (!cleaned) return null;
+  // Hard cap — 12 chars (~6 Chinese chars equivalent)
+  return cleaned.length > 12 ? cleaned.slice(0, 12) : cleaned;
 }
 
 /**
@@ -309,11 +338,14 @@ export default async function handler(req, res) {
       LIMIT 1
     `;
     if (existingNote.length > 0 && existing.notebook_page) {
+      if (containsForbiddenContent(existing.notebook_page)) {
+        console.warn(`[finalize-day B1] notebook_page for session=${sessionId} contained forbidden coach-internal content — sanitized at API boundary`);
+      }
       return res.status(200).json({
         ok: true,
         alreadyDone: true,
         damonNotePublic: existing.damon_note_public,
-        notebookPage: existing.notebook_page,  // v4 index.html 過渡期仍讀（07 §3-B updated）
+        notebookPage: sanitizeStudentNote(existing.notebook_page),  // B1: scrub before student render
         isWeekBoundary: weekBoundary,
         isGraduation: graduation,
       });
@@ -348,9 +380,11 @@ export default async function handler(req, res) {
     // PR-4c-2 P0-4 — daily_takeaways append（每天）+ Day 21 結業生成 + export email
     // ════════════════════════════════════════════════════════════════
 
-    // (1) 每天：抽 Damon Note 【關鍵句】 → append daily_takeaways（dedup-by-day）
+    // (1) 每天：抽 Damon Note 【關鍵句】 → 短錨點（≤12 chars）→ append daily_takeaways（dedup-by-day）
     //     失敗 fail-soft、不阻塞主回應（21 句詩有 1-2 格缺、優於整段 500 erroring）
-    const takeawayTerm = extractKeyPhrase(noteResult.fullNote);
+    //     PR-4c-4d B2: use extractTakeawayAnchor (short) not extractKeyPhrase (full sentence)
+    //                  — overflowed cells in #16 preview + made 結業 21 句詩 unreadable.
+    const takeawayTerm = extractTakeawayAnchor(noteResult.fullNote);
     if (takeawayTerm) {
       try {
         await appendDailyTakeaway(existing.student_id, { day: sessionDay, term: takeawayTerm });
@@ -432,11 +466,14 @@ export default async function handler(req, res) {
       }
     }
 
+    if (noteResult.notebookPage && containsForbiddenContent(noteResult.notebookPage)) {
+      console.warn(`[finalize-day B1] freshly-generated notebook_page contained forbidden coach-internal content — sanitized at API boundary`);
+    }
     return res.status(200).json({
       ok: true,
       alreadyDone: false,
       damonNotePublic: noteResult.publicNote,
-      notebookPage: noteResult.notebookPage,  // v4 index.html 過渡期仍讀（07 §3-B updated）
+      notebookPage: sanitizeStudentNote(noteResult.notebookPage),  // B1: scrub before student render
       isWeekBoundary: weekBoundary,
       isGraduation: graduation,
     });

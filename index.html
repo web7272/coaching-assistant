@@ -50,7 +50,13 @@
     <!-- input bar (§4.3) — replaced by closure bar (§4.4) when AI ends the day -->
     <div id="conv-input-bar" class="conv-input-bar">
       <div class="conv-input-wrap">
-        <textarea id="conv-input" class="conv-input" rows="1" placeholder="" aria-label="輸入"></textarea>
+        <div class="conv-input-row">
+          <textarea id="conv-input" class="conv-input" rows="1" placeholder="" aria-label="輸入"></textarea>
+          <!-- F1 (PR-4c-4d): Vivi-authorised override of UI §六 「無 Send 鈕」—
+               testers don't know Enter sends. Paper aesthetic, NOT SaaS.
+               Enter still sends; Shift+Enter still newlines. -->
+          <button type="button" id="conv-send-btn" class="conv-send-btn" aria-label="送出" disabled>送出</button>
+        </div>
         <p class="conv-hint">⋯ 想沉默一下，AI 會在這裡等你</p>
       </div>
     </div>

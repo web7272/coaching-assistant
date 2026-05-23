@@ -10,6 +10,7 @@ import {
   isWeekBoundary,
   isGraduationDay,
   extractKeyPhrase,
+  extractTakeawayAnchor,
   buildExportPersonalCoachPrompt,
   buildGraduationSystemPrompt,
   parseGraduationResponse,
@@ -129,6 +130,46 @@ test('extractKeyPhrase: non-string input → null', () => {
   assert.equal(extractKeyPhrase(null), null);
   assert.equal(extractKeyPhrase(undefined), null);
   assert.equal(extractKeyPhrase(42), null);
+});
+
+// ─────────────────────────────────────────────────────────
+// PR-4c-4d B2: extractTakeawayAnchor — short anchor for 21-poem + cell display
+// ─────────────────────────────────────────────────────────
+
+test('🛑 extractTakeawayAnchor: short keyphrase passes through unchanged', () => {
+  const note = `【關鍵句】\n可以決定\n\n【其他】`;
+  assert.equal(extractTakeawayAnchor(note), '可以決定');
+});
+
+test('🛑 extractTakeawayAnchor: long sentence → first chunk before sentence punctuation', () => {
+  const note = `【關鍵句】\n我可以決定我自己的生活、不需要等別人同意。\n\n【其他】`;
+  // splits at first 、 or 。
+  assert.equal(extractTakeawayAnchor(note), '我可以決定我自己的生活');
+  // …and result is capped at 12 chars (above is 11 chars, still cap-safe)
+});
+
+test('🛑 extractTakeawayAnchor: very long unbroken text → hard-capped at 12 chars', () => {
+  const note = `【關鍵句】\n這個非常非常非常非常非常非常非常長的話沒有句點\n\n【其他】`;
+  const out = extractTakeawayAnchor(note);
+  assert.ok(out.length <= 12, `expected length ≤ 12, got ${out.length}`);
+});
+
+test('extractTakeawayAnchor: strips quotes — fullwidth + ASCII', () => {
+  assert.equal(extractTakeawayAnchor(`【關鍵句】\n「被看見」\n\n【x】`), '被看見');
+  assert.equal(extractTakeawayAnchor(`【關鍵句】\n"是繼承的"\n\n【x】`), '是繼承的');
+});
+
+test('extractTakeawayAnchor: no 【關鍵句】 section → null', () => {
+  assert.equal(extractTakeawayAnchor(`【深度層次】\nLayer 3`), null);
+});
+
+test('extractTakeawayAnchor: empty 【關鍵句】 → null', () => {
+  assert.equal(extractTakeawayAnchor(`【關鍵句】\n\n【x】`), null);
+});
+
+test('extractTakeawayAnchor: non-string → null', () => {
+  assert.equal(extractTakeawayAnchor(null), null);
+  assert.equal(extractTakeawayAnchor(42), null);
 });
 
 // ─────────────────────────────────────────────────────────

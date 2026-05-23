@@ -125,10 +125,31 @@ a { color: inherit; text-decoration: none; }
 
 .conv-input-bar { border-top: 0.5px solid var(--border-separator); padding: 16px 28px 18px; background: var(--bg-primary); }
 .conv-input-wrap { max-width: 540px; margin: 0 auto; }
-.conv-input { width: 100%; padding: 14px 18px; background: #FFF; border: 0.5px solid var(--border-revealed); border-radius: 14px;
+/* F1 (PR-4c-4d) — input + send 並排 row。Mobile (<480px) 會 wrap、按鈕仍在 input 下方 */
+.conv-input-row { display: flex; align-items: flex-end; gap: 10px; }
+.conv-input { flex: 1 1 auto; padding: 14px 18px; background: #FFF; border: 0.5px solid var(--border-revealed); border-radius: 14px;
   font-family: var(--font-sans); font-size: 15px; resize: none; min-height: 48px; max-height: 200px; overflow-y: auto; }
 .conv-input:focus { outline: 0.5px solid var(--border-active); }
 .conv-input::placeholder { color: var(--text-quaternary); font-family: var(--font-sans); }
+/* F1 paper-aesthetic send button — NOT SaaS-bright. 紙感 button style same as
+   §4.5 / §4.7 buttons but compact + inline with the textarea. Enter still works. */
+.conv-send-btn {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  padding: 12px 22px;
+  background: var(--bg-card);
+  border: 0.5px solid var(--border-active);
+  border-radius: 14px;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  min-height: 48px;
+  transition: background-color 200ms ease-out, opacity 200ms ease-out;
+}
+.conv-send-btn:disabled { opacity: 0.4; cursor: default; }
+.conv-send-btn:not(:disabled):hover { background: #F7F2E6; }
 .conv-hint { margin-top: 10px; font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.5px; color: #968F85; }
 
 /* §4.4 收尾轉場 — input 退場、改顯示「教練在寫今天的字」 */
@@ -195,15 +216,21 @@ a { color: inherit; text-decoration: none; }
 .coach-list__open { font-family: var(--font-serif); font-size: 13px; color: var(--text-secondary); text-align: right; }
 .coach-section { margin-top: 32px; }
 .coach-h2 { font-family: var(--font-serif); font-size: 14px; letter-spacing: 2px; color: var(--text-secondary); margin-bottom: 10px; }
-.coach-mini-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; max-width: 480px; }
+.coach-mini-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; max-width: 480px;
+  margin-bottom: 16px; }                          /* F2: gap before next section */
 .coach-mini-cell { height: 38px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
   font-family: var(--font-serif); font-size: 11px; color: var(--text-primary); padding: 0 4px;
-  border: 0.5px solid var(--border-future); }
+  border: 0.5px solid var(--border-future); box-sizing: border-box;
+  /* F2 (PR-4c-4d) — defend against long terms overflowing into the next section.
+     Truncate visibly; full term lives in the hover title attribute. */
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
 .coach-mini-cell--active   { background: var(--bg-card); border-color: var(--border-active); }
 .coach-mini-cell--revealed { background: var(--bg-card); border-color: var(--border-revealed); color: var(--text-secondary); }
-.coach-mini-cell--graduation { grid-column: 1 / -1; font-size: 12px; letter-spacing: 2px; }
+.coach-mini-cell--graduation { grid-column: 1 / -1; font-size: 12px; letter-spacing: 2px; height: 32px; }
 .coach-pre { background: var(--bg-card); border: 0.5px solid var(--border-revealed); border-radius: 6px;
-  padding: 16px 18px; font-family: var(--font-serif); font-size: 14px; line-height: 1.85; color: var(--text-primary); white-space: pre-wrap; }
+  padding: 16px 18px; font-family: var(--font-serif); font-size: 14px; line-height: 1.85; color: var(--text-primary); white-space: pre-wrap;
+  overflow-wrap: anywhere; word-break: break-word;  /* F2: long Chinese without spaces still wraps */
+  box-sizing: border-box; max-width: 100%; }
 
 /* ─── shared utility ─── */
 .muted { color: var(--text-tertiary); }

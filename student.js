@@ -194,28 +194,30 @@ async function renderJourney() {
 }
 
 function renderDailyCell(c) {
+  // B2 (PR-4c-4d, Vivi decision): cells show ONLY the day number.
+  // No phrase, no 「今天」 label — states purely visual:
+  //   future        → transparent bg + faint border + faint day#
+  //   active-empty  → paper bg + active border + ✦ corner + 今天-coloured day#
+  //   active-filled → same visual as active-empty (no text differentiation),
+  //                   but click routes to that day's note (just-finished)
+  //   revealed      → paper bg + revealed border + no ✦, click → that day's note
+  // The phrase still lives in c.phrase (server returns it) — used for aria-label only.
   const div = document.createElement('div');
   div.setAttribute('role', 'listitem');
   div.className = `cell cell--${c.state}`;
   div.tabIndex = (c.state === 'future') ? -1 : 0;
   div.setAttribute('aria-label', `第 ${c.day} 天，${ariaState(c.state)}${c.phrase ? '，' + c.phrase : ''}`);
   div.innerHTML = `<span class="cell__day">${c.day}</span>`;
-  if (c.state === 'active-empty') {
-    div.innerHTML += `<span class="cell__star" aria-hidden="true">✦</span><span class="cell__center-today">今天</span>`;
-  } else if (c.state === 'active-filled') {
-    div.innerHTML += `<span class="cell__star" aria-hidden="true">✦</span><span class="cell__center-phrase">${escapeText(c.phrase || '')}</span>`;
-  } else if (c.state === 'revealed') {
-    div.innerHTML += `<span class="cell__center-phrase">${escapeText(c.phrase || '')}</span>`;
+  // ✦ corner mark only on active states (today)
+  if (c.state === 'active-empty' || c.state === 'active-filled') {
+    div.innerHTML += `<span class="cell__star" aria-hidden="true">✦</span>`;
   }
   if (c.state !== 'future') {
     const handler = () => {
       if (c.state === 'active-empty') {
-        // 進對話
         location.hash = '#/conversation';
-      } else if (c.state === 'active-filled') {
-        // 今天的筆記已生成 → 看 note
-        location.hash = `#/note?day=${c.day}`;
-      } else if (c.state === 'revealed') {
+      } else {
+        // active-filled (today, just finished) OR revealed (past day) → that day's note
         location.hash = `#/note?day=${c.day}`;
       }
     };
@@ -286,22 +288,42 @@ async function renderConversation() {
     await requestKickoffOpening();
   }
 
-  // auto-resize textarea on input
+  // auto-resize textarea + manage send-button disabled state
   input.value = '';
   input.style.height = 'auto';
-  input.oninput = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 200) + 'px'; };
+  const sendBtn = document.getElementById('conv-send-btn');
+  const syncSendBtn = () => {
+    if (!sendBtn) return;
+    const hasText = (input.value || '').trim().length > 0;
+    sendBtn.disabled = !hasText || state.closure;
+  };
+  input.oninput = () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+    syncSendBtn();
+  };
 
-  // Enter to send; Shift+Enter newline (per §六)
+  // Submit handler — shared between Enter (§六 keyboard) + 送出 button (F1 Vivi override)
+  const submit = async () => {
+    const text = (input.value || '').trim();
+    if (!text || state.closure) return;
+    input.value = '';
+    input.style.height = 'auto';
+    syncSendBtn();
+    await sendUserMessage(text);
+  };
+
+  // Enter to send; Shift+Enter newline (per §六 keyboard convention)
   input.onkeydown = async (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const text = (input.value || '').trim();
-      if (!text || state.closure) return;
-      input.value = '';
-      input.style.height = 'auto';
-      await sendUserMessage(text);
+      await submit();
     }
   };
+  // F1 (PR-4c-4d): explicit 送出 button — Vivi override of UI §六 「無 Send 鈕」
+  if (sendBtn) sendBtn.onclick = async (e) => { e.preventDefault(); await submit(); };
+
+  syncSendBtn();
   input.focus();
 }
 
