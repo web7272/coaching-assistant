@@ -38,25 +38,68 @@ export function normalizeEmail(email) {
   return e;
 }
 
+/**
+ * Normalize/validate the preferred_name field from the entry form.
+ * Trim + length-cap (40 chars). Empty / non-string → null (no preferred name set).
+ *
+ * @param {string} name
+ * @returns {string|null}
+ */
+export function normalizePreferredName(name) {
+  if (typeof name !== 'string') return null;
+  const t = name.trim();
+  if (t.length === 0) return null;
+  return t.length > 40 ? t.slice(0, 40) : t;
+}
+
+/**
+ * Coerce the entry-form pace selection to a valid value.
+ * 'daily' is the default. Anything not 'self-paced' falls back to 'daily'.
+ *
+ * @param {string} pace
+ * @returns {'daily'|'self-paced'}
+ */
+export function normalizePace(pace) {
+  if (pace === 'self-paced') return 'self-paced';
+  return 'daily';
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const email = normalizeEmail(req.body?.email);
   if (!email) return res.status(400).json({ error: 'INVALID_EMAIL' });
 
+  // PR-4c-4e — 入口同頁收 3 樣
+  const preferredName = normalizePreferredName(req.body?.preferredName);
+  const pace          = normalizePace(req.body?.pace);
+
   try {
     const sql = neon(process.env.DATABASE_URL);
 
-    // 1. lookup existing student by email (case-insensitive — col is VARCHAR、實際 email 已 lowercase)
+    // 1. lookup existing student by email
     const found = await sql`
-      SELECT student_id, current_module, current_day
+      SELECT student_id, current_module, current_day, preferred_name, pace
       FROM students WHERE LOWER(email) = ${email}
       LIMIT 1
     `;
     if (found.length > 0) {
+      // existing student — refresh preferred_name / pace if new values came in
+      // (COALESCE: only override when the request explicitly provided a non-null value)
+      if (preferredName !== null || pace !== null) {
+        await sql`
+          UPDATE students SET
+            preferred_name = COALESCE(${preferredName}, preferred_name),
+            pace           = COALESCE(${pace}, pace),
+            updated_at     = NOW()
+          WHERE student_id = ${found[0].student_id}
+        `;
+      }
       return res.status(200).json({
-        studentId:  found[0].student_id,
-        module:     found[0].current_module || 'self',
-        currentDay: found[0].current_day || 1,
+        studentId:     found[0].student_id,
+        module:        found[0].current_module || 'self',
+        currentDay:    found[0].current_day || 1,
+        preferredName: preferredName ?? found[0].preferred_name ?? null,
+        pace:          pace ?? found[0].pace ?? 'daily',
       });
     }
 
@@ -71,16 +114,20 @@ export default async function handler(req, res) {
     await sql`
       INSERT INTO students
         (student_id, email, plan, tier, current_module, current_week, current_day,
-         self_week_completed, money_unlocked, relationship_unlocked)
+         self_week_completed, money_unlocked, relationship_unlocked,
+         preferred_name, pace)
       VALUES
         (${newId}, ${email}, 'trial', 0, 'self', 1, 1,
-         0, FALSE, FALSE)
+         0, FALSE, FALSE,
+         ${preferredName}, ${pace})
     `;
 
     return res.status(200).json({
-      studentId:  newId,
-      module:     'self',
-      currentDay: 1,
+      studentId:     newId,
+      module:        'self',
+      currentDay:    1,
+      preferredName,
+      pace,
     });
   } catch (e) {
     console.error('[email-login] error:', e);

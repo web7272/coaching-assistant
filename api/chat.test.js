@@ -18,6 +18,8 @@ import {
   KICKOFF_TRIGGER_CONTENT,
   isKickoffRequest,
   buildKickoffMessages,
+  normalizeDateString,
+  decideSessionAction,
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 
@@ -428,4 +430,109 @@ test('🛑 KICKOFF_TRIGGER_CONTENT: instructs AI to emit the opening WITHOUT ech
 test('🛑 KICKOFF_TRIGGER_CONTENT: 紅線 1 — sentinel itself does not contain 為什麼', () => {
   assert.doesNotMatch(KICKOFF_TRIGGER_CONTENT, /為什麼/,
     'sentinel feeds Sonnet directly — must not introduce a 紅線 1 violation by example');
+});
+
+// ═════════════════════════════════════════════════════════
+// PR-4c-4e: normalizeDateString + decideSessionAction (pace-aware session resolver)
+// ═════════════════════════════════════════════════════════
+
+test('normalizeDateString: Date / "YYYY-MM-DD" / longer string → canonical YYYY-MM-DD', () => {
+  assert.equal(normalizeDateString(new Date('2026-05-23T12:00:00Z')), '2026-05-23');
+  assert.equal(normalizeDateString('2026-05-23'), '2026-05-23');
+  assert.equal(normalizeDateString('2026-05-23T08:00:00.000Z'), '2026-05-23');
+  assert.equal(normalizeDateString(null), null);
+  assert.equal(normalizeDateString(undefined), null);
+  assert.equal(normalizeDateString(''), null);
+});
+
+test('decideSessionAction: in-progress session → reuse', () => {
+  const r = decideSessionAction({
+    inProgress: { day: 3 }, prior: null, pace: 'daily',
+    sessionDate: '2026-05-23', userSessionDayCount: 3,
+  });
+  assert.deepEqual(r, { action: 'reuse', sessionDay: 3 });
+});
+
+test('decideSessionAction: no prior — brand-new student → create Day 1', () => {
+  const r = decideSessionAction({
+    inProgress: null, prior: null, pace: 'daily',
+    sessionDate: '2026-05-23', userSessionDayCount: 0,
+  });
+  assert.deepEqual(r, { action: 'create', sessionDay: 1 });
+});
+
+test('decideSessionAction: prior session was YESTERDAY (daily) → create next day', () => {
+  const r = decideSessionAction({
+    inProgress: null,
+    prior: { day: 1, session_date: '2026-05-22' },
+    pace: 'daily',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+  });
+  assert.deepEqual(r, { action: 'create', sessionDay: 2 });
+});
+
+test('🛑 decideSessionAction: daily mode + prior session is TODAY → locked', () => {
+  const r = decideSessionAction({
+    inProgress: null,
+    prior: { day: 1, session_date: '2026-05-23' },
+    pace: 'daily',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+  });
+  assert.equal(r.action, 'locked');
+  assert.equal(r.sessionDay, 1, 'locked sessionDay = prior day (informational)');
+});
+
+test('🛑 decideSessionAction: self-paced + prior session is TODAY → CREATE next day (same calendar day unlock)', () => {
+  const r = decideSessionAction({
+    inProgress: null,
+    prior: { day: 1, session_date: '2026-05-23' },
+    pace: 'self-paced',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+  });
+  assert.deepEqual(r, { action: 'create', sessionDay: 2 });
+});
+
+test('decideSessionAction: accepts Date OR string for prior.session_date', () => {
+  const a = decideSessionAction({
+    inProgress: null,
+    prior: { day: 1, session_date: new Date('2026-05-23T03:00:00Z') },
+    pace: 'daily',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+  });
+  const b = decideSessionAction({
+    inProgress: null,
+    prior: { day: 1, session_date: '2026-05-23' },
+    pace: 'daily',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+  });
+  assert.deepEqual(a, b);
+  assert.equal(a.action, 'locked');
+});
+
+test('🛑 decideSessionAction: nextDay sourced from userSessionDayCount, not prior.day', () => {
+  // advance_student_day.sql scenario: session_day_count = 6 (jumped via SQL), but
+  // sessions table is empty (no prior rows). Next day MUST be 7, not 1.
+  const r = decideSessionAction({
+    inProgress: null, prior: null, pace: 'daily',
+    sessionDate: '2026-05-23', userSessionDayCount: 6,
+  });
+  assert.equal(r.sessionDay, 7, 'scripts/advance_student_day.sql must skip-ahead cleanly');
+});
+
+test('decideSessionAction: in-progress wins over pace/lock — never lock with active session', () => {
+  // edge: daily mode, prior says today's session is in progress (day_complete=false)
+  // → reuse, don't lock.
+  const r = decideSessionAction({
+    inProgress: { day: 1 },
+    prior: { day: 1, session_date: '2026-05-23' },
+    pace: 'daily',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+  });
+  assert.equal(r.action, 'reuse');
 });

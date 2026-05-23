@@ -10,16 +10,46 @@
 <body>
 <div id="app">
 
-  <!-- ─────────── §4.1 Entry / Email 頁 ─────────── -->
+  <!-- ─────────── §4.1 Entry / Email 頁 (PR-4c-4e: + 稱呼 + 步調) ─────────── -->
   <section id="view-entry" class="view" aria-label="入口">
     <div class="entry-container">
       <h1 class="entry-title">看見自己</h1>
       <p class="entry-sub">21 天 · 每天 5–10 分鐘</p>
+
       <form id="entry-form" class="entry-form" novalidate>
-        <input type="email" id="entry-email" class="entry-input" placeholder="你的 email" autocomplete="email" required>
+        <!-- email -->
+        <label class="entry-field-label" for="entry-email">你的 email</label>
+        <input type="email" id="entry-email" class="entry-input" placeholder="email" autocomplete="email" required>
+
+        <!-- 稱呼 -->
+        <label class="entry-field-label entry-field-label--gap" for="entry-name">我可以怎麼稱呼你？</label>
+        <input type="text" id="entry-name" class="entry-input" placeholder="名字或暱稱、隨你" autocomplete="given-name" maxlength="40">
+
+        <!-- 步調二選一 (紙感 radio、不做成設定開關樣) -->
+        <fieldset class="entry-pace">
+          <legend class="entry-field-label entry-field-label--gap">步調</legend>
+
+          <label class="entry-pace-option">
+            <input type="radio" name="pace" value="daily" checked>
+            <span class="entry-pace-option__body">
+              <span class="entry-pace-option__title">一天一次</span>
+              <span class="entry-pace-option__sub">每天留十分鐘，讓今天的看見沉澱一晚，明天再繼續。</span>
+            </span>
+          </label>
+
+          <label class="entry-pace-option">
+            <input type="radio" name="pace" value="self-paced">
+            <span class="entry-pace-option__body">
+              <span class="entry-pace-option__title">依自己的步調</span>
+              <span class="entry-pace-option__sub">想連著多走幾天，也可以。</span>
+            </span>
+          </label>
+        </fieldset>
+
         <button type="submit" id="entry-btn" class="entry-btn">繼續</button>
         <p id="entry-error" class="entry-error hidden"></p>
       </form>
+
       <p class="entry-foot">進去之後就直接開始。</p>
     </div>
   </section>
@@ -28,8 +58,10 @@
   <section id="view-journey" class="view" aria-label="你的旅程">
     <header class="app-header"><span class="label" id="journey-header-label">看見自己 · 第一天</span></header>
     <div class="journey-title-wrap">
-      <h2 class="journey-title">你的旅程</h2>
-      <p class="journey-sub">21 天 · 21 句你自己的話</p>
+      <!-- PR-4c-4e: 「{preferredName} 的旅程」 — Vivi 拍板 override of UI §六 「不顯示名字」.
+           student.js sets the text from state.preferredName; "你的旅程" is the no-name fallback. -->
+      <h2 class="journey-title" id="journey-title">你的旅程</h2>
+      <p class="journey-sub">21 天 · 擴大地圖之旅</p>
     </div>
     <div class="journey-grid-wrap">
       <div class="journey-grid" id="journey-grid" role="list">

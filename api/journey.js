@@ -14,6 +14,7 @@ import { neon } from '@neondatabase/serverless';
 import { getUserProfile } from '../lib/state/state-manager.js';
 import {
   computeDailyCells, computeWeeklyCells, computeGraduationCell, MODULE_LABEL,
+  computeUnlockedCurrentDay,
 } from '../lib/api/journey-state.js';
 
 export const maxDuration = 10;
@@ -31,15 +32,35 @@ export default async function handler(req, res) {
     let profile = null;
     try { profile = await getUserProfile(studentId); }
     catch (e) { console.warn('[journey] getUserProfile failed:', e.message); }
-    // Floor to ≥1：brand-new / reset student has session_day_count=0 (or no UPE row yet).
-    // UX-wise that student is "on Day 1, not yet started" — Day 1 cell must be active-empty
-    // (clickable, shows「今天」+✦) so they can begin. Without the floor the journey
-    // shows 21 future cells and the student can't start (PR-4c-4 preview bug, Patrick caught).
-    // chat.js incrementUserProfileCounters writes session_day_count=1 on the first chat,
-    // so this floor is purely the "before first message" UX, not a state lie post-first-turn.
-    const currentDay = Math.max(1, profile?.session_day_count || 0);
+    // PR-4c-4e — pace-aware currentDay resolution.
+    //   daily:     currentDay = max(1, session_day_count)
+    //   self-paced + last session day_complete=true:  +1 (Day N+1 active-empty same day)
+    // Brand-new students (session_day_count=0 or no UPE row): floored to 1 by
+    // computeUnlockedCurrentDay — keeps the PR-4c-4b regression invariant.
     const dailyTakeaways = Array.isArray(profile?.daily_takeaways) ? profile.daily_takeaways : [];
     const exportPromptGeneratedAt = profile?.export_prompt_generated_at || null;
+
+    // Fetch pace + last session's day_complete (defensively — no row → defaults)
+    let pace = 'daily';
+    let lastSessionComplete = false;
+    try {
+      const pr = await sql`SELECT pace FROM students WHERE student_id = ${studentId} LIMIT 1`;
+      if (pr.length > 0 && pr[0].pace) pace = pr[0].pace;
+    } catch (e) { console.warn('[journey] pace lookup failed:', e.message); }
+    try {
+      const lr = await sql`
+        SELECT day_complete FROM sessions
+        WHERE student_id = ${studentId} AND module = ${module}
+        ORDER BY created_at DESC LIMIT 1
+      `;
+      lastSessionComplete = !!(lr[0] && lr[0].day_complete);
+    } catch (e) { console.warn('[journey] last session lookup failed:', e.message); }
+
+    const currentDay = computeUnlockedCurrentDay({
+      pace,
+      sessionDayCount: profile?.session_day_count || 0,
+      lastSessionComplete,
+    });
 
     // weeks with summary — read damon_notes is_week_summary=true (collapse to Set)
     let weeksWithSummary = new Set();

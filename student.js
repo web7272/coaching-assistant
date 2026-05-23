@@ -11,6 +11,8 @@ const LS_KEY = 'sy.v5.student';
 const state = {
   studentId: null,
   email:     null,
+  preferredName: null,        // PR-4c-4e — 「{preferredName} 的旅程」
+  pace:      'daily',         // PR-4c-4e — 'daily' | 'self-paced'
   module:    'self',
   currentDay: 0,
   conversation: [],          // {role: 'user'|'assistant', content}
@@ -33,15 +35,19 @@ function saveState() {
   try {
     // PR-4c-4c: persist conversation too so refresh on the conversation page
     // doesn't double-fire kickoff and re-emit the opening.
-    const { studentId, email, module, currentDay, conversation, _lastSessionId } = state;
+    // PR-4c-4e: also persist preferredName + pace (collected once at entry).
+    const { studentId, email, preferredName, pace, module, currentDay, conversation, _lastSessionId } = state;
     localStorage.setItem(LS_KEY, JSON.stringify({
-      studentId, email, module, currentDay, conversation, _lastSessionId,
+      studentId, email, preferredName, pace, module, currentDay, conversation, _lastSessionId,
     }));
   } catch {}
 }
 function clearState() {
   try { localStorage.removeItem(LS_KEY); } catch {}
-  Object.assign(state, { studentId: null, email: null, currentDay: 0, conversation: [], closure: false, finalizing: false, _lastSessionId: null });
+  Object.assign(state, {
+    studentId: null, email: null, preferredName: null, pace: 'daily',
+    currentDay: 0, conversation: [], closure: false, finalizing: false, _lastSessionId: null,
+  });
 }
 
 // ─── HTTP ──────────────────────────────────────────────────────────
@@ -119,10 +125,18 @@ async function route() {
 function renderEntry() {
   const form = document.getElementById('entry-form');
   const emailEl = document.getElementById('entry-email');
+  const nameEl = document.getElementById('entry-name');
   const btn = document.getElementById('entry-btn');
   const err = document.getElementById('entry-error');
   err.classList.add('hidden');
+
+  // pre-fill (returning visitor)
   if (state.email) emailEl.value = state.email;
+  if (state.preferredName) nameEl.value = state.preferredName;
+  if (state.pace) {
+    const radio = form.querySelector(`input[name="pace"][value="${state.pace}"]`);
+    if (radio) radio.checked = true;
+  }
 
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -133,13 +147,22 @@ function renderEntry() {
       err.classList.remove('hidden');
       return;
     }
+    const preferredName = (nameEl.value || '').trim() || null;
+    const paceChoice = (form.querySelector('input[name="pace"]:checked')?.value === 'self-paced')
+      ? 'self-paced' : 'daily';
+
     btn.disabled = true;
     try {
-      const r = await api('/api/auth/email-login', { method: 'POST', body: { email } });
-      state.studentId  = r.studentId;
-      state.email      = email;
-      state.module     = r.module || 'self';
-      state.currentDay = r.currentDay || 1;
+      const r = await api('/api/auth/email-login', {
+        method: 'POST',
+        body: { email, preferredName, pace: paceChoice },
+      });
+      state.studentId     = r.studentId;
+      state.email         = email;
+      state.preferredName = r.preferredName ?? preferredName ?? null;
+      state.pace          = r.pace || paceChoice || 'daily';
+      state.module        = r.module || 'self';
+      state.currentDay    = r.currentDay || 1;
       saveState();
       location.hash = '#/journey';
     } catch (e2) {
@@ -154,6 +177,12 @@ function renderEntry() {
 // ─── §4.2 journey ──────────────────────────────────────────────────
 async function renderJourney() {
   document.getElementById('journey-header-label').textContent = `看見自己 · 第${state.currentDay || 1}天`;
+
+  // PR-4c-4e — personalised title「{preferredName} 的旅程」 (Vivi 拍板 override of UI §六)
+  const titleEl = document.getElementById('journey-title');
+  if (titleEl) {
+    titleEl.textContent = state.preferredName ? `${state.preferredName} 的旅程` : '你的旅程';
+  }
 
   let j;
   try {
