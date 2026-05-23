@@ -17,6 +17,11 @@
 import { neon } from '@neondatabase/serverless';
 import Anthropic from '@anthropic-ai/sdk';
 import { generateDamonNote } from './chat.js';
+import {
+  appendDailyTakeaway, setLastSessionDaySummary, markExportEmailed,
+  getUserProfile,
+} from '../lib/state/state-manager.js';
+import { sendExportEmail } from '../lib/email/brevo.js';
 
 // Anthropic SDK（lazy、跟 chat.js 對齊、test-friendly）
 let _anthropic = null;
@@ -71,6 +76,195 @@ export function isWeekBoundary(sessionDay) {
 /** Day 21 = graduation。 */
 export function isGraduationDay(sessionDay) {
   return sessionDay === 21;
+}
+
+// ════════════════════════════════════════════════════════════════
+// PR-4c-2 pure helpers — daily_takeaways extraction + graduation Markdown
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Extract the per-day takeaway "term" from a Damon Note's 【關鍵句】 section.
+ * Strips leading/trailing CJK + ASCII quote chars + whitespace.
+ *
+ * @param {string} fullNote
+ * @returns {string|null}
+ */
+export function extractKeyPhrase(fullNote) {
+  if (typeof fullNote !== 'string') return null;
+  // [ \t]*\n (not \s*\n) — \s would consume the blank line before the next 【-section,
+  // which causes the lookahead to mis-capture the next header when content is empty.
+  const m = fullNote.match(/【關鍵句】[ \t]*\n([\s\S]*?)(?=\n【|$)/);
+  if (!m) return null;
+  // Take the first non-empty line only (defensive against multi-line notes)
+  const firstLine = m[1].split(/\r?\n/).map(s => s.trim()).find(s => s.length > 0) || '';
+  // Strip CJK + ASCII quotes from both ends
+  const cleaned = firstLine.replace(/^[「『"'\s]+|[」』"'\s]+$/g, '').trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
+ * Build the personal-coach-prompt Markdown export (Day 21 Founder bonus).
+ *
+ * Template comes from lib/prompt-sections/conditional/engine-4/export-personal-coach-prompt.js:
+ * Section 1 = dynamic substitution; Sections 2 & 3 = static Damon-style template.
+ *
+ * @param {object} args
+ * @param {string} [args.studentNickname] - defaults to student_id when unset
+ * @param {string} args.studentId
+ * @param {string|null} [args.top1_value]
+ * @param {Array<string|{term?:string}>} [args.anchors]
+ * @param {Array<{value:string,rank?:number}|string>} [args.values_ranking]
+ * @returns {string} Markdown body
+ */
+export function buildExportPersonalCoachPrompt({
+  studentNickname, studentId, top1_value = null,
+  anchors = [], values_ranking = [],
+} = {}) {
+  const name = studentNickname || studentId || '學員';
+  const top1 = top1_value || '（你的 Top 1 quality、尚未確定）';
+
+  const anchorList = (Array.isArray(anchors) ? anchors : [])
+    .map(a => (typeof a === 'string' ? a : a?.term))
+    .filter(Boolean);
+  const anchorsBlock = anchorList.length
+    ? anchorList.map(t => `- 「${t}」`).join('\n')
+    : '- （尚無 owned anchor）';
+
+  const rankList = (Array.isArray(values_ranking) ? values_ranking : [])
+    .map(r => (typeof r === 'string' ? r : r?.value))
+    .filter(Boolean)
+    .slice(0, 5);
+  const rankingBlock = rankList.length
+    ? rankList.map((v, i) => `${i + 1}. ${v}${i === 0 ? '（核心）' : ''}`).join('\n')
+    : '（尚未排序）';
+
+  return `# ${name} 的個人 Identity Coach Prompt
+
+> 21 天 Identity Shift 旅程的延續工具。
+> 把這段 prompt 複製貼到 Claude / ChatGPT / 任何 LLM、它就會以你的個人教練模式跟你對話。
+
+---
+
+## 第一段：你是誰（你的 owned identity）
+
+我的 Top 1 quality 是「${top1}」——
+這是我整段旅程的根、其他 quality 都在它裡面。
+
+我已經 owned 的 quality 是：
+${anchorsBlock}
+
+我的 values 排序（從最大涵蓋到最具體）：
+${rankingBlock}
+
+---
+
+## 第二段：對 AI 教練的引導風格指引（Damon-style）
+
+請以下面這個風格跟我對話：
+
+1. **不要安慰我、不要鼓勵我**——我來找你不是要 validation。
+
+2. **用 Damon Cart 的方法**：
+   - 問「這對我來說會帶來什麼」（What will that do for you?）、不要問 Why
+   - 我說「我不知道」、把它翻轉成「我想要知道什麼?」
+   - 我說「我老是搞砸」、強制翻轉成「我真正想要的是什麼?」
+   - 不接受我模糊的回答（「應該是 / 大概 / 還好」）——push back、要具體事件
+
+3. **如果我說我是某個 quality**：
+   - 不要直接相信、要我舉具體事件（時間、地點、跟誰、做了什麼）
+   - 沒有具體事件就是 candidate、不是 owned
+
+4. **如果我陷入大詞 / 抽象**（整合 / 完整 / 覺醒 / 一切是最好的安排）：
+   - 指認:「這個詞太大、抓不到」
+   - 拉我到具體層次
+
+5. **永遠相信我的 parts 都有正向意圖**：
+   - 我所有的阻力都是過時的「日本兵」（還在執行舊命令、不知道戰爭結束了）
+   - 用 As-If Frame 給它新角色、不打敗它
+
+6. **不要 over-process**：
+   - 我在 takeaway 後不繼續挖、給我潛意識整合空間
+   - 隔天驗證、不當天追問
+
+---
+
+## 第三段：使用說明
+
+1. 把這整段 prompt 複製、貼到你選的 LLM（Claude.ai / ChatGPT / 其他）
+2. 在你的提問前面、開頭說「我現在想處理 [具體議題]」
+3. AI 會以上面的風格跟你對話、不會繞圈子、不會給你雞湯
+
+建議使用情境：
+- 你卡住、不知道下一步
+- 你有一個重要決定、想確認跟你的 values 對齊
+- 你想 deepen 某個已 owned quality
+- 你發現一個新的 candidate quality、想驗證
+`;
+}
+
+/**
+ * Build the Day 21 graduation Sonnet system prompt（pure for testing）。
+ * @param {string} module
+ * @param {Array<{day:number,term:string}>} dailyTakeaways
+ * @returns {string}
+ */
+export function buildGraduationSystemPrompt(module, dailyTakeaways = []) {
+  const poemLines = (Array.isArray(dailyTakeaways) ? dailyTakeaways : [])
+    .filter(e => e && typeof e.term === 'string')
+    .slice()
+    .sort((a, b) => (a.day || 0) - (b.day || 0))
+    .map(e => `[Day ${e.day}] ${e.term}`)
+    .join('\n');
+  const moduleLabel = module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係';
+
+  return `你是 Damon Cart 教練。學員剛完成 21 天的「看見自己」旅程（${moduleLabel}模組）。
+為學員寫一封「教練見證信」 + 整理出一句「學員的宣言」。
+
+請輸出嚴格的 JSON（單一物件、不要加 markdown fence、不要多餘文字）：
+{
+  "coach_letter": "<4 段、約 150-200 字、宋體質感、平靜、不雞湯、不下指令、不過度承諾>",
+  "declaration": "<學員的宣言、一句、現在式、第一人稱「我是一個___的人。」 — 若 Day 21 Damon Note 有【宣言】欄位就一字不改用原文；沒有就從 21 天 takeaway 萃出最 anchor 的那句>"
+}
+
+教練見證信格式（coach_letter）：
+- Section 1：見證學員走過的旅程（提及反覆出現的詞 / 突破點）
+- Section 2：見證學員的「真實的你」（提及 top1_value / 學員今天的宣言）
+- Section 3：見證學員的下一步（不是建議、是描述「你已經 ready」的姿態）
+- Section 4：簽署「— 教練見證」
+
+學員 21 天的 daily_takeaways（每天一個學員停下來的詞 / 一句真的話）：
+${poemLines || '（尚未累積、用 Damon Note context 推估）'}
+
+⚠️ 嚴格遵守：
+- 不寫「加油 / 你已經很努力了 / 擁抱自己 / 成為更好的自己 / 跟著做就會 / 立刻改變人生」
+- 不問「為什麼」（紅線 1）
+- coach_letter 用學員的詞、不替學員下結論
+- declaration 必須是學員的話、不替學員寫`;
+}
+
+/**
+ * Robust JSON extraction for the graduation Sonnet output.
+ * Accepts a raw string, optionally markdown-fenced; returns the parsed object
+ * or null on failure. Pure (no I/O).
+ *
+ * @param {string} raw
+ * @returns {{ coach_letter: string, declaration: string } | null}
+ */
+export function parseGraduationResponse(raw) {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  // strip markdown fences
+  let body = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  // grab the outermost { ... } block defensively
+  const firstBrace = body.indexOf('{');
+  const lastBrace  = body.lastIndexOf('}');
+  if (firstBrace < 0 || lastBrace < firstBrace) return null;
+  body = body.slice(firstBrace, lastBrace + 1);
+  let obj;
+  try { obj = JSON.parse(body); } catch { return null; }
+  if (!obj || typeof obj !== 'object') return null;
+  if (typeof obj.coach_letter !== 'string' || obj.coach_letter.length === 0) return null;
+  if (typeof obj.declaration  !== 'string' || obj.declaration.length  === 0) return null;
+  return { coach_letter: obj.coach_letter, declaration: obj.declaration };
 }
 
 export default async function handler(req, res) {
@@ -150,10 +344,93 @@ export default async function handler(req, res) {
       }
     }
 
-    // TODO PR-4c P0-4：sessionDay === 21 → 生結業內容 + export-personal-coach-prompt → email
-    //                  finalize-day 每天 append daily_takeaways（user_profile_evolution）
-    //                  本 PR (PR-4c-1) 範圍：只接通 v5 numbering + 週報邊界；
-    //                  daily_takeaways + 結業 export 留 PR-4c-2（migration 016 之後）。
+    // ════════════════════════════════════════════════════════════════
+    // PR-4c-2 P0-4 — daily_takeaways append（每天）+ Day 21 結業生成 + export email
+    // ════════════════════════════════════════════════════════════════
+
+    // (1) 每天：抽 Damon Note 【關鍵句】 → append daily_takeaways（dedup-by-day）
+    //     失敗 fail-soft、不阻塞主回應（21 句詩有 1-2 格缺、優於整段 500 erroring）
+    const takeawayTerm = extractKeyPhrase(noteResult.fullNote);
+    if (takeawayTerm) {
+      try {
+        await appendDailyTakeaway(existing.student_id, { day: sessionDay, term: takeawayTerm });
+      } catch (e) {
+        console.error('[daily_takeaways] append failed (fail-soft):', e.message);
+      }
+    } else {
+      console.warn(`[daily_takeaways] no 【關鍵句】 in Damon Note for day=${sessionDay} — skipping append`);
+    }
+
+    // (2) Day 21：生結業內容（coach letter + declaration）+ export prompt + email stub
+    //     ⚠️ 不放進 finalize-day response（07 §3-B 沒這欄）— 持久化後由 GET /api/graduation 讀（07 §3-F、P1 落地）
+    if (graduation) {
+      try {
+        // 2a. 撈 user_profile + 累積的 daily_takeaways
+        const profile = (await getUserProfile(existing.student_id)) || {};
+        const dailyTakeaways = Array.isArray(profile.daily_takeaways) ? profile.daily_takeaways : [];
+
+        // 2b. Sonnet 生 coach_letter + declaration（JSON 結構化）
+        const gradPrompt = buildGraduationSystemPrompt(module, dailyTakeaways);
+        const gradResp = await getAnthropic().messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          system: gradPrompt,
+          messages: [{
+            role: 'user',
+            content: `Day 21 Damon Note 全文：\n\n${noteResult.fullNote}`,
+          }],
+        });
+        const graduationContent = parseGraduationResponse(gradResp.content?.[0]?.text || '');
+
+        if (graduationContent) {
+          // 2c. 持久化進 user_profile_evolution.last_session_day_summary.graduation
+          try {
+            await setLastSessionDaySummary(existing.student_id, {
+              graduation: graduationContent,
+            });
+          } catch (e) {
+            console.error('[graduation] setLastSessionDaySummary failed:', e.message);
+          }
+
+          // 2d. 學員的 email（從 students 表撈）
+          let toEmail = null;
+          try {
+            const sRow = await sql`
+              SELECT email FROM students WHERE student_id = ${existing.student_id} LIMIT 1
+            `;
+            toEmail = sRow[0]?.email || null;
+          } catch (e) { console.warn('[graduation] email lookup failed:', e.message); }
+
+          // 2e. 生 export markdown + 送 Brevo（stub fail-soft）
+          if (toEmail) {
+            const exportMarkdown = buildExportPersonalCoachPrompt({
+              studentId: existing.student_id,
+              top1_value: profile.top1_value,
+              anchors: profile.anchors,
+              values_ranking: profile.values_ranking,
+            });
+            const emailResp = await sendExportEmail({
+              toEmail, studentId: existing.student_id,
+              subject: '你的個人教練 prompt — 21 天的延續',
+              markdownBody: exportMarkdown,
+            });
+            if (emailResp.stubbed) {
+              console.warn(`[graduation] export email stubbed: ${emailResp.reason}`);
+            }
+          } else {
+            console.warn(`[graduation] no email on file for ${existing.student_id} — skipping export send`);
+          }
+
+          // 2f. 戳記 export_prompt_generated_at（即便 email stubbed 也戳、避免 endpoint 永遠回未生成）
+          try { await markExportEmailed(existing.student_id); }
+          catch (e) { console.error('[graduation] markExportEmailed failed:', e.message); }
+        } else {
+          console.warn('[graduation] Sonnet output failed schema validation — graduationContent null');
+        }
+      } catch (e) {
+        console.error('[graduation] Day 21 generation failed (fail-soft):', e.message);
+      }
+    }
 
     return res.status(200).json({
       ok: true,
