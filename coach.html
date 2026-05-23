@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>看見自己 · 教練後台</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="coach-shell">
+  <header class="coach-header">
+    <h1 class="coach-title">看見自己 · 教練後台</h1>
+    <nav class="coach-nav">
+      <a href="/coach.html" id="nav-dashboard">學員清單</a>
+      <a href="/admin-v4-metrics.html">v4 指標</a>
+      <a href="/api/auth/signout">登出</a>
+    </nav>
+  </header>
+
+  <!-- View 1: 學員清單 -->
+  <section id="coach-view-list">
+    <div class="coach-section">
+      <h2 class="coach-h2">學員 · 全部</h2>
+      <p class="muted" style="font-family:var(--font-sans);font-size:12px;margin-bottom:14px;">
+        點任一行 → 看該學員的旅程 / 筆記 / 週報 / 結業。
+      </p>
+      <div class="coach-list" id="coach-students-list"></div>
+    </div>
+  </section>
+
+  <!-- View 2: 單一學員 detail -->
+  <section id="coach-view-student" class="hidden">
+    <div class="coach-section">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;">
+        <h2 class="coach-h2" id="coach-student-title">學員 · —</h2>
+        <a href="#" id="coach-back" class="coach-nav" style="font-family:var(--font-sans);font-size:12px;">← 返回清單</a>
+      </div>
+      <p class="muted" id="coach-student-meta" style="font-family:var(--font-sans);font-size:12px;margin-bottom:18px;"></p>
+
+      <h2 class="coach-h2" style="margin-top:20px;">旅程縮圖</h2>
+      <div id="coach-journey-grid" class="coach-mini-grid"></div>
+      <div id="coach-grad-cell" style="max-width:480px;margin-top:6px;"></div>
+
+      <h2 class="coach-h2" style="margin-top:28px;">本週 / 上週週報</h2>
+      <div id="coach-week-reports" style="display:flex;flex-direction:column;gap:10px;"></div>
+
+      <h2 class="coach-h2" style="margin-top:28px;">展開某天筆記</h2>
+      <div id="coach-day-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+      <div id="coach-day-note" class="coach-pre" style="min-height:80px;">點上方某一天看當日筆記。</div>
+
+      <h2 class="coach-h2" style="margin-top:28px;">結業（若已生成）</h2>
+      <div id="coach-graduation" class="coach-pre" style="min-height:60px;"></div>
+    </div>
+  </section>
+</div>
+
+<script src="/coach.js"></script>
+</body>
+</html>
