@@ -138,13 +138,26 @@ function renderEntry() {
     if (radio) radio.checked = true;
   }
 
+  // helper: spec §5.1 — invalid input gets a --green-walked border (not red), explainer below
+  const setInvalid = (el, msg) => {
+    el?.classList.add('invalid');
+    err.textContent = msg;
+    err.classList.remove('hidden');
+  };
+  const clearInvalid = () => {
+    emailEl.classList.remove('invalid');
+    nameEl.classList.remove('invalid');
+    err.classList.add('hidden');
+  };
+  emailEl.addEventListener('input', clearInvalid);
+  nameEl.addEventListener('input', clearInvalid);
+
   form.onsubmit = async (e) => {
     e.preventDefault();
-    err.classList.add('hidden');
+    clearInvalid();
     const email = (emailEl.value || '').trim().toLowerCase();
     if (!email || !email.includes('@') || !email.includes('.')) {
-      err.textContent = '這個 email 看起來不太對，再看一下。';   // §六: 米棕色平靜措辭
-      err.classList.remove('hidden');
+      setInvalid(emailEl, '這個 email 看起來不太對，再看一下。');
       return;
     }
     const preferredName = (nameEl.value || '').trim() || null;
@@ -166,8 +179,7 @@ function renderEntry() {
       saveState();
       location.hash = '#/journey';
     } catch (e2) {
-      err.textContent = '沒能送出，我們再試一次。';
-      err.classList.remove('hidden');
+      setInvalid(emailEl, '沒能送出，我們再試一次。');
     } finally {
       btn.disabled = false;
     }

@@ -10,11 +10,13 @@
 <body>
 <div id="app">
 
-  <!-- ─────────── §4.1 Entry / Email 頁 (PR-4c-4e: + 稱呼 + 步調) ─────────── -->
+  <!-- ─────────── §5.1 Entry — v2.1-green: logo hero + 3 fields + 開始 ─────────── -->
   <section id="view-entry" class="view" aria-label="入口">
     <div class="entry-container">
+      <!-- P1 (PR-4c-green): logo hero — green telescope mark, 5/23 Vivi 已提供 -->
+      <img src="/assets/logo.png" alt="看見自己" class="entry-logo">
       <h1 class="entry-title">看見自己</h1>
-      <p class="entry-sub">21 天 · 每天 5–10 分鐘</p>
+      <p class="entry-sub">21 天 · 一步一步，走進自己</p>
 
       <form id="entry-form" class="entry-form" novalidate>
         <!-- email -->
@@ -25,15 +27,15 @@
         <label class="entry-field-label entry-field-label--gap" for="entry-name">我可以怎麼稱呼你？</label>
         <input type="text" id="entry-name" class="entry-input" placeholder="名字或暱稱、隨你" autocomplete="given-name" maxlength="40">
 
-        <!-- 步調二選一 (紙感 radio、不做成設定開關樣) -->
+        <!-- 步調二選一 — wording per spec §5.1 -->
         <fieldset class="entry-pace">
           <legend class="entry-field-label entry-field-label--gap">步調</legend>
 
           <label class="entry-pace-option">
             <input type="radio" name="pace" value="daily" checked>
             <span class="entry-pace-option__body">
-              <span class="entry-pace-option__title">一天一次</span>
-              <span class="entry-pace-option__sub">每天留十分鐘，讓今天的看見沉澱一晚，明天再繼續。</span>
+              <span class="entry-pace-option__title">一天一輪對話</span>
+              <span class="entry-pace-option__sub">每天沉澱一晚，隔天再繼續。</span>
             </span>
           </label>
 
@@ -46,11 +48,10 @@
           </label>
         </fieldset>
 
-        <button type="submit" id="entry-btn" class="entry-btn">繼續</button>
+        <!-- P1: CTA 開始（was 繼續）— .btn-green via the legacy .entry-btn selector group -->
+        <button type="submit" id="entry-btn" class="entry-btn">開始</button>
         <p id="entry-error" class="entry-error hidden"></p>
       </form>
-
-      <p class="entry-foot">進去之後就直接開始。</p>
     </div>
   </section>
 

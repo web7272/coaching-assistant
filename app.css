@@ -192,10 +192,12 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 /* ════════════════════════════════════════════════════════════════
    §5.1 entry — token sweep only at P0; logo hero + new wording lands at P1
    ════════════════════════════════════════════════════════════════ */
-#view-entry { justify-content: flex-start; align-items: center; padding-top: 110px; padding-bottom: 90px; }
+#view-entry { justify-content: flex-start; align-items: center; padding-top: 56px; padding-bottom: 56px; }
 .entry-container { width: 100%; max-width: 420px; padding: 0 28px; text-align: center; }
-.entry-title { font-family: var(--font-serif); font-size: 32px; letter-spacing: 8px; line-height: 1.2; color: var(--green-forest); }
-.entry-sub { margin-top: 18px; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 2.5px; color: var(--text-secondary); }
+/* P1 (PR-4c-green) — logo hero (Vivi 已提供、green 望遠鏡 + ✦) */
+.entry-logo { display: block; width: 100%; max-width: 240px; height: auto; margin: 0 auto 24px; user-select: none; }
+.entry-title { font-family: var(--font-serif); font-size: 30px; letter-spacing: 6px; line-height: 1.2; color: var(--green-forest); }
+.entry-sub { margin-top: 14px; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 2.5px; color: var(--text-secondary); }
 .entry-form { margin-top: 56px; text-align: left; }
 .entry-field-label { display: block; font-family: var(--font-serif); font-size: 12px; letter-spacing: 1.5px; color: var(--text-secondary); margin-bottom: 8px; }
 .entry-field-label--gap { margin-top: 22px; }
