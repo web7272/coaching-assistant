@@ -90,11 +90,17 @@
           <button type="button" id="conv-send-btn" class="conv-send-btn" aria-label="送出" disabled>送出</button>
         </div>
         <p class="conv-hint">⋯ 想沉默一下，AI 會在這裡等你</p>
+        <!-- P3 (PR-4c-4f) — Day-1-only chain-追問 explainer (toggled by student.js).
+             Tells the new student the teacher's repeated「對你有什麼重要?」is deliberate. -->
+        <p id="conv-chain-hint" class="conv-hint--chain hidden">
+          教練會用同樣的問題一層一層往下問——這是刻意的，不是卡住了。
+        </p>
       </div>
     </div>
 
     <div id="conv-closure" class="conv-closure hidden">
-      <span class="star">✦</span><span class="text">教練在寫今天的字</span>
+      <!-- P2: ellipsis + ✦ paper-breathe via .conv-closure.shown .star — signals "in progress" -->
+      <span class="star">✦</span><span class="text">教練在寫今天的字…</span>
     </div>
   </section>
 

@@ -128,10 +128,12 @@ a { color: inherit; text-decoration: none; }
 /* ─── §4.3-4.4 conversation ─── */
 #view-conversation { background: var(--bg-primary); position: relative; }
 .conv-scroll { flex: 1; max-width: 540px; width: 100%; margin: 0 auto; padding: 88px 28px 24px; overflow-y: auto; }
-.msg-ai { font-family: var(--font-serif); font-size: 19px; line-height: 1.95; color: var(--text-primary); margin-bottom: 36px; white-space: pre-wrap; }
-.msg-user-wrap { display: flex; justify-content: flex-end; margin-bottom: 22px; }
-.msg-user { background: var(--bg-bubble); padding: 13px 18px; border-radius: 16px 16px 4px 16px; max-width: 80%;
-  font-family: var(--font-sans); font-size: 15px; line-height: 1.65; color: var(--bubble-text); white-space: pre-wrap; }
+/* P1 (PR-4c-4f) — Vivi 刻意 override of §4.3 (原 19px / lh 1.95): AI msg / user bubble
+   shrunk so a typical reply doesn't fill a whole screen. Still 紙感, just denser. */
+.msg-ai { font-family: var(--font-serif); font-size: 17px; line-height: 1.8; color: var(--text-primary); margin-bottom: 28px; white-space: pre-wrap; }
+.msg-user-wrap { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+.msg-user { background: var(--bg-bubble); padding: 12px 16px; border-radius: 16px 16px 4px 16px; max-width: 80%;
+  font-family: var(--font-sans); font-size: 15px; line-height: 1.6; color: var(--bubble-text); white-space: pre-wrap; }
 .callback { background: var(--bg-callback); border-left: 2px solid var(--border-active); border-radius: 0 8px 8px 0;
   padding: 14px 18px; margin-bottom: 22px; }
 .callback__label { font-family: var(--font-sans); font-size: 11px; letter-spacing: 1px; color: #9B8A6F; margin-bottom: 8px; }
@@ -167,22 +169,46 @@ a { color: inherit; text-decoration: none; }
 .conv-send-btn:not(:disabled):hover { background: #F7F2E6; }
 .conv-hint { margin-top: 10px; font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.5px; color: #968F85; }
 
-/* §4.4 收尾轉場 — input 退場、改顯示「教練在寫今天的字」 */
+/* §4.4 收尾轉場 — input 退場、改顯示「教練在寫今天的字…」
+   P2 (PR-4c-4f): ✦ 輕微呼吸 — Vivi 刻意 override of §5.4「no pulse」 for usability
+   (testers thought the static label = stuck). 紙感：慢、柔、不 shout — 不是 SaaS spinner. */
 .conv-closure { border-top: 0.5px solid var(--border-separator); padding: 28px 28px 36px; text-align: center;
   background: var(--bg-primary); opacity: 0; transition: opacity 400ms ease-out; }
 .conv-closure.shown { opacity: 1; }
-.conv-closure .star { color: var(--accent-sage); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; }
+.conv-closure .star { color: var(--accent-sage); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; display: inline-block; }
+.conv-closure.shown .star { animation: paper-breathe 2.4s ease-in-out infinite; }
 .conv-closure .text { font-family: var(--font-serif); font-style: italic; font-size: 13px; letter-spacing: 1px; color: var(--text-secondary); }
 
 .conv-input-bar.exiting { opacity: 0; transform: translateY(8px); transition: opacity 250ms ease-out, transform 250ms ease-out; }
 
 /* §五.四 兼容：fresh conversation 進場、AI 起手式還沒回到時、用 §4.4 同樣的「stillness」紙感 indicator
-   — 不是 typing dots / spinner、是「教練在打開今天」italic 米棕色提示 */
+   — 不是 typing dots / spinner、是「教練在打開今天」italic 米棕色提示 + 慢呼吸 ✦ (P2) */
 .conv-waiting { display: flex; justify-content: center; align-items: center; margin: 40px 0 24px;
   opacity: 0; animation: conv-waiting-fade 400ms ease-out 100ms forwards; }
-.conv-waiting .star { color: var(--accent-sage); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; }
+.conv-waiting .star { color: var(--accent-sage); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; display: inline-block;
+  animation: paper-breathe 2.4s ease-in-out infinite; }
 .conv-waiting .text { font-family: var(--font-serif); font-style: italic; font-size: 13px; letter-spacing: 1px; color: var(--text-secondary); }
 @keyframes conv-waiting-fade { to { opacity: 1; } }
+
+/* P2 — gentle ✦ breathing keyframe, shared by .conv-closure + .conv-waiting.
+   2.4s slow, opacity 0.5 ↔ 1 — calm, not a SaaS pulse / shimmer. */
+@keyframes paper-breathe {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+
+/* P3 (PR-4c-4f) — Day-1-only chain-追問 explainer. Tells the new student that the
+   teacher's repeated「對你有什麼重要?」is deliberate (not the app freezing).
+   紙感、灰字小字、italic — same family as 「點開今天」 Day-1 prompt. NOT a suggested-reply. */
+.conv-hint--chain {
+  margin-top: 6px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: #968F85;
+  line-height: 1.55;
+}
 
 /* ─── §4.5 教練筆記 / §4.6 週報 / §4.7 結業 (共用 paper card 樣式) ─── */
 .paper-page { background: var(--bg-primary); align-items: center; padding: 52px 24px 48px; }

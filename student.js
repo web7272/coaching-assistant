@@ -309,6 +309,15 @@ async function renderConversation() {
   state.finalizing = false;
   input.placeholder = '寫一句、什麼都好';   // §六: no example placeholders
 
+  // P3 (PR-4c-4f) — show the chain-追問 explainer ONLY on Day 1 (same Day-1-only
+  // pattern as journey 「點開今天」 bottom prompt). After Day 1 the chain pattern is
+  // familiar; the hint would be noise.
+  const chainHint = document.getElementById('conv-chain-hint');
+  if (chainHint) {
+    if ((state.currentDay || 1) <= 1) chainHint.classList.remove('hidden');
+    else                              chainHint.classList.add('hidden');
+  }
+
   // PR-4c-4c: fresh conversation → kickoff handshake so AI 起手式 appears first
   // (per UI spec + storyboard "Day 1 對話 第一個問句"). The 起手式 text comes from
   // the phase-context opening variant in the server's system prompt — frontend
@@ -419,7 +428,8 @@ async function requestKickoffOpening() {
   const scroll = document.getElementById('conv-scroll');
   const placeholder = document.createElement('div');
   placeholder.className = 'conv-waiting';
-  placeholder.innerHTML = '<span class="star">✦</span><span class="text">教練在打開今天</span>';
+  // P2 (PR-4c-4f): ellipsis + .star paper-breathe (CSS) → signals "in progress" without SaaS spinner
+  placeholder.innerHTML = '<span class="star">✦</span><span class="text">教練在打開今天…</span>';
   scroll.appendChild(placeholder);
 
   try {
