@@ -252,7 +252,9 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   overflow: visible;
 }
 
-/* ─── §4.1 DayTile — 4 states (Vivi correction A: never collapse active-empty/filled) ─── */
+/* ─── §4.1 DayTile — 角色旅程 puzzle reveal (PR-4c-green Patrick 5/24) ───
+   ⚠️ Supersedes the old「植物 Option A」: scenes are full-bleed (not去背), the
+   whole journey reads as a darkened picture that lights up格一格. States below. */
 .day-tile {
   position: relative;
   z-index: 1;
@@ -265,67 +267,80 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   justify-content: center;
   box-sizing: border-box;
   cursor: default;
-  overflow: visible;
-  transition: background-color 250ms ease-out, border-color 250ms ease-out;
+  overflow: hidden;   /* clip the WebP scene to the tile's rounded corners */
+  transition: filter 350ms ease-out, border-color 250ms ease-out;
 }
 .day-tile:focus-visible { outline: 2px solid var(--gold-accent); outline-offset: 3px; }
 
-/* Tile state colours */
-.day-tile--future        { background: var(--tile-future); }
+/* Scene WebP — fills the tile via object-fit: cover. Common to all states.
+   State-specific filters are applied to the IMG (not the tile) so the day
+   number + check + footprint overlays stay full-colour. */
+.day-tile__scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;   /* match parent .day-tile border-radius */
+  pointer-events: none;
+  user-select: none;
+  transition: filter 350ms ease-out, opacity 350ms ease-out;
+  z-index: 1;
+}
+
+/* future = LOCKED puzzle piece: grayscale + dim, with a dark overlay via ::after */
+.day-tile--future        { background: var(--tile-future); cursor: default; }
+.day-tile--future .day-tile__scene {
+  filter: grayscale(1) brightness(0.55) contrast(0.9);
+}
+.day-tile--future::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 35, 25, 0.32);   /* deep-forest tint, half-transparent */
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* today (active) = LIVE: full colour + brand-green frame + halo via keyframes below */
 .day-tile--active-empty,
 .day-tile--active-filled {
-  background: var(--peach-today);
   border-color: var(--green-walked);
   cursor: pointer;
 }
-/* Vivi A001 Option A (PR-4c-green): completed tile keeps the plant illustration
-   visible. Earlier solid var(--green-walked) bg painted over the plant entirely.
-   Now: light green wash (transparent so the plant photo shows through) +
-   1px green-walked frame + gold ✓ disc top-right = clear "walked + has memory". */
+
+/* completed = REVEALED: full colour scene + gold ✓ (no green wash now — the
+   scene itself carries the "warm" full-colour signal of "walked + has memory") */
 .day-tile--completed {
-  background: rgba(93, 168, 115, 0.18);   /* same green as --green-walked, 18% alpha */
   border: 1px solid var(--green-walked);
   cursor: pointer;
 }
 
-/* Plant illustration — fills tile via object-fit: cover (Patrick correction:
-   crop is on the transparent 16:9 padding, no plant content lost). Hidden on
-   future tiles (footprint shows instead). */
-.day-tile__plant {
-  position: absolute;
-  inset: 4px;
-  width: calc(100% - 8px);
-  height: calc(100% - 8px);
-  object-fit: cover;
-  border-radius: 10px;
-  pointer-events: none;
-  user-select: none;
-}
-
-/* Footprint (future only) */
+/* Footprint (future only — sits over the dark overlay so it reads as "鎖") */
 .day-tile__footprint {
   width: 28px;
   height: 28px;
-  color: var(--neutral-step);
-  opacity: 0.55;
+  color: #FFFFFF;
+  opacity: 0.7;
+  position: relative;
+  z-index: 3;
 }
 
-/* Day number — top-left, sans. Three legibility variants per state:
-   future = faint on cream (no shadow), active = white on peach (with shadow),
-   completed = deep green on the light wash so the plant photo doesn't kill it. */
+/* Day number — top-left, sans, white with shadow over every state since scenes
+   are full-bleed across the board now. (Old per-state colour variants retired
+   along with the植物 wash background.) */
 .day-tile__day {
   position: absolute;
   top: 6px;
   left: 8px;
   font-family: var(--font-sans);
   font-size: 11px;
-  z-index: 2;
+  z-index: 3;
   color: #FFFFFF;
   pointer-events: none;
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.25);     /* keeps the number legible over the plant */
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.45);
 }
-.day-tile--future .day-tile__day    { color: var(--text-faint); text-shadow: none; }
-.day-tile--completed .day-tile__day { color: var(--green-forest); text-shadow: 0 0 4px rgba(255, 255, 255, 0.7); }
 
 /* Completed ✓ — gold disc top-right with white check */
 .day-tile__check {
@@ -435,6 +450,36 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
    ════════════════════════════════════════════════════════════════ */
 #view-conversation { background: var(--bg-mint); position: relative; }
 .conv-scroll { flex: 1; max-width: 540px; width: 100%; margin: 0 auto; padding: 88px 28px 24px; overflow-y: auto; }
+
+/* PR-4c-green Patrick 5/24 — day hero scene shown at the top of #conv-scroll
+   (scrolls away with content so the input bar stays docked) AND above the
+   paper-card on the note view. 1:1 square asset; max-width caps the visual so
+   it doesn't swallow a mobile screen. Subtle paper aesthetic, no shadow. */
+.day-hero {
+  margin: 0 auto 24px;
+  max-width: 360px;       /* ~92vw on a 390px viewport — roomy not overwhelming */
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 0.5px solid var(--border-line);
+  background: var(--paper-card);
+}
+.day-hero__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  user-select: none;
+}
+/* On the note (paper-page) view the hero sits above the paper-card with a bit
+   more breathing room and centered within the page's narrower column. */
+.day-hero--note { margin: 0 auto 18px; }
+@media (max-width: 480px) {
+  /* Tighter on phones so the input bar / note buttons stay in view. */
+  .day-hero       { max-width: 280px; margin-bottom: 18px; }
+  .day-hero--note { max-width: 280px; }
+}
 .msg-ai { font-family: var(--font-serif); font-size: 17px; line-height: 1.8; color: var(--text-primary); margin-bottom: 28px; white-space: pre-wrap; }
 .msg-user-wrap { display: flex; justify-content: flex-end; margin-bottom: 18px; }
 .msg-user { background: var(--bubble-user); padding: 12px 16px; border-radius: 16px 16px 4px 16px; max-width: 80%;

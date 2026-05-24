@@ -254,20 +254,21 @@ function renderDayTile(c) {
   div.style.gridColumn = String(col + 1);
 
   // content
-  if (isFuture) {
-    div.innerHTML = `${FOOTPRINT_SVG}<span class="day-tile__day">${c.day}</span>`;
-  } else {
-    div.innerHTML = `
-      <img class="day-tile__plant" src="/assets/days/day${c.day}.png" alt="" loading="lazy">
-      <span class="day-tile__day">${c.day}</span>
-      ${stateName === 'completed' || stateName === 'active-filled'
-        ? `<span class="day-tile__check" aria-hidden="true">${CHECK_SVG}</span>`
-        : ''}
-      ${stateName === 'active-empty'
-        ? `<span class="day-tile__start-pill">開始</span>`
-        : ''}
-    `;
-  }
+  // PR-4c-green Patrick 5/24 — new「角色旅程」插畫 (WebP, full-bleed scenes,
+  // not去背). Every tile now carries the scene; future tiles get a grayscale +
+  // dark overlay treatment via CSS for the locked-puzzle feel. Old class name
+  // .day-tile__plant retired (植物 metaphor is gone) → .day-tile__scene.
+  div.innerHTML = `
+    <img class="day-tile__scene" src="/assets/days/day${c.day}.webp" alt="" loading="lazy">
+    <span class="day-tile__day">${c.day}</span>
+    ${isFuture ? FOOTPRINT_SVG : ''}
+    ${stateName === 'completed' || stateName === 'active-filled'
+      ? `<span class="day-tile__check" aria-hidden="true">${CHECK_SVG}</span>`
+      : ''}
+    ${stateName === 'active-empty'
+      ? `<span class="day-tile__start-pill">開始</span>`
+      : ''}
+  `;
 
   if (!isFuture) {
     const handler = () => {
@@ -421,6 +422,16 @@ async function renderConversation() {
   document.getElementById('conv-header-label').textContent = `${headerName} · 第${state.currentDay || 1}天`;
   const scroll = document.getElementById('conv-scroll');
   scroll.innerHTML = '';
+  // PR-4c-green Patrick 5/24 — hero scene at the top of #conv-scroll. Scrolls
+  // away with content so the input bar stays docked (mobile-friendly). 1:1
+  // square scene; CSS caps the visual height so it doesn't swallow the screen.
+  const day = state.currentDay || 1;
+  scroll.insertAdjacentHTML('beforeend', `
+    <figure class="day-hero">
+      <img class="day-hero__img" src="/assets/days/hero/day${day}.webp"
+           alt="" loading="eager" decoding="async">
+    </figure>
+  `);
   // Re-render persisted conversation (localStorage survives refresh)
   for (const m of state.conversation) appendMessage(m.role, m.content, /*scroll=*/false);
 
@@ -679,6 +690,12 @@ async function renderNote(day) {
   // P3: header「{preferredName} · 第N天」(was「看見自己 · 第N天」)
   const headerName = state.preferredName || '你';
   document.getElementById('note-header-label').textContent = `${headerName} · 第${day}天`;
+  // PR-4c-green Patrick 5/24 — hero scene above the paper-card. Square 1:1 with
+  // CSS-capped max-width so it sits naturally above the note (paper-aesthetic
+  // "title image of the day"). Same asset as the conversation hero — 1-to-1
+  // illustration N = 第 N 天.
+  const heroImg = document.getElementById('note-hero-img');
+  if (heroImg) heroImg.src = `/assets/days/hero/day${day}.webp`;
   const body = document.getElementById('note-body');
   body.innerHTML = '';
 
