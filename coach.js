@@ -129,6 +129,81 @@ async function renderStudent(sid) {
     phaseBox.appendChild(card);
   }
 
+  // PR-4c-green Patrick 5/24 — coach-only full transcript collapsible.
+  // Lives below the day-note. Hidden until a day is picked; pinned to the
+  // currently-selected day. Lazy-fetches via /api/admin/transcript (the
+  // getToken + COACH_EMAIL gated endpoint) on first open per day; cached
+  // per session so re-toggling within the same day doesn't re-hit the DB.
+  const transcriptWrap   = document.getElementById('coach-transcript-wrap');
+  const transcriptToggle = document.getElementById('coach-transcript-toggle');
+  const transcriptBody   = document.getElementById('coach-transcript-body');
+  const transcriptCache  = new Map();   // dayN → rendered HTML
+  let transcriptCurrentDay = null;
+
+  function renderTranscript(payload, day) {
+    const msgs = Array.isArray(payload?.messages) ? payload.messages : [];
+    if (msgs.length === 0) {
+      return `<div class="coach-transcript-empty">（Day ${day} 還沒有對話。）</div>`;
+    }
+    return msgs.map(m => {
+      const roleLabel = m.role === 'user' ? '學員' : '教練';
+      const stamp = m.createdAt ? new Date(m.createdAt).toLocaleTimeString('zh-TW', {
+        hour: '2-digit', minute: '2-digit',
+      }) : '';
+      return `<div class="coach-transcript-msg coach-transcript-msg--${escapeText(m.role)}">
+        <div class="coach-transcript-msg__role">${escapeText(roleLabel)}
+          ${stamp ? `<span class="coach-transcript-msg__time">${escapeText(stamp)}</span>` : ''}
+        </div>
+        <div class="coach-transcript-msg__body">${escapeText(m.content || '')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadTranscriptIfNeeded(day) {
+    if (transcriptCache.has(day)) {
+      transcriptBody.innerHTML = transcriptCache.get(day);
+      return;
+    }
+    transcriptBody.innerHTML = '<div class="coach-transcript-empty">讀取中…</div>';
+    try {
+      const r = await api(`/api/admin/transcript?studentId=${encodeURIComponent(sid)}&module=self&day=${day}`);
+      const html = renderTranscript(r, day);
+      transcriptCache.set(day, html);
+      transcriptBody.innerHTML = html;
+    } catch (e) {
+      const code = (e && e.status) || '';
+      const msg = code === 401
+        ? '沒有教練 session、請從 /coach-login 重新登入。'
+        : ('沒能取回逐字：' + (e?.message || code));
+      transcriptBody.innerHTML = `<div class="coach-transcript-empty">${escapeText(msg)}</div>`;
+    }
+  }
+
+  function setTranscriptCollapsed(collapsed) {
+    transcriptBody.style.display = collapsed ? 'none' : 'block';
+    transcriptToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    transcriptToggle.textContent = (collapsed ? '▸ ' : '▾ ')
+      + '展開完整對話（教練專用）';
+  }
+
+  // Wire the toggle once per renderStudent call (idempotent — replaceWith resets listener).
+  const freshToggle = transcriptToggle.cloneNode(true);
+  transcriptToggle.replaceWith(freshToggle);
+  // re-grab references after replaceWith
+  const toggleEl = document.getElementById('coach-transcript-toggle');
+  toggleEl.addEventListener('click', async () => {
+    const isCollapsed = toggleEl.getAttribute('aria-expanded') !== 'true';
+    if (isCollapsed) {
+      setTranscriptCollapsed(false);
+      if (transcriptCurrentDay != null) await loadTranscriptIfNeeded(transcriptCurrentDay);
+    } else {
+      setTranscriptCollapsed(true);
+    }
+  });
+  // Start collapsed + hidden (no day picked yet).
+  setTranscriptCollapsed(true);
+  transcriptWrap.style.display = 'none';
+
   // day picker — every day with revealed/active-filled state gets a button
   for (const d of days) {
     if (d.state === 'future' || d.state === 'active-empty') continue;
@@ -148,6 +223,12 @@ async function renderStudent(sid) {
       } catch (e) {
         noteEl.textContent = '沒能取回筆記：' + e.message;
       }
+      // PR-4c-green Patrick 5/24 — pin transcript to this day, surface the
+      // collapsible. Body stays collapsed until coach clicks the toggle.
+      transcriptCurrentDay = d.day;
+      transcriptWrap.style.display = 'block';
+      setTranscriptCollapsed(true);
+      transcriptBody.innerHTML = '';   // clear stale render from prior day
     });
     picker.appendChild(btn);
   }

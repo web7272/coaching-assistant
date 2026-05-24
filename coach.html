@@ -53,6 +53,19 @@
       <div id="coach-day-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
       <div id="coach-day-note" class="coach-pre" style="min-height:80px;">點上方某一天看當日筆記。</div>
 
+      <!-- PR-4c-green Patrick 5/24 — coach-only full transcript review (鐵律 #2 上鎖).
+           Collapsed by default; lazy-fetches /api/admin/transcript on first open.
+           Student SPA never gets a path to this content. -->
+      <div id="coach-transcript-wrap" style="margin-top:14px;display:none;">
+        <button type="button" id="coach-transcript-toggle" class="paper-btn"
+                style="padding:8px 14px;font-size:12px;letter-spacing:1px;"
+                aria-expanded="false" aria-controls="coach-transcript-body">
+          ▸ 展開完整對話（教練專用）
+        </button>
+        <div id="coach-transcript-body" class="coach-pre"
+             style="display:none;margin-top:10px;min-height:60px;"></div>
+      </div>
+
       <h2 class="coach-h2" style="margin-top:28px;">結業（若已生成）</h2>
       <div id="coach-graduation" class="coach-pre" style="min-height:60px;"></div>
     </div>
