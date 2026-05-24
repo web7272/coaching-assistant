@@ -1,44 +1,61 @@
-/* app.css — v5.0 紙感 design system
-   Source of truth: docs/v5-spec/design/看見自己-21天-UI設計規格.md
-   §1 colors, §2 fonts, §3 cell, §4 layouts, §5 transitions
-   ⚠️ Any deviation breaks the "紙感" — code-review against UI §六/§九 */
+/* app.css — v2.1-green design system (PR-4c-green / P0)
+   Source of truth: docs/v5-spec/engineering/09-green-ui-spec.md
+   §1 colours, §2 fonts, §3 響應式 (mobile-first centred 440-480 col),
+   §4 components (DayTile / 連線 / Treasure / buttons), §5 page layouts.
+   ⚠️ Supersedes all earlier UI (v1 霧綠 / 金棕 / 水彩).
+
+   P0 scope: tokens + body + buttons (.btn-green/.btn-gold/.btn-paper) +
+             paper-card / input / pace-radio primitives. Existing class names
+             kept so HTML stays untouched at this checkpoint — sections
+             (entry / journey / conv / paper-pages / coach) render via the
+             new tokens automatically.
+             P1 adds logo hero; P2 rebuilds the journey grid (DayTile + snake
+             path + treasures); P3 polishes conversation/note/graduation copy;
+             P4 adds Phase Report page + weeks→phases endpoint; P5 puts /coach
+             in green. */
 
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400&family=Noto+Sans+TC:wght@300;400&display=swap');
 
-/* ─── §1 color tokens ─── */
+/* ════════════════════════════════════════════════════════════════
+   §1 colour tokens (green-mint palette)
+   ════════════════════════════════════════════════════════════════ */
 :root {
-  --bg-primary:    #FAF7F2;
-  --bg-card:       #FFFBF4;
-  --bg-bubble:     #F0EAE0;
-  --bg-callback:   #F5EFE4;
+  /* Backdrop + tiles */
+  --bg-mint:        #D7EBD1;        /* 主背景（學員頁、桌面置中欄左右也是它） */
+  --green-walked:   #5DA873;        /* 走過的日子格子填色 + focus border */
+  --green-forest:   #2C5238;        /* 深森林綠：標題、深色強調 */
+  --peach-today:    #F4C9A0;        /* 今天格子（暖色對比、empty + filled 共用） */
+  --gold-accent:    #E3B340;        /* ✓ / ✦ / 寶藏 / active 金光 */
+  --tile-future:    #EAF4E6;        /* 未到的格子 + 微邊框 */
+  --neutral-step:   #B9A88C;        /* 腳印 / locked 寶藏 / 中性 icon（非綠） */
+  --paper-card:     #FBF6EC;        /* 卡片：筆記 / 報告 */
+  --brand-green:    #3E9D5C;        /* 主按鈕（logo 精確綠、Vivi 上線前微調） */
 
-  --border-revealed:  #E8DFCD;
-  --border-active:    #C9B69D;
-  --border-future:    #ECE5D6;
-  --border-separator: #EFE9DC;
+  /* Text scale (only 3 levels per spec §1 — collapsed v1 quaternary/tertiary) */
+  --text-primary:   #2C3A2C;
+  --text-secondary: #6E8A6E;
+  --text-faint:     #A7BCA4;
 
-  --text-primary:    #2C2825;
-  --text-secondary:  #8B7B65;
-  --text-tertiary:   #A8A097;
-  --text-quaternary: #B5AEA2;
-  --text-faint:      #D4CDC1;
+  /* Derived */
+  --bubble-user:    #C8E4C2;        /* 使用者泡泡淺底（spec §5.3 hint） */
+  --border-line:    #BFD7BA;        /* 微分隔線（綠調 hairline） */
 
-  --accent-sage:     #8FA68E;
-  --bubble-text:     #3A352F;
-
+  /* Typography */
   --font-serif: 'Noto Serif TC', 'Songti SC', 'Songti TC', serif;
   --font-sans:  'Noto Sans TC', 'PingFang TC', sans-serif;
 }
 
-/* ─── reset ─── */
+/* ════════════════════════════════════════════════════════════════
+   reset + base
+   ════════════════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
-  background: var(--bg-primary);
+  background: var(--bg-mint);                  /* §3: mint fills the screen */
   color: var(--text-primary);
   font-family: var(--font-serif);
-  font-size: 19px;
-  line-height: 1.95;
+  font-size: 17px;
+  line-height: 1.8;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -46,210 +63,287 @@ button { background: none; border: none; font-family: inherit; color: inherit; c
 input, textarea { font-family: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; }
 
-/* ─── view switcher (SPA) ─── */
-.view { display: none; min-height: 100vh; }
+/* §2 — never bold (CJK weight bumps break the paper feel; rely on size/lts contrast) */
+b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
+
+/* ════════════════════════════════════════════════════════════════
+   §3 響應式 — 學員 app 桌面置中 440-480 px col
+   ════════════════════════════════════════════════════════════════ */
+.view { display: none; min-height: 100vh; max-width: 480px; margin: 0 auto; }
 .view.active { display: flex; flex-direction: column; }
 .view.fade-out { opacity: 0; transform: translateY(-12px); transition: opacity 400ms ease-in, transform 400ms ease-in; }
 .view.fade-in  { opacity: 0; transform: translateY(8px); }
 .view.fade-in.shown { opacity: 1; transform: none; transition: opacity 500ms ease-out, transform 500ms ease-out; }
 
-/* ─── §4.1 entry ─── */
-#view-entry { justify-content: flex-start; align-items: center; padding-top: 110px; padding-bottom: 90px; }
-.entry-container { width: 100%; max-width: 420px; padding: 0 28px; text-align: center; }      /* PR-4c-4e: widened for taller form (email + 稱呼 + pace) */
-.entry-title { font-family: var(--font-serif); font-size: 32px; font-weight: 400; letter-spacing: 8px; line-height: 1.2; color: var(--text-primary); }
-.entry-sub { margin-top: 18px; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 2.5px; color: var(--text-tertiary); }
-.entry-form { margin-top: 56px; text-align: left; }                /* PR-4c-4e: gap reduced from 84 → 56 since the form is taller now */
-.entry-field-label { display: block; font-family: var(--font-serif); font-size: 12px; letter-spacing: 1.5px; color: var(--text-secondary); margin-bottom: 8px; }
-.entry-field-label--gap { margin-top: 22px; }
-.entry-input { width: 100%; padding: 14px 18px; background: #FFF; border: 0.5px solid var(--border-revealed); border-radius: 8px; font-family: var(--font-sans); font-size: 15px; color: var(--text-primary); }
-.entry-input::placeholder { color: var(--text-quaternary); font-family: var(--font-sans); font-size: 15px; }
-.entry-input:focus { outline: 0.5px solid var(--border-active); }
+/* ════════════════════════════════════════════════════════════════
+   §4.4 buttons — 3 primitives per spec.
+   Legacy class names (.entry-btn / .paper-btn / .conv-send-btn) share the
+   primitive selectors so existing HTML keeps working before P1/P3 cleanup.
+   ════════════════════════════════════════════════════════════════ */
+.btn-green,
+.entry-btn,
+.conv-send-btn {
+  background: var(--brand-green);
+  color: #FFFFFF;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  letter-spacing: 4px;
+  padding: 14px 36px;
+  border-radius: 10px;
+  transition: background-color 200ms ease-out, opacity 200ms ease-out;
+}
+.btn-green:hover,
+.entry-btn:hover,
+.conv-send-btn:hover { background: #348651; }   /* shade darker, calm hover */
+.btn-green:disabled,
+.entry-btn:disabled,
+.conv-send-btn:disabled { opacity: 0.45; cursor: default; background: var(--brand-green); }
 
-/* PR-4c-4e: pace radio fieldset — 紙感、不是設定開關樣 */
+.btn-gold {
+  background: var(--gold-accent);
+  color: #3A2E10;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  letter-spacing: 4px;
+  padding: 14px 36px;
+  border-radius: 10px;
+}
+
+.btn-paper,
+.paper-btn {
+  background: var(--paper-card);
+  color: var(--text-primary);
+  border: 0.5px solid var(--green-walked);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  letter-spacing: 2px;
+  padding: 12px 28px;
+  border-radius: 10px;
+  transition: background-color 200ms ease-out, border-color 200ms ease-out;
+}
+.btn-paper:hover,
+.paper-btn:hover { background: #F4ECDA; }
+
+/* Override layout of legacy .conv-send-btn so it stays inline with the textarea */
+.conv-send-btn { padding: 12px 22px; letter-spacing: 2px; font-size: 14px;
+  border-radius: 14px; white-space: nowrap; min-height: 48px; align-self: flex-end; }
+
+/* ════════════════════════════════════════════════════════════════
+   §4.5 input + paper-card + pace-radio (component primitives)
+   ════════════════════════════════════════════════════════════════ */
+.entry-input,
+.conv-input {
+  width: 100%;
+  padding: 14px 18px;
+  background: var(--paper-card);
+  border: 0.5px solid var(--border-line);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-primary);
+  transition: border-color 200ms ease-out;
+}
+.entry-input::placeholder,
+.conv-input::placeholder {
+  color: var(--text-faint);
+  font-family: var(--font-serif);
+  font-style: italic;
+}
+.entry-input:focus,
+.conv-input:focus {
+  outline: none;
+  border-color: var(--green-walked);
+}
+.entry-input.invalid { border-color: var(--green-walked); }   /* validation: §5.1 — no red, brand-green border */
+.conv-input { resize: none; min-height: 48px; max-height: 200px; overflow-y: auto; border-radius: 14px; }
+
+/* Paper card — used by 教練筆記 / 週報 / 結業 / Phase Report */
+.paper-card {
+  background: var(--paper-card);
+  border: 0.5px solid var(--border-line);
+  border-radius: 10px;
+  /* no shadow, no gradient — spec §4.5 */
+}
+
+/* Pace radio (entry §5.1) — paper底 + 選中 green-walked 邊 + 深綠圓點 */
 .entry-pace { border: none; padding: 0; margin: 22px 0 0; }
 .entry-pace .entry-field-label { margin-bottom: 8px; padding: 0; }
-.entry-pace-option { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; margin-top: 10px;
-  background: var(--bg-card); border: 0.5px solid var(--border-revealed); border-radius: 8px; cursor: pointer;
-  transition: border-color 200ms ease-out, background-color 200ms ease-out; }
-.entry-pace-option:has(input:checked) { border-color: var(--border-active); background: #FBF7EC; }
-.entry-pace-option input[type="radio"] { margin-top: 6px; accent-color: var(--accent-sage); flex: 0 0 auto; }
+.entry-pace-option {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px; margin-top: 10px;
+  background: var(--paper-card);
+  border: 0.5px solid var(--border-line);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 200ms ease-out, background-color 200ms ease-out;
+}
+.entry-pace-option:has(input:checked) {
+  border-color: var(--green-walked);
+  background: var(--paper-card);
+}
+.entry-pace-option input[type="radio"] {
+  margin-top: 6px; flex: 0 0 auto;
+  accent-color: var(--brand-green);     /* §4.5: 深綠圓點 */
+}
 .entry-pace-option__body { display: flex; flex-direction: column; gap: 4px; }
 .entry-pace-option__title { font-family: var(--font-serif); font-size: 15px; letter-spacing: 1px; color: var(--text-primary); }
 .entry-pace-option__sub { font-family: var(--font-serif); font-style: italic; font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
 
-.entry-btn { display: block; margin: 28px auto 0; padding: 12px 36px; background: var(--bg-card); border: 0.5px solid var(--border-active); border-radius: 8px; font-family: var(--font-serif); font-size: 14px; letter-spacing: 3px; color: var(--text-primary); }
-.entry-btn:disabled { opacity: 0.55; cursor: default; }
-.entry-foot { margin-top: 56px; font-family: var(--font-serif); font-style: italic; font-size: 12px; color: var(--text-quaternary); text-align: center; }
-.entry-error { margin-top: 16px; font-family: var(--font-serif); font-size: 13px; color: var(--text-secondary); text-align: center; }
+/* ════════════════════════════════════════════════════════════════
+   §5.1 entry — token sweep only at P0; logo hero + new wording lands at P1
+   ════════════════════════════════════════════════════════════════ */
+#view-entry { justify-content: flex-start; align-items: center; padding-top: 110px; padding-bottom: 90px; }
+.entry-container { width: 100%; max-width: 420px; padding: 0 28px; text-align: center; }
+.entry-title { font-family: var(--font-serif); font-size: 32px; letter-spacing: 8px; line-height: 1.2; color: var(--green-forest); }
+.entry-sub { margin-top: 18px; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 2.5px; color: var(--text-secondary); }
+.entry-form { margin-top: 56px; text-align: left; }
+.entry-field-label { display: block; font-family: var(--font-serif); font-size: 12px; letter-spacing: 1.5px; color: var(--text-secondary); margin-bottom: 8px; }
+.entry-field-label--gap { margin-top: 22px; }
+.entry-btn { display: block; margin: 28px auto 0; }   /* spacing only; visual via .btn-green grouping above */
+.entry-foot { margin-top: 56px; font-family: var(--font-serif); font-style: italic; font-size: 12px; color: var(--text-faint); text-align: center; }
+.entry-error { margin-top: 16px; font-family: var(--font-serif); font-style: italic; font-size: 13px; color: var(--green-walked); text-align: center; }
 
-/* ─── header (used by 4.2-4.7) ─── */
-.app-header { padding: 16px 28px; border-bottom: 0.5px solid var(--border-separator); text-align: center; }
+/* ════════════════════════════════════════════════════════════════
+   header (used by journey / conversation / note / week / graduation)
+   ════════════════════════════════════════════════════════════════ */
+.app-header { padding: 16px 28px; border-bottom: 0.5px solid var(--border-line); text-align: center; }
 .app-header .label { font-family: var(--font-serif); font-size: 11px; letter-spacing: 3px; color: var(--text-secondary); }
 
-/* ─── §4.2 journey ─── */
-#view-journey { background: var(--bg-primary); }
+/* ════════════════════════════════════════════════════════════════
+   §5.2 journey — P0 ONLY token sweep. P2 rewrites the grid entirely
+   (3-col snake DayTile + plant illustrations + path + treasure shelf).
+   ════════════════════════════════════════════════════════════════ */
+#view-journey { background: var(--bg-mint); }
 .journey-title-wrap { text-align: center; padding-top: 40px; }
-.journey-title { font-family: var(--font-serif); font-size: 24px; letter-spacing: 4px; color: var(--text-primary); }
-.journey-sub { margin-top: 10px; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 1px; color: var(--text-tertiary); }
+.journey-title { font-family: var(--font-serif); font-size: 24px; letter-spacing: 4px; color: var(--green-forest); }
+.journey-sub { margin-top: 10px; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 1px; color: var(--text-secondary); }
 
 .journey-grid-wrap { padding: 38px 28px 0; }
 .journey-grid { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
 
-/* ─── §3 cell ─── */
+/* cell — P0 token sweep; P2 replaces with .day-tile (3-col snake, plant illos) */
 .cell { position: relative; height: 64px; border-radius: 8px; display: flex; justify-content: center; align-items: center;
   box-sizing: border-box; transition: background-color 250ms ease-out, border-color 250ms ease-out; }
-.cell--future        { background: transparent;    border: 0.5px solid var(--border-future); }
-.cell--active-empty  { background: var(--bg-card); border: 0.5px solid var(--border-active); cursor: pointer; }
-.cell--active-filled { background: var(--bg-card); border: 0.5px solid var(--border-active); cursor: pointer; }
-.cell--revealed      { background: var(--bg-card); border: 0.5px solid var(--border-revealed); cursor: pointer; }
-.cell--future .cell__day { color: var(--text-faint); }
-.cell--active-empty .cell__day, .cell--active-filled .cell__day { color: var(--text-secondary); }
-.cell--revealed .cell__day { color: var(--text-quaternary); }
-.cell:focus-visible { outline: 2px solid var(--border-active); outline-offset: -2px; }
+.cell--future        { background: var(--tile-future);  border: 0.5px solid var(--border-line); }
+.cell--active-empty  { background: var(--peach-today);  border: 0.5px solid var(--green-walked); cursor: pointer; }
+.cell--active-filled { background: var(--peach-today);  border: 0.5px solid var(--green-walked); cursor: pointer; }
+.cell--revealed      { background: var(--green-walked); border: 0.5px solid var(--green-walked); cursor: pointer; }
+.cell--future        .cell__day { color: var(--text-faint); }
+.cell--active-empty  .cell__day,
+.cell--active-filled .cell__day { color: #FFFFFF; }
+.cell--revealed      .cell__day { color: #FFFFFF; }
+.cell:focus-visible { outline: 2px solid var(--gold-accent); outline-offset: -2px; }
 .cell__day { position: absolute; top: 6px; left: 8px; font-family: var(--font-sans); font-size: 9px; }
-.cell__star { position: absolute; top: 5px; right: 7px; font-family: var(--font-sans); font-size: 9px; color: var(--accent-sage); }
-.cell__center-today { font-family: var(--font-serif); font-style: italic; font-size: 12.5px; color: var(--text-secondary); }
-.cell__center-phrase { font-family: var(--font-serif); font-size: 13px; color: var(--text-primary);
-  padding: 0 6px; text-align: center; line-height: 1.2; max-height: 100%; overflow: hidden; word-break: break-word; }
+.cell__star { position: absolute; top: 5px; right: 7px; font-family: var(--font-sans); font-size: 9px; color: var(--gold-accent); }
 .cell--weekly .roman { font-family: var(--font-serif); font-style: italic; letter-spacing: 1px; }
-.cell--weekly.cell--active   .roman { font-size: 18px; color: var(--text-primary); }
-.cell--weekly.cell--revealed .roman { font-size: 18px; color: var(--text-secondary); }
+.cell--weekly.cell--active   .roman { font-size: 18px; color: #FFFFFF; }
+.cell--weekly.cell--revealed .roman { font-size: 18px; color: #FFFFFF; }
 .cell--weekly.cell--future   .roman { font-size: 16px; color: var(--text-faint); }
 
 .cell--graduation { width: 100%; height: 56px; border-radius: 8px; margin-top: 18px; cursor: default; }
 .cell--graduation.cell--active, .cell--graduation.cell--revealed { cursor: pointer; }
 .cell--graduation .label { font-family: var(--font-serif); font-size: 13px; letter-spacing: 3px; }
 .cell--graduation.cell--future   .label { color: var(--text-faint); }
-.cell--graduation.cell--active   .label { color: var(--text-primary); }
-.cell--graduation.cell--revealed .label { color: var(--text-secondary); }
+.cell--graduation.cell--active   .label { color: var(--green-forest); }
+.cell--graduation.cell--revealed .label { color: #FFFFFF; }
 
 .journey-prompt { margin: 32px auto 48px; text-align: center; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 1.5px; color: var(--text-secondary); }
 
-/* ─── §4.3-4.4 conversation ─── */
-#view-conversation { background: var(--bg-primary); position: relative; }
+/* ════════════════════════════════════════════════════════════════
+   §5.3 conversation — green sweep; structural copy lands in P3
+   ════════════════════════════════════════════════════════════════ */
+#view-conversation { background: var(--bg-mint); position: relative; }
 .conv-scroll { flex: 1; max-width: 540px; width: 100%; margin: 0 auto; padding: 88px 28px 24px; overflow-y: auto; }
-/* P1 (PR-4c-4f) — Vivi 刻意 override of §4.3 (原 19px / lh 1.95): AI msg / user bubble
-   shrunk so a typical reply doesn't fill a whole screen. Still 紙感, just denser. */
 .msg-ai { font-family: var(--font-serif); font-size: 17px; line-height: 1.8; color: var(--text-primary); margin-bottom: 28px; white-space: pre-wrap; }
 .msg-user-wrap { display: flex; justify-content: flex-end; margin-bottom: 18px; }
-.msg-user { background: var(--bg-bubble); padding: 12px 16px; border-radius: 16px 16px 4px 16px; max-width: 80%;
-  font-family: var(--font-sans); font-size: 15px; line-height: 1.6; color: var(--bubble-text); white-space: pre-wrap; }
-.callback { background: var(--bg-callback); border-left: 2px solid var(--border-active); border-radius: 0 8px 8px 0;
+.msg-user { background: var(--bubble-user); padding: 12px 16px; border-radius: 16px 16px 4px 16px; max-width: 80%;
+  font-family: var(--font-sans); font-size: 15px; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap; }
+.callback { background: var(--paper-card); border-left: 2px solid var(--green-walked); border-radius: 0 8px 8px 0;
   padding: 14px 18px; margin-bottom: 22px; }
-.callback__label { font-family: var(--font-sans); font-size: 11px; letter-spacing: 1px; color: #9B8A6F; margin-bottom: 8px; }
-.callback__quote { font-family: var(--font-serif); font-style: italic; font-size: 15.5px; line-height: 1.75; color: var(--bubble-text); }
-.hint-italic { font-family: var(--font-serif); font-style: italic; font-size: 13px; color: var(--text-quaternary); }
+.callback__label { font-family: var(--font-sans); font-size: 11px; letter-spacing: 1px; color: var(--text-secondary); margin-bottom: 8px; }
+.callback__quote { font-family: var(--font-serif); font-style: italic; font-size: 15.5px; line-height: 1.75; color: var(--text-primary); }
+.hint-italic { font-family: var(--font-serif); font-style: italic; font-size: 13px; color: var(--text-faint); }
 
-.conv-input-bar { border-top: 0.5px solid var(--border-separator); padding: 16px 28px 18px; background: var(--bg-primary); }
+.conv-input-bar { border-top: 0.5px solid var(--border-line); padding: 16px 28px 18px; background: var(--bg-mint); }
 .conv-input-wrap { max-width: 540px; margin: 0 auto; }
-/* F1 (PR-4c-4d) — input + send 並排 row。Mobile (<480px) 會 wrap、按鈕仍在 input 下方 */
 .conv-input-row { display: flex; align-items: flex-end; gap: 10px; }
-.conv-input { flex: 1 1 auto; padding: 14px 18px; background: #FFF; border: 0.5px solid var(--border-revealed); border-radius: 14px;
-  font-family: var(--font-sans); font-size: 15px; resize: none; min-height: 48px; max-height: 200px; overflow-y: auto; }
-.conv-input:focus { outline: 0.5px solid var(--border-active); }
-.conv-input::placeholder { color: var(--text-quaternary); font-family: var(--font-sans); }
-/* F1 paper-aesthetic send button — NOT SaaS-bright. 紙感 button style same as
-   §4.5 / §4.7 buttons but compact + inline with the textarea. Enter still works. */
-.conv-send-btn {
-  flex: 0 0 auto;
-  align-self: flex-end;
-  padding: 12px 22px;
-  background: var(--bg-card);
-  border: 0.5px solid var(--border-active);
-  border-radius: 14px;
-  font-family: var(--font-serif);
-  font-size: 14px;
-  letter-spacing: 2px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  min-height: 48px;
-  transition: background-color 200ms ease-out, opacity 200ms ease-out;
-}
 .conv-send-btn:disabled { opacity: 0.4; cursor: default; }
-.conv-send-btn:not(:disabled):hover { background: #F7F2E6; }
-.conv-hint { margin-top: 10px; font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.5px; color: #968F85; }
+.conv-hint { margin-top: 10px; font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.5px; color: var(--text-faint); }
 
-/* §4.4 收尾轉場 — input 退場、改顯示「教練在寫今天的字…」
-   P2 (PR-4c-4f): ✦ 輕微呼吸 — Vivi 刻意 override of §5.4「no pulse」 for usability
-   (testers thought the static label = stuck). 紙感：慢、柔、不 shout — 不是 SaaS spinner. */
-.conv-closure { border-top: 0.5px solid var(--border-separator); padding: 28px 28px 36px; text-align: center;
-  background: var(--bg-primary); opacity: 0; transition: opacity 400ms ease-out; }
+/* §5.3 收尾 — token sweep; ✦ now gold per §1 */
+.conv-closure { border-top: 0.5px solid var(--border-line); padding: 28px 28px 36px; text-align: center;
+  background: var(--bg-mint); opacity: 0; transition: opacity 400ms ease-out; }
 .conv-closure.shown { opacity: 1; }
-.conv-closure .star { color: var(--accent-sage); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; display: inline-block; }
+.conv-closure .star { color: var(--gold-accent); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; display: inline-block; }
 .conv-closure.shown .star { animation: paper-breathe 2.4s ease-in-out infinite; }
 .conv-closure .text { font-family: var(--font-serif); font-style: italic; font-size: 13px; letter-spacing: 1px; color: var(--text-secondary); }
 
 .conv-input-bar.exiting { opacity: 0; transform: translateY(8px); transition: opacity 250ms ease-out, transform 250ms ease-out; }
 
-/* §五.四 兼容：fresh conversation 進場、AI 起手式還沒回到時、用 §4.4 同樣的「stillness」紙感 indicator
-   — 不是 typing dots / spinner、是「教練在打開今天」italic 米棕色提示 + 慢呼吸 ✦ (P2) */
 .conv-waiting { display: flex; justify-content: center; align-items: center; margin: 40px 0 24px;
   opacity: 0; animation: conv-waiting-fade 400ms ease-out 100ms forwards; }
-.conv-waiting .star { color: var(--accent-sage); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; display: inline-block;
+.conv-waiting .star { color: var(--gold-accent); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; display: inline-block;
   animation: paper-breathe 2.4s ease-in-out infinite; }
 .conv-waiting .text { font-family: var(--font-serif); font-style: italic; font-size: 13px; letter-spacing: 1px; color: var(--text-secondary); }
 @keyframes conv-waiting-fade { to { opacity: 1; } }
 
-/* P2 — gentle ✦ breathing keyframe, shared by .conv-closure + .conv-waiting.
-   2.4s slow, opacity 0.5 ↔ 1 — calm, not a SaaS pulse / shimmer. */
 @keyframes paper-breathe {
   0%, 100% { opacity: 0.5; }
   50%      { opacity: 1; }
 }
 
-/* P3 (PR-4c-4f) — Day-1-only chain-追問 explainer. Tells the new student that the
-   teacher's repeated「對你有什麼重要?」is deliberate (not the app freezing).
-   紙感、灰字小字、italic — same family as 「點開今天」 Day-1 prompt. NOT a suggested-reply. */
 .conv-hint--chain {
   margin-top: 6px;
   font-family: var(--font-serif);
   font-style: italic;
   font-size: 11px;
   letter-spacing: 0.5px;
-  color: #968F85;
+  color: var(--text-secondary);
   line-height: 1.55;
 }
 
-/* ─── §4.5 教練筆記 / §4.6 週報 / §4.7 結業 (共用 paper card 樣式) ─── */
-.paper-page { background: var(--bg-primary); align-items: center; padding: 52px 24px 48px; }
-.paper-card { background: var(--bg-card); border: 0.5px solid var(--border-revealed); border-radius: 10px;
-  max-width: 440px; width: 100%; padding: 38px 36px 30px; }
-.paper-card--wide { max-width: 480px; padding: 42px 42px 32px; }
+/* ════════════════════════════════════════════════════════════════
+   §5.4 教練卡 / §5.5 Phase Report / §5.6 結業 — shared .paper-card
+   ════════════════════════════════════════════════════════════════ */
+.paper-page { background: var(--bg-mint); align-items: center; padding: 52px 24px 48px; }
+.paper-card { max-width: 440px; width: 100%; padding: 38px 36px 30px; }
+.paper-card--wide       { max-width: 480px; padding: 42px 42px 32px; }
 .paper-card--graduation { max-width: 540px; padding: 48px 44px 36px; }
 .paper-card__header { text-align: center; margin-bottom: 28px; }
-.paper-card__eyebrow { font-family: var(--font-serif); font-size: 11px; letter-spacing: 4px; color: #9B8A6F; }
-.paper-card__title { margin-top: 4px; font-family: var(--font-serif); font-size: 17px; letter-spacing: 1.5px; color: var(--text-primary); }
-.paper-card__subtitle { margin-top: 10px; font-family: var(--font-serif); font-style: italic; font-size: 11px; letter-spacing: 3px; color: #9B8A6F; }
-.paper-card__divider { width: 24px; height: 0.5px; background: var(--border-active); margin: 14px auto 0; }
-.paper-card__body { font-family: var(--font-serif); font-size: 16.5px; line-height: 2; color: var(--text-primary); white-space: pre-wrap; }
+.paper-card__eyebrow { font-family: var(--font-serif); font-size: 11px; letter-spacing: 4px; color: var(--green-walked); }
+.paper-card__title { margin-top: 4px; font-family: var(--font-serif); font-size: 17px; letter-spacing: 1.5px; color: var(--green-forest); }
+.paper-card__subtitle { margin-top: 10px; font-family: var(--font-serif); font-style: italic; font-size: 11px; letter-spacing: 3px; color: var(--text-secondary); }
+.paper-card__divider { width: 24px; height: 0.5px; background: var(--gold-accent); margin: 14px auto 0; }
+.paper-card__body { font-family: var(--font-serif); font-size: 14.5px; line-height: 2; color: var(--text-primary); white-space: pre-wrap; }
 .paper-card__body p { margin-bottom: 18px; }
 .paper-card__body p:last-child { margin-bottom: 0; }
 .paper-card__sig { margin-top: 32px; text-align: right; font-family: var(--font-serif); font-style: italic; font-size: 14px; letter-spacing: 0.5px; color: var(--text-secondary); }
 
 .status-row { margin-top: 32px; text-align: center; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 1px; color: var(--text-secondary); }
-.status-row .star { color: var(--accent-sage); margin-right: 6px; font-family: var(--font-sans); font-size: 9px; }
+.status-row .star { color: var(--gold-accent); margin-right: 6px; font-family: var(--font-sans); font-size: 9px; }
 
 .btn-row { margin-top: 26px; display: flex; justify-content: center; gap: 12px; }
-.paper-btn { padding: 12px 28px; background: var(--bg-card); border: 0.5px solid var(--border-active); border-radius: 8px;
-  font-family: var(--font-serif); font-size: 14px; letter-spacing: 2px; color: var(--text-primary); }
 
-/* ─── §4.7 graduation specifics ─── */
+/* §5.6 graduation specifics */
 .poem-block { margin: 40px auto 36px; text-align: center; }
-.poem-line { font-family: var(--font-serif); font-size: 13px; line-height: 2.4; letter-spacing: 0.5px; color: #6B645D; margin-bottom: 6px; }
-.declaration-leadin { text-align: center; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 2px; color: #9B8A6F; margin-bottom: 18px; }
-.declaration { text-align: center; font-family: var(--font-serif); font-size: 19px; line-height: 2.1; letter-spacing: 1.5px; color: var(--text-primary); margin-bottom: 36px; }
+.poem-line { font-family: var(--font-serif); font-size: 13px; line-height: 2.4; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 6px; }
+.declaration-leadin { text-align: center; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 2px; color: var(--green-walked); margin-bottom: 18px; }
+.declaration { text-align: center; font-family: var(--font-serif); font-size: 19px; line-height: 2.1; letter-spacing: 1.5px; color: var(--green-forest); margin-bottom: 36px; }
 .export-notice { margin-top: 18px; text-align: center; font-family: var(--font-serif); font-style: italic; font-size: 12px; color: var(--text-secondary); }
 
-/* ─── coach (separate aesthetic, not 紙感 — functional admin) ─── */
-.coach-shell { padding: 32px 28px; max-width: 960px; margin: 0 auto; }
-.coach-header { padding-bottom: 16px; border-bottom: 0.5px solid var(--border-separator); margin-bottom: 24px;
+/* ════════════════════════════════════════════════════════════════
+   /coach — separate aesthetic (admin), green sweep only at P0;
+   full restyle for /coach lands in P5.
+   ════════════════════════════════════════════════════════════════ */
+.coach-shell { padding: 32px 28px; max-width: 960px; margin: 0 auto; background: var(--bg-mint); min-height: 100vh; }
+.coach-header { padding-bottom: 16px; border-bottom: 0.5px solid var(--border-line); margin-bottom: 24px;
   display: flex; align-items: baseline; justify-content: space-between; }
-.coach-title { font-family: var(--font-serif); font-size: 20px; letter-spacing: 2px; color: var(--text-primary); }
+.coach-title { font-family: var(--font-serif); font-size: 20px; letter-spacing: 2px; color: var(--green-forest); }
 .coach-nav { font-family: var(--font-sans); font-size: 13px; color: var(--text-secondary); }
 .coach-nav a { margin-left: 14px; }
 .coach-list { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .coach-list__row { display: grid; grid-template-columns: 110px 1fr 110px 88px; gap: 12px;
-  background: var(--bg-card); border: 0.5px solid var(--border-revealed); border-radius: 6px;
+  background: var(--paper-card); border: 0.5px solid var(--border-line); border-radius: 6px;
   padding: 12px 16px; align-items: center; font-family: var(--font-sans); font-size: 13px; color: var(--text-primary); cursor: pointer; }
 .coach-list__sid { font-family: var(--font-sans); font-size: 13px; letter-spacing: 0.5px; }
 .coach-list__email { color: var(--text-secondary); }
@@ -258,21 +352,21 @@ a { color: inherit; text-decoration: none; }
 .coach-section { margin-top: 32px; }
 .coach-h2 { font-family: var(--font-serif); font-size: 14px; letter-spacing: 2px; color: var(--text-secondary); margin-bottom: 10px; }
 .coach-mini-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; max-width: 480px;
-  margin-bottom: 16px; }                          /* F2: gap before next section */
+  margin-bottom: 16px; }
 .coach-mini-cell { height: 38px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
   font-family: var(--font-serif); font-size: 11px; color: var(--text-primary); padding: 0 4px;
-  border: 0.5px solid var(--border-future); box-sizing: border-box;
-  /* F2 (PR-4c-4d) — defend against long terms overflowing into the next section.
-     Truncate visibly; full term lives in the hover title attribute. */
+  border: 0.5px solid var(--border-line); box-sizing: border-box;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
-.coach-mini-cell--active   { background: var(--bg-card); border-color: var(--border-active); }
-.coach-mini-cell--revealed { background: var(--bg-card); border-color: var(--border-revealed); color: var(--text-secondary); }
+.coach-mini-cell--active   { background: var(--peach-today);  border-color: var(--green-walked); }
+.coach-mini-cell--revealed { background: var(--green-walked); border-color: var(--green-walked); color: #FFFFFF; }
 .coach-mini-cell--graduation { grid-column: 1 / -1; font-size: 12px; letter-spacing: 2px; height: 32px; }
-.coach-pre { background: var(--bg-card); border: 0.5px solid var(--border-revealed); border-radius: 6px;
+.coach-pre { background: var(--paper-card); border: 0.5px solid var(--border-line); border-radius: 6px;
   padding: 16px 18px; font-family: var(--font-serif); font-size: 14px; line-height: 1.85; color: var(--text-primary); white-space: pre-wrap;
-  overflow-wrap: anywhere; word-break: break-word;  /* F2: long Chinese without spaces still wraps */
+  overflow-wrap: anywhere; word-break: break-word;
   box-sizing: border-box; max-width: 100%; }
 
-/* ─── shared utility ─── */
-.muted { color: var(--text-tertiary); }
-.hidden { display: none !important; }
+/* ════════════════════════════════════════════════════════════════
+   shared utilities
+   ════════════════════════════════════════════════════════════════ */
+.muted   { color: var(--text-faint); }
+.hidden  { display: none !important; }
