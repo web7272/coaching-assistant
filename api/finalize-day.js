@@ -391,6 +391,18 @@ export default async function handler(req, res) {
       } catch (e) {
         console.error('[daily_takeaways] append failed (fail-soft):', e.message);
       }
+      // PR-4c-green bug 3 — also write last_session_day_summary.last_takeaway_term.
+      // This is the field E4 day-opening-selector.prompt_content expects to fill the
+      // V1/V2/V5 variants; without it, Day N+1 's 跨日引用 has no anchor to reference.
+      // Shallow-merge via setLastSessionDaySummary (race-safe Postgres `||`).
+      try {
+        await setLastSessionDaySummary(existing.student_id, {
+          last_takeaway_term: takeawayTerm,
+          last_takeaway_day: sessionDay,
+        });
+      } catch (e) {
+        console.error('[last_takeaway_term] setLastSessionDaySummary failed (fail-soft):', e.message);
+      }
     } else {
       console.warn(`[daily_takeaways] no 【關鍵句】 in Damon Note for day=${sessionDay} — skipping append`);
     }
