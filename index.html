@@ -55,22 +55,37 @@
     </div>
   </section>
 
-  <!-- ─────────── §4.2 你的旅程 ─────────── -->
+  <!-- ─────────── §5.2 Journey — v2.1-green: 3-col snake + plants + path + treasures ─────────── -->
   <section id="view-journey" class="view" aria-label="你的旅程">
     <header class="app-header"><span class="label" id="journey-header-label">看見自己 · 第一天</span></header>
+
     <div class="journey-title-wrap">
-      <!-- PR-4c-4e: 「{preferredName} 的旅程」 — Vivi 拍板 override of UI §六 「不顯示名字」.
-           student.js sets the text from state.preferredName; "你的旅程" is the no-name fallback. -->
-      <h2 class="journey-title" id="journey-title">你的旅程</h2>
-      <p class="journey-sub">21 天 · 擴大地圖之旅</p>
+      <!-- PR-4c-green P2: 「{preferredName} 的看見自己之旅」 + 「一步一步，走進自己」 -->
+      <h2 class="journey-title" id="journey-title">你的看見自己之旅</h2>
+      <p class="journey-sub">一步一步，走進自己</p>
     </div>
+
     <div class="journey-grid-wrap">
-      <div class="journey-grid" id="journey-grid" role="list">
-        <!-- 24 daily cells + 3 weekly cells injected by student.js -->
+      <div class="journey-stage" id="journey-stage">
+        <!-- snake-path SVG overlays the grid (z-index 0); tiles z-index 1.
+             Path lives outside #journey-grid so renderJourney's innerHTML='' doesn't wipe it. -->
+        <svg class="journey-path" aria-hidden="true">
+          <path id="journey-path-line"
+                stroke="var(--brand-green)" stroke-width="4"
+                stroke-dasharray="1 12" stroke-linecap="round" fill="none" />
+        </svg>
+        <div class="journey-grid" id="journey-grid" role="list">
+          <!-- 21 day-tiles injected by student.js (snake-positioned via grid-row/col) -->
+        </div>
       </div>
-      <div id="graduation-cell-wrap" style="max-width:560px;margin:0 auto;"></div>
-      <p id="journey-prompt" class="journey-prompt hidden">點開今天，從第一句開始。</p>
     </div>
+
+    <h3 class="treasure-title">你的寶藏</h3>
+    <div class="treasure-shelf" id="treasure-shelf">
+      <!-- 5 phase treasures (locked at P2 — phases[] endpoint lands at P4) -->
+    </div>
+
+    <p id="journey-prompt" class="journey-prompt hidden">點開今天，從第一句開始。</p>
   </section>
 
   <!-- ─────────── §4.3 對話頁 / §4.4 收尾 ─────────── -->

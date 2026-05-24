@@ -186,14 +186,14 @@ function renderEntry() {
   };
 }
 
-// ─── §4.2 journey ──────────────────────────────────────────────────
+// ─── §5.2 journey (v2.1-green: 3-col snake + plant tiles + snake path + treasures) ───
 async function renderJourney() {
   document.getElementById('journey-header-label').textContent = `看見自己 · 第${state.currentDay || 1}天`;
 
-  // PR-4c-4e — personalised title「{preferredName} 的旅程」 (Vivi 拍板 override of UI §六)
+  // P2 (PR-4c-green) §5.2 — personalised title「{name} 的看見自己之旅」(Vivi 拍板)
   const titleEl = document.getElementById('journey-title');
   if (titleEl) {
-    titleEl.textContent = state.preferredName ? `${state.preferredName} 的旅程` : '你的旅程';
+    titleEl.textContent = state.preferredName ? `${state.preferredName} 的看見自己之旅` : '你的看見自己之旅';
   }
 
   let j;
@@ -207,101 +207,209 @@ async function renderJourney() {
   saveState();
   document.getElementById('journey-header-label').textContent = `看見自己 · 第${j.currentDay || 1}天`;
 
-  // grid: 3 rows of 8 cells (7 daily + 1 weekly each)
+  // 21 day-tiles in 3-col snake order. Inline grid-row/column placement so
+  // DOM stays day-1..21 (a11y / tab order) while visual layout snakes.
   const grid = document.getElementById('journey-grid');
   grid.innerHTML = '';
   const days = (j.days || []).slice();
   while (days.length < 21) days.push({ day: days.length + 1, state: 'future', phrase: null });
-  const weeks = (j.weeks || []).slice();
-  while (weeks.length < 3) weeks.push({ week: weeks.length + 1, state: 'future' });
 
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 7; col++) {
-      const cell = days[row * 7 + col];
-      grid.appendChild(renderDailyCell(cell));
-    }
-    grid.appendChild(renderWeeklyCell(weeks[row]));
+  for (const cell of days) {
+    grid.appendChild(renderDayTile(cell));
   }
 
-  // graduation cell (full grid width)
-  const gradWrap = document.getElementById('graduation-cell-wrap');
-  gradWrap.innerHTML = '';
-  gradWrap.appendChild(renderGraduationCell(j.graduation || { state: 'future' }));
+  // 5 treasure boxes (one per phase). P2 hardcodes all locked — phases[] endpoint
+  // is P4. Click is no-op until then. Visible labels = roman; full names in title.
+  renderTreasureShelf(j.phases /* may be undefined at P2 */);
 
-  // bottom prompt only on Day 1
+  // Day-1 bottom prompt
   const prompt = document.getElementById('journey-prompt');
   if ((j.currentDay || 0) <= 1) prompt.classList.remove('hidden');
   else prompt.classList.add('hidden');
+
+  // Draw snake path AFTER layout — wait a paint to get correct getBoundingClientRect.
+  requestAnimationFrame(() => requestAnimationFrame(() => drawSnakePath()));
+
+  setupJourneyResizeObserver();
 }
 
-function renderDailyCell(c) {
-  // B2 (PR-4c-4d, Vivi decision): cells show ONLY the day number.
-  // No phrase, no 「今天」 label — states purely visual:
-  //   future        → transparent bg + faint border + faint day#
-  //   active-empty  → paper bg + active border + ✦ corner + 今天-coloured day#
-  //   active-filled → same visual as active-empty (no text differentiation),
-  //                   but click routes to that day's note (just-finished)
-  //   revealed      → paper bg + revealed border + no ✦, click → that day's note
-  // The phrase still lives in c.phrase (server returns it) — used for aria-label only.
+/** v2.1-green DayTile — 4 visually distinct states (Vivi correction A: never collapse). */
+function renderDayTile(c) {
+  // map server "revealed" → frontend "completed" (same semantics, new name)
+  const stateName = c.state === 'revealed' ? 'completed' : c.state;
+  const isFuture = stateName === 'future';
+
   const div = document.createElement('div');
+  div.className = `day-tile day-tile--${stateName}`;
   div.setAttribute('role', 'listitem');
-  div.className = `cell cell--${c.state}`;
-  div.tabIndex = (c.state === 'future') ? -1 : 0;
-  div.setAttribute('aria-label', `第 ${c.day} 天，${ariaState(c.state)}${c.phrase ? '，' + c.phrase : ''}`);
-  div.innerHTML = `<span class="cell__day">${c.day}</span>`;
-  // ✦ corner mark only on active states (today)
-  if (c.state === 'active-empty' || c.state === 'active-filled') {
-    div.innerHTML += `<span class="cell__star" aria-hidden="true">✦</span>`;
+  div.dataset.day = String(c.day);
+  div.dataset.state = stateName;
+  div.tabIndex = isFuture ? -1 : 0;
+  div.setAttribute('aria-label', `第 ${c.day} 天，${ariaState(stateName)}`);
+
+  // snake positioning — DOM order stays day-1..21, visual order snakes
+  const { row, col } = snakeRowCol(c.day);
+  div.style.gridRow = String(row + 1);
+  div.style.gridColumn = String(col + 1);
+
+  // content
+  if (isFuture) {
+    div.innerHTML = `${FOOTPRINT_SVG}<span class="day-tile__day">${c.day}</span>`;
+  } else {
+    div.innerHTML = `
+      <img class="day-tile__plant" src="/assets/days/day${c.day}.png" alt="" loading="lazy">
+      <span class="day-tile__day">${c.day}</span>
+      ${stateName === 'completed' || stateName === 'active-filled'
+        ? `<span class="day-tile__check" aria-hidden="true">${CHECK_SVG}</span>`
+        : ''}
+      ${stateName === 'active-empty'
+        ? `<span class="day-tile__start-pill">開始</span>`
+        : ''}
+    `;
   }
-  if (c.state !== 'future') {
+
+  if (!isFuture) {
     const handler = () => {
-      if (c.state === 'active-empty') {
+      if (stateName === 'active-empty') {
+        // today, still going → into conversation
         location.hash = '#/conversation';
       } else {
-        // active-filled (today, just finished) OR revealed (past day) → that day's note
+        // completed (past) OR active-filled (today, just done) → that day's note
         location.hash = `#/note?day=${c.day}`;
       }
     };
     div.addEventListener('click', handler);
-    div.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
-  }
-  return div;
-}
-function renderWeeklyCell(w) {
-  const div = document.createElement('div');
-  div.className = `cell cell--weekly cell--${w.state}`;
-  div.tabIndex = (w.state === 'future') ? -1 : 0;
-  div.setAttribute('aria-label', `第 ${w.week} 週，${ariaState(w.state)}`);
-  div.innerHTML = `<span class="roman">${roman(w.week)}</span>`;
-  if (w.state !== 'future') {
-    const handler = () => { location.hash = `#/week?week=${w.week}`; };
-    div.addEventListener('click', handler);
-    div.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
-  }
-  return div;
-}
-function renderGraduationCell(g) {
-  const div = document.createElement('div');
-  div.className = `cell cell--graduation cell--${g.state}`;
-  div.tabIndex = (g.state === 'future') ? -1 : 0;
-  div.setAttribute('aria-label', `結業 · 第 21 天，${ariaState(g.state)}`);
-  div.innerHTML = `<span class="label">結業 · 第 21 天</span>`;
-  if (g.state !== 'future') {
-    const handler = () => { location.hash = '#/graduation'; };
-    div.addEventListener('click', handler);
-    div.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
+    div.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); }
+    });
   }
   return div;
 }
 
-function roman(n) { return ['I', 'II', 'III'][n - 1] || ''; }
+/** 21 days in 3 cols, snake order:
+ *    row 0 (D1-3):   cols 0,1,2 left→right
+ *    row 1 (D4-6):   cols 2,1,0 right→left
+ *    row 2 (D7-9):   cols 0,1,2 left→right
+ *    …alternating through row 6 (D19-21)
+ */
+function snakeRowCol(day) {
+  const idx = day - 1;
+  const row = Math.floor(idx / 3);
+  const col = (row % 2 === 0) ? (idx % 3) : (2 - (idx % 3));
+  return { row, col };
+}
+
+const PHASE_NAMES = [
+  '找到你真正要的',
+  '你是誰',
+  '擴大地圖',
+  '串連起來',
+  '放手帶著走',
+];
+const PHASE_ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+
+function renderTreasureShelf(phases /* P2: may be undefined */) {
+  const shelf = document.getElementById('treasure-shelf');
+  if (!shelf) return;
+  shelf.innerHTML = '';
+
+  const states = Array.isArray(phases) && phases.length === 5
+    ? phases.map(p => (p && p.state) || 'locked')
+    : Array.from({ length: 5 }, () => 'locked');
+
+  for (let i = 0; i < 5; i++) {
+    const stateName = states[i] === 'unlocked' ? 'unlocked' : 'locked';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `treasure-box treasure-box--${stateName}`;
+    btn.disabled = stateName === 'locked';
+    btn.setAttribute('aria-label', `寶藏 ${PHASE_ROMAN[i]} · ${PHASE_NAMES[i]}，${stateName === 'unlocked' ? '已解鎖' : '尚未解鎖'}`);
+    btn.title = PHASE_NAMES[i];
+    btn.innerHTML = `${TREASURE_SVG}<span class="treasure-box__roman">${PHASE_ROMAN[i]}</span>`;
+    if (stateName === 'unlocked') {
+      btn.addEventListener('click', () => {
+        // P4 will route to /#/phase-report?phase=N once that page lands.
+        location.hash = `#/phase-report?phase=${i + 1}`;
+      });
+    }
+    shelf.appendChild(btn);
+  }
+}
+
+/** Compute the dotted snake-path d= from the laid-out tile centers. */
+function drawSnakePath() {
+  const path = document.getElementById('journey-path-line');
+  const grid = document.getElementById('journey-grid');
+  if (!path || !grid) return;
+  const gridRect = grid.getBoundingClientRect();
+  const pts = [];
+  // Iterate tiles in DOM order (= day-1..21). Only include non-future ones.
+  for (const tile of grid.querySelectorAll('.day-tile')) {
+    if (tile.dataset.state === 'future') break;   // future never connects, stop at first
+    const r = tile.getBoundingClientRect();
+    pts.push({
+      x: r.left - gridRect.left + r.width / 2,
+      y: r.top  - gridRect.top  + r.height / 2,
+    });
+  }
+  if (pts.length === 0) { path.setAttribute('d', ''); return; }
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    d += ` L ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)}`;
+  }
+  path.setAttribute('d', d);
+}
+
+/** ResizeObserver lives once for the page; recomputes path on grid resize. */
+let _journeyResizeObserver = null;
+function setupJourneyResizeObserver() {
+  if (_journeyResizeObserver) return;
+  const grid = document.getElementById('journey-grid');
+  if (!grid || typeof ResizeObserver === 'undefined') return;
+  _journeyResizeObserver = new ResizeObserver(() => {
+    if (document.getElementById('view-journey')?.classList.contains('active')) {
+      drawSnakePath();
+    }
+  });
+  _journeyResizeObserver.observe(grid);
+  // also redraw on window resize (paranoid — RO catches most cases)
+  window.addEventListener('resize', () => {
+    if (document.getElementById('view-journey')?.classList.contains('active')) {
+      drawSnakePath();
+    }
+  });
+}
+
 function ariaState(s) {
   return s === 'future'        ? '還沒到'
        : s === 'active-empty'  ? '今天，點開進入對話'
        : s === 'active-filled' ? '今天，已完成'
-       : s === 'revealed'      ? '已揭開' : s;
+       : s === 'completed'     ? '已揭開' : s;
 }
 function escapeText(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
+
+// ─── inline SVG icons (zero asset dependency per spec §9) ──────────
+const FOOTPRINT_SVG = `
+<svg class="day-tile__footprint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+  <ellipse cx="12" cy="14" rx="4" ry="6" fill="currentColor" opacity="0.55" stroke="none"/>
+  <circle cx="8.5"  cy="6.5" r="1.4" fill="currentColor" opacity="0.55" stroke="none"/>
+  <circle cx="11.5" cy="5"   r="1.4" fill="currentColor" opacity="0.55" stroke="none"/>
+  <circle cx="14.5" cy="5.5" r="1.4" fill="currentColor" opacity="0.55" stroke="none"/>
+  <circle cx="16.5" cy="8"   r="1.2" fill="currentColor" opacity="0.55" stroke="none"/>
+</svg>`;
+
+const CHECK_SVG = `
+<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <polyline points="3,7.5 6,10.5 11,4.5"/>
+</svg>`;
+
+const TREASURE_SVG = `
+<svg class="treasure-box__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <rect x="3.5" y="9"  width="17" height="11" rx="2"   stroke="currentColor" stroke-width="1.4"/>
+  <rect x="3.5" y="9"  width="17" height="4.5" rx="1.5" fill="currentColor" opacity="0.25"/>
+  <line x1="3.5" y1="13.5" x2="20.5" y2="13.5" stroke="currentColor" stroke-width="1.2"/>
+  <circle cx="12" cy="13.5" r="1.6" fill="currentColor"/>
+</svg>`;
 
 // ─── §4.3 conversation ────────────────────────────────────────────
 async function renderConversation() {
