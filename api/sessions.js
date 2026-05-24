@@ -1,7 +1,29 @@
+// api/sessions.js — v4-legacy, coach-only (v5 student SPA has zero deps on this).
+//
+// PR-4c-green Patrick 5/24 — entire endpoint gated behind guardCoachOr401.
+// `action=history` returns raw 逐字 messages → would otherwise bypass the lock
+// already placed on /api/admin/transcript. v5 frontend (student.js / index.html)
+// has been grep-confirmed clean of any /api/sessions calls; only index-v4.html
+// and coach-side tooling reference it. Anything reaching here must wear a coach
+// session.
+
 import { neon } from '@neondatabase/serverless';
+import { guardCoachOr401 } from '../lib/auth/coach-session.js';
+
+// Test seam — inject a mock tag-template sql client (matches lib/state/state-manager.js).
+let _sql = null;
+export function _setSqlClient(client) { _sql = client; }
+function getSql() {
+  if (_sql) return _sql;
+  return neon(process.env.DATABASE_URL);
+}
 
 export default async function handler(req, res) {
-  const sql = neon(process.env.DATABASE_URL);
+  // PR-4c-green Patrick 5/24 — gate happens BEFORE any DB call (no neon client
+  // instantiation either — getSql is lazy). Unauthenticated traffic gets 401
+  // without leaking even an SQL connection.
+  if (!(await guardCoachOr401(req, res))) return;
+  const sql = getSql();
 
   if (req.method === 'GET') {
     const { studentId, module, week, action, today } = req.query;

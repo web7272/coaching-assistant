@@ -11,12 +11,24 @@
 //   - 任何 student_id 找不到 / email 對不上，統一回 401（不洩漏哪一個錯）
 
 import { neon } from '@neondatabase/serverless';
+// PR-4c-green Patrick 5/24 — coach-only gate; POST action=login intentionally
+// stays open (it validates student_id + email itself, the v4-compat student
+// login path). Every other method/action requires a coach OAuth session.
+import { guardCoachOr401 } from '../lib/auth/coach-session.js';
 
 // v3.0 雙方案 plan enum（對齊 migration 007 + DB CHECK constraint students_plan_check）
 const VALID_PLANS = new Set(['trial', 'plan_a', 'plan_b']);
 
+// Test seam — inject a mock tag-template sql client.
+let _sql = null;
+export function _setSqlClient(client) { _sql = client; }
+function getSql() {
+  if (_sql) return _sql;
+  return neon(process.env.DATABASE_URL);
+}
+
 export default async function handler(req, res) {
-  const sql = neon(process.env.DATABASE_URL);
+  const sql = getSql();
 
   try {
     // ===========================================================
@@ -70,6 +82,11 @@ export default async function handler(req, res) {
       }
 
       // ---------- 新增學員（教練後台） ----------
+      // PR-4c-green Patrick 5/24 — coach-only. POST action=login above stays
+      // open (its own studentId+email auth); this branch creates new students
+      // and must require a coach OAuth session.
+      if (!(await guardCoachOr401(req, res))) return;
+
       const email = String(req.body.email || '').trim().toLowerCase();
       const plan = req.body.plan || 'trial';
       const tier = parseInt(req.body.tier ?? 0, 10);
@@ -124,6 +141,8 @@ export default async function handler(req, res) {
     //   notes 允許清空（傳空字串會存成 null）
     // ===========================================================
     if (req.method === 'PATCH') {
+      // PR-4c-green Patrick 5/24 — coach-only.
+      if (!(await guardCoachOr401(req, res))) return;
       const studentId = String(req.body.studentId || '').toUpperCase().trim();
       if (!/^[A-Z]\d{3}$/.test(studentId)) {
         return res.status(400).json({ error: 'INVALID_STUDENT_ID' });
@@ -184,6 +203,10 @@ export default async function handler(req, res) {
     //   - ?studentId=A001 → 單一學員（向後相容；不再回 email）
     // ===========================================================
     if (req.method === 'GET') {
+      // PR-4c-green Patrick 5/24 — coach-only (list contains email + can enumerate
+      // every student; single-student GET also coach-side, student SPA never
+      // hits this — student login uses /api/auth/email-login).
+      if (!(await guardCoachOr401(req, res))) return;
       const studentId = req.query.studentId
         ? String(req.query.studentId).toUpperCase().trim()
         : null;
