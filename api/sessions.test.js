@@ -7,7 +7,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import handler, { _setSqlClient } from './sessions.js';
-import { _setGetTokenFn } from '../lib/auth/coach-session.js';
+import { _setCoachSessionReader } from '../lib/auth/coach-session.js';
 
 // ── mock SQL tag-template tracker ──
 
@@ -38,11 +38,15 @@ function mockRes() {
   return r;
 }
 
+// Auth rebuild stage 1a: HMAC session model. The reader returns a payload like
+// {role:'coach'} (authorized) or null (not). Old getToken({email:...}) shape gone.
+const COACH_OK = async () => ({ role: 'coach' });
+const NO_SESSION = async () => null;
+
 beforeEach(() => {
   _setSqlClient(null);
-  _setGetTokenFn(null);
-  process.env.COACH_EMAIL = 'patrick@example.com';
-  process.env.NEXTAUTH_SECRET = 'test-secret';
+  _setCoachSessionReader(null);
+  process.env.SESSION_SECRET = 'test-secret-32-bytes-of-entropy-aaaaaaaa';
 });
 
 // ═════════════════════════════════════════════════════════
@@ -50,7 +54,7 @@ beforeEach(() => {
 // ═════════════════════════════════════════════════════════
 
 test('🛑 sessions.js: no session token → 401', async () => {
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   _setSqlClient(makeMockSql([]));
   const res = mockRes();
   await handler(mockReq({ method: 'GET', query: { action: 'history', studentId: 'A001', module: 'self', week: '1' } }), res);
@@ -61,7 +65,7 @@ test('🛑 sessions.js: 401 happens BEFORE any DB call (no leakage even on histo
   // The whole point of locking this file: action=history would otherwise leak
   // raw 逐字 messages, bypassing the /api/admin/transcript lock. Verify the
   // mock sql is never called when auth fails.
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   await handler(mockReq({ method: 'GET', query: { action: 'history', studentId: 'A001', module: 'self', week: '1' } }), mockRes());
@@ -69,8 +73,10 @@ test('🛑 sessions.js: 401 happens BEFORE any DB call (no leakage even on histo
     'unauthenticated request must not touch the DB on any sessions.js branch');
 });
 
-test('🛑 sessions.js: wrong email → 401 (not just any signed Google account)', async () => {
-  _setGetTokenFn(async () => ({ email: 'random@example.com' }));
+test('🛑 sessions.js: wrong-role session (e.g. student) → 401', async () => {
+  // PR-4c-green Auth rebuild stage 1a: the email-allowlist gate was replaced by
+  // a role gate. A valid signed cookie for a student session must still 401 here.
+  _setCoachSessionReader(async () => ({ role: 'student', sid: 'A001' }));
   _setSqlClient(makeMockSql([]));
   const res = mockRes();
   await handler(mockReq({ method: 'GET', query: {} }), res);
@@ -78,7 +84,7 @@ test('🛑 sessions.js: wrong email → 401 (not just any signed Google account)
 });
 
 test('sessions.js: 401 applies to every method (GET / POST / PATCH)', async () => {
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   for (const method of ['GET', 'POST', 'PATCH']) {
@@ -94,7 +100,7 @@ test('sessions.js: 401 applies to every method (GET / POST / PATCH)', async () =
 // ═════════════════════════════════════════════════════════
 
 test('sessions.js: authorized coach + action=history → 200 with messages', async () => {
-  _setGetTokenFn(async () => ({ email: 'patrick@example.com' }));
+  _setCoachSessionReader(COACH_OK);
   // Two-step query (sessions list then messages join) — return sessions first then messages.
   // Mock returns same rows for every call; sufficient for shape verification.
   const sql = makeMockSql([{ id: 1, day: 1, session_date: '2026-05-23' }]);
@@ -110,7 +116,7 @@ test('sessions.js: authorized coach + action=history → 200 with messages', asy
 });
 
 test('sessions.js: authorized coach + default GET (list) → 200', async () => {
-  _setGetTokenFn(async () => ({ email: 'patrick@example.com' }));
+  _setCoachSessionReader(COACH_OK);
   _setSqlClient(makeMockSql([
     { student_id: 'A001', module: 'self', week: 1, last_active: '2026-05-23' },
   ]));
@@ -122,7 +128,7 @@ test('sessions.js: authorized coach + default GET (list) → 200', async () => {
 test('sessions.js: unknown method (still requires auth) → 401 first, then 405', async () => {
   // Without auth, we never reach the method check. That's correct order:
   // auth before everything else.
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   _setSqlClient(makeMockSql([]));
   const res = mockRes();
   await handler(mockReq({ method: 'DELETE' }), res);

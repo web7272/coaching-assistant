@@ -7,7 +7,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import handler, { _setSqlClient } from './students.js';
-import { _setGetTokenFn } from '../lib/auth/coach-session.js';
+import { _setCoachSessionReader } from '../lib/auth/coach-session.js';
 
 // ── mock SQL + req/res helpers ──
 
@@ -44,11 +44,15 @@ function mockRes() {
   return r;
 }
 
+// Auth rebuild stage 1a: HMAC session model. The reader returns a payload like
+// {role:'coach'} (authorized) or null (not). Old getToken({email:...}) shape gone.
+const COACH_OK = async () => ({ role: 'coach' });
+const NO_SESSION = async () => null;
+
 beforeEach(() => {
   _setSqlClient(null);
-  _setGetTokenFn(null);
-  process.env.COACH_EMAIL = 'patrick@example.com';
-  process.env.NEXTAUTH_SECRET = 'test-secret';
+  _setCoachSessionReader(null);
+  process.env.SESSION_SECRET = 'test-secret-32-bytes-of-entropy-aaaaaaaa';
 });
 
 // ═════════════════════════════════════════════════════════
@@ -56,7 +60,7 @@ beforeEach(() => {
 // ═════════════════════════════════════════════════════════
 
 test('🛑 students.js GET (list): no session → 401', async () => {
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   const res = mockRes();
@@ -66,7 +70,7 @@ test('🛑 students.js GET (list): no session → 401', async () => {
 });
 
 test('🛑 students.js GET (single by studentId): no session → 401', async () => {
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   const res = mockRes();
@@ -76,7 +80,7 @@ test('🛑 students.js GET (single by studentId): no session → 401', async () 
 });
 
 test('🛑 students.js PATCH (edit student): no session → 401', async () => {
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   const res = mockRes();
@@ -89,7 +93,7 @@ test('🛑 students.js PATCH (edit student): no session → 401', async () => {
 });
 
 test('🛑 students.js POST (create student, no action): no session → 401', async () => {
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   const res = mockRes();
@@ -101,8 +105,9 @@ test('🛑 students.js POST (create student, no action): no session → 401', as
   assert.equal(sql.calls.length, 0, 'create student must not touch DB without coach session');
 });
 
-test('🛑 students.js wrong email in token → 401 (not any signed Google account)', async () => {
-  _setGetTokenFn(async () => ({ email: 'random@example.com' }));
+test('🛑 students.js wrong-role session (e.g. student) → 401', async () => {
+  // PR-4c-green Auth rebuild stage 1a: email-allowlist gate replaced by role gate.
+  _setCoachSessionReader(async () => ({ role: 'student', sid: 'A001' }));
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   const res = mockRes();
@@ -117,7 +122,7 @@ test('🛑 students.js wrong email in token → 401 (not any signed Google accou
 test('🛑 students.js POST action=login: no coach session + valid creds → 200 (login still works)', async () => {
   // Critical regression-prevention: locking this file must NOT break student
   // login. The login branch authenticates with student_id + email match.
-  _setGetTokenFn(async () => null);   // explicitly NO coach session
+  _setCoachSessionReader(NO_SESSION);   // explicitly NO coach session
   _setSqlClient(makeMockSql([{
     student_id: 'A001',
     email: 'vivi@example.com',
@@ -142,7 +147,7 @@ test('🛑 students.js POST action=login: no coach session + valid creds → 200
 test('🛑 students.js POST action=login: bad credentials → 401 (own auth, not the coach gate)', async () => {
   // The 401 here is from the login auth (mismatched email), not the coach gate.
   // Both yield 401 but the login branch returns AUTH_FAILED.
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   _setSqlClient(makeMockSql([{
     student_id: 'A001',
     email: 'stored@example.com',
@@ -160,7 +165,7 @@ test('🛑 students.js POST action=login: bad credentials → 401 (own auth, not
 });
 
 test('🛑 students.js POST action=login: malformed input → 400 (own validation, not the gate)', async () => {
-  _setGetTokenFn(async () => null);
+  _setCoachSessionReader(NO_SESSION);
   _setSqlClient(makeMockSql([]));
   const res = mockRes();
   await handler(mockReq({
@@ -176,7 +181,7 @@ test('🛑 students.js POST action=login: malformed input → 400 (own validatio
 // ═════════════════════════════════════════════════════════
 
 test('students.js GET (list) authorized → 200 with students array', async () => {
-  _setGetTokenFn(async () => ({ email: 'patrick@example.com' }));
+  _setCoachSessionReader(COACH_OK);
   // Two-call dance: students list, then sessions stats (or fallback)
   _setSqlClient(makeMockSql([
     [{ student_id: 'A001', email: 'a@b.com', plan: 'trial' }],   // SELECT * FROM students
@@ -190,7 +195,7 @@ test('students.js GET (list) authorized → 200 with students array', async () =
 });
 
 test('students.js POST create student authorized → 200 with new studentId', async () => {
-  _setGetTokenFn(async () => ({ email: 'patrick@example.com' }));
+  _setCoachSessionReader(COACH_OK);
   _setSqlClient(makeMockSql([
     [],   // email dup check: none
     [{ student_id: 'A042' }],   // last A### query
@@ -206,7 +211,7 @@ test('students.js POST create student authorized → 200 with new studentId', as
 });
 
 test('students.js PATCH authorized → 200', async () => {
-  _setGetTokenFn(async () => ({ email: 'patrick@example.com' }));
+  _setCoachSessionReader(COACH_OK);
   _setSqlClient(makeMockSql([
     [{ student_id: 'A001' }],   // exists check
     [],                          // UPDATE
@@ -221,7 +226,7 @@ test('students.js PATCH authorized → 200', async () => {
 });
 
 test('students.js: unknown method (coach authorized) → 405', async () => {
-  _setGetTokenFn(async () => ({ email: 'patrick@example.com' }));
+  _setCoachSessionReader(COACH_OK);
   _setSqlClient(makeMockSql([]));
   const res = mockRes();
   await handler(mockReq({ method: 'DELETE' }), res);

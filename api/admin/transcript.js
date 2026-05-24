@@ -14,13 +14,12 @@
 //   }
 //
 // ⚠️ Auth (鐵律 #2 諮商保密 — most sensitive data we hold):
-//   - getToken from next-auth/jwt reads the OAuth session cookie set by the
-//     existing GoogleProvider in api/auth/[...nextauth].js.
-//   - token.email must equal process.env.COACH_EMAIL (the same Vivi-authorized
-//     email the [...nextauth].js signIn callback already gates on).
-//   - Anything else → 401. No x-admin-token header here; tokens can't be safely
-//     handed to a browser SPA. This is the gate every audience=coach endpoint
-//     should eventually wear (PR-4c-5 debt).
+//   - guardCoachOr401 reads the HMAC-signed `coach_session` cookie set by
+//     POST /api/coach-auth (correct passcode → cookie). Payload must carry
+//     role='coach' and not be expired. Any failure → 401.
+//   - PR-4c-green Auth rebuild stage 1a swapped this from broken NextAuth
+//     (`next-auth` was never in package.json → 404'd in production) to
+//     SESSION_SECRET-backed HMAC cookies.
 //
 // ⚠️ day→session mapping consistency:
 //   This endpoint joins messages → sessions ON sessions.day = N — the same
@@ -50,9 +49,10 @@ function getSql() {
   return neon(process.env.DATABASE_URL);
 }
 
-// Backwards-compat re-export — transcript.test.js's existing test seam.
-// guardCoachOr401 reads its mock getToken from lib/auth/coach-session's seam.
-export { _setGetTokenFn, isAuthorizedCoach } from '../../lib/auth/coach-session.js';
+// Re-export the new test seam + pure shape check from coach-session so the
+// test file imports stay one-line. PR-4c-green Auth rebuild stage 1a: was
+// `_setGetTokenFn`, now `_setCoachSessionReader`.
+export { _setCoachSessionReader, isAuthorizedCoach } from '../../lib/auth/coach-session.js';
 
 // ─────────────────────────────────────────────────────────
 // Pure helpers (exported for tests)
@@ -79,7 +79,7 @@ export function shapeTranscriptResponse(rows, day) {
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Auth — getToken + COACH_EMAIL via shared gate. 401 sent if not authorized.
+  // Auth — HMAC coach_session cookie via shared gate. 401 if not authorized.
   if (!(await guardCoachOr401(req, res))) return;
 
   // Inputs
