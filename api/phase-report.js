@@ -28,6 +28,8 @@ import {
 import {
   sanitizeStudentNote, containsForbiddenContent,
 } from '../lib/api/student-note-safe.js';
+// PR-4c-green Patrick 5/24 — shared coach-session gate (audience=coach branch).
+import { guardCoachOr401 } from '../lib/auth/coach-session.js';
 
 export const maxDuration = 30;
 export const config = { maxDuration: 30 };
@@ -110,6 +112,9 @@ export default async function handler(req, res) {
   if (!Number.isInteger(phaseId) || phaseId < 1 || phaseId > 5) {
     return res.status(400).json({ error: 'Invalid phase (1-5)' });
   }
+  // PR-4c-green Patrick 5/24 — gate audience=coach behind getToken + COACH_EMAIL.
+  // Student-default audience stays open (reads sanitized cache).
+  if (isCoach && !(await guardCoachOr401(req, res))) return;
 
   const sql = neon(process.env.DATABASE_URL);
 

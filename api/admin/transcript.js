@@ -35,26 +35,11 @@
 //   same calendar date.)
 
 import { neon } from '@neondatabase/serverless';
+// PR-4c-green Patrick 5/24 — shared coach gate (was inline; extracted to lib so
+// the same rule guards note.js / phase-report.js audience=coach branches too).
+import { guardCoachOr401 } from '../../lib/auth/coach-session.js';
 
 export const maxDuration = 10;
-
-// ─────────────────────────────────────────────────────────
-// Test seams
-// ─────────────────────────────────────────────────────────
-
-// next-auth/jwt is provided at runtime on Vercel (via the existing
-// [...nextauth].js wiring) but is NOT in this repo's package.json deps. Use a
-// dynamic import so node:test doesn't fail to resolve at module-load time, and
-// expose an injection seam for unit tests to bypass the real getToken.
-let _getTokenFn = null;
-/** @param {(req: any) => Promise<{email?: string}|null>} fn */
-export function _setGetTokenFn(fn) { _getTokenFn = fn; }
-
-async function resolveGetToken() {
-  if (_getTokenFn) return _getTokenFn;
-  const mod = await import('next-auth/jwt');
-  return (req) => mod.getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-}
 
 // SQL client injection seam (matches lib/state/state-manager.js's _setSqlClient).
 let _sql = null;
@@ -65,21 +50,13 @@ function getSql() {
   return neon(process.env.DATABASE_URL);
 }
 
+// Backwards-compat re-export — transcript.test.js's existing test seam.
+// guardCoachOr401 reads its mock getToken from lib/auth/coach-session's seam.
+export { _setGetTokenFn, isAuthorizedCoach } from '../../lib/auth/coach-session.js';
+
 // ─────────────────────────────────────────────────────────
 // Pure helpers (exported for tests)
 // ─────────────────────────────────────────────────────────
-
-/**
- * @param {{email?: string}|null} token  the next-auth/jwt decoded token
- * @param {string|undefined}     expectedEmail  process.env.COACH_EMAIL
- * @returns {boolean}
- */
-export function isAuthorizedCoach(token, expectedEmail) {
-  if (!token || typeof token !== 'object') return false;
-  if (typeof expectedEmail !== 'string' || expectedEmail.length === 0) return false;
-  if (typeof token.email !== 'string' || token.email.length === 0) return false;
-  return token.email.toLowerCase() === expectedEmail.toLowerCase();
-}
 
 /**
  * Shape the API response from raw message rows. Pure (no I/O).
@@ -102,17 +79,8 @@ export function shapeTranscriptResponse(rows, day) {
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Auth — getToken + COACH_EMAIL. No exceptions.
-  try {
-    const getToken = await resolveGetToken();
-    const token = await getToken(req);
-    if (!isAuthorizedCoach(token, process.env.COACH_EMAIL)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  } catch (e) {
-    console.error('[admin/transcript] auth failed:', e?.message || e);
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // Auth — getToken + COACH_EMAIL via shared gate. 401 sent if not authorized.
+  if (!(await guardCoachOr401(req, res))) return;
 
   // Inputs
   const studentId = String(req.query?.studentId || '').trim();

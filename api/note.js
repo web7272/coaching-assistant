@@ -17,14 +17,12 @@
 //
 //   COACH path (audience='coach'): returns damon_notes.note_text — the fullNote
 //     with all coach-internal sections.
-//     TODO PR-4c-5 follow-up: gate this branch behind requireAdmin (currently
-//     open for preview; coach.html sits behind NextAuth Google OAuth at /coach
-//     but this endpoint isn't auth-checked. Vivi: don't expose /api/note?audience=coach
-//     to public traffic until the requireAdmin gate is wired in or the endpoint
-//     is moved to api/admin/note.js with x-admin-token header.).
+//     PR-4c-green Patrick 5/24 follow-up — gated behind guardCoachOr401
+//     (getToken + COACH_EMAIL). 401 if no coach session. PR-4c-5 debt cleared.
 
 import { neon } from '@neondatabase/serverless';
 import { sanitizeStudentNote, containsForbiddenContent } from '../lib/api/student-note-safe.js';
+import { guardCoachOr401 } from '../lib/auth/coach-session.js';
 
 export const maxDuration = 10;
 
@@ -43,6 +41,9 @@ export default async function handler(req, res) {
 
   try {
     if (audience === 'coach') {
+      // PR-4c-green Patrick 5/24 — gate the coach-internal branch behind
+      // getToken + COACH_EMAIL. Student-default path stays open (above this).
+      if (!(await guardCoachOr401(req, res))) return;
       // Coach path — return fullNote (coach-internal sections included).
       // Keyed by (student_id, module, week=ceil(day/7), day, is_week_summary=false).
       const week = Math.ceil(day / 7);
