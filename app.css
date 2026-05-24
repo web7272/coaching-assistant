@@ -288,16 +288,21 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   z-index: 1;
 }
 
-/* future = LOCKED puzzle piece: grayscale + dim, with a dark overlay via ::after */
+/* future = LOCKED puzzle piece: warm sepia「未翻開的書頁」(Vivi preview-feedback,
+   PR-4c-green Patrick 5/24 — 從深綠黑死黑改成 tan-sepia、放亮、讓「今天」那格 pop).
+   Tint is brand-neutral tan (#B9A88C = --neutral-step), NOT green — green is
+   reserved for the「走過的路」signal on completed tiles. */
 .day-tile--future        { background: var(--tile-future); cursor: default; }
 .day-tile--future .day-tile__scene {
-  filter: grayscale(1) brightness(0.55) contrast(0.9);
+  /* sepia + reduced saturation + brightened: an aged-paper photo rather than
+     a flat grayscale dim. brightness lifted from 0.55 → 0.78 per Patrick. */
+  filter: sepia(0.55) saturate(0.5) brightness(0.78) contrast(0.95);
 }
 .day-tile--future::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(20, 35, 25, 0.32);   /* deep-forest tint, half-transparent */
+  background: rgba(185, 168, 140, 0.28);   /* #B9A88C tan @ 28% — warm 未翻開感 */
   border-radius: inherit;
   pointer-events: none;
   z-index: 2;
@@ -317,12 +322,16 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   cursor: pointer;
 }
 
-/* Footprint (future only — sits over the dark overlay so it reads as "鎖") */
+/* Footprint (future only — sits over the tan overlay as a quiet「鎖」 hint).
+   PR-4c-green Patrick 5/24: 淺綠 (--bg-mint #D7EBD1) over warm tan = quiet
+   retreat, lets「今天」那格 pop. 不用品牌綠 (--brand-green) — 那是 CTA / 走過
+   的路才該亮。If preview shows it disappearing on tan → escalate to
+   --green-walked (#5DA873), still NOT saturated brand-green. */
 .day-tile__footprint {
   width: 28px;
   height: 28px;
-  color: #FFFFFF;
-  opacity: 0.7;
+  color: var(--bg-mint);
+  opacity: 0.85;
   position: relative;
   z-index: 3;
 }
