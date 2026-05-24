@@ -32,59 +32,13 @@ export default async function handler(req, res) {
 
   try {
     // ===========================================================
-    // POST
-    //   - body.action === 'login' → 學員登入驗證
-    //   - 其他 → 新增學員（教練後台）
+    // POST — coach-only (create student).
+    //   PR-4c-green Auth rebuild stage 1d retired the v4-compat
+    //   `POST action=login` student-login path. Student login is now
+    //   handled exclusively by /api/auth/request-link + /api/auth/verify-link
+    //   (magic link). Any POST without a coach session → 401.
     // ===========================================================
     if (req.method === 'POST') {
-      const action = (req.body && req.body.action) || null;
-
-      // ---------- 學員登入 ----------
-      if (action === 'login') {
-        const studentId = String(req.body.studentId || '').toUpperCase().trim();
-        const email = String(req.body.email || '').toLowerCase().trim();
-
-        // 格式檢查
-        if (!/^[A-Z]\d{3}$/.test(studentId) || !email || !email.includes('@')) {
-          return res.status(400).json({ error: 'INVALID_INPUT' });
-        }
-
-        const rows = await sql`
-          SELECT student_id, email, current_module, current_week, current_day, plan, tier
-          FROM students
-          WHERE student_id = ${studentId}
-        `;
-
-        // 統一錯誤訊息：不告訴對方是 ID 錯還是 email 錯
-        if (rows.length === 0) {
-          return res.status(401).json({ error: 'AUTH_FAILED' });
-        }
-
-        const stored = String(rows[0].email || '').toLowerCase().trim();
-
-        // 強制要求學員必須有 email 並完全比對
-        if (!stored || stored !== email) {
-          return res.status(401).json({ error: 'AUTH_FAILED' });
-        }
-
-        // 通過：回學員資料（不回 email，前端不需要存）
-        const s = rows[0];
-        return res.status(200).json({
-          student: {
-            student_id: s.student_id,
-            current_module: s.current_module,
-            current_week: s.current_week,
-            current_day: s.current_day,
-            plan: s.plan,
-            tier: s.tier,
-          },
-        });
-      }
-
-      // ---------- 新增學員（教練後台） ----------
-      // PR-4c-green Patrick 5/24 — coach-only. POST action=login above stays
-      // open (its own studentId+email auth); this branch creates new students
-      // and must require a coach OAuth session.
       if (!(await guardCoachOr401(req, res))) return;
 
       const email = String(req.body.email || '').trim().toLowerCase();

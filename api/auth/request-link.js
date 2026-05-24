@@ -20,7 +20,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { sendMagicLink } from '../../lib/email/brevo.js';
 import {
   normalizeEmail, normalizePreferredName, normalizePace,
-} from './email-login.js';
+} from '../../lib/auth/student-helpers.js';
 
 export const maxDuration = 10;
 

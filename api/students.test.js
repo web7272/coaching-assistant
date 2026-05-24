@@ -116,64 +116,25 @@ test('🛑 students.js wrong-role session (e.g. student) → 401', async () => {
 });
 
 // ═════════════════════════════════════════════════════════
-// 🛑 (b) POST action='login' stays OPEN (no coach session needed)
+// 🛑 (b) POST action='login' RETIRED — replaced by magic link in stage 1d
 // ═════════════════════════════════════════════════════════
+// The v4-compat student login path (POST students.js with action=login) was
+// removed in 1d. Student login now uses /api/auth/request-link → email →
+// /api/auth/verify-link → sets student_session cookie. Any POST to /api/students
+// without a coach session → 401 from the coach gate, including a POST that
+// claims action=login (the special-casing is gone).
 
-test('🛑 students.js POST action=login: no coach session + valid creds → 200 (login still works)', async () => {
-  // Critical regression-prevention: locking this file must NOT break student
-  // login. The login branch authenticates with student_id + email match.
-  _setCoachSessionReader(NO_SESSION);   // explicitly NO coach session
-  _setSqlClient(makeMockSql([{
-    student_id: 'A001',
-    email: 'vivi@example.com',
-    current_module: 'self',
-    current_week: 1,
-    current_day: 3,
-    plan: 'plan_a',
-    tier: 1,
-  }]));
+test('🛑 students.js POST action=login: retired — now 401 from coach gate (no special case)', async () => {
+  _setCoachSessionReader(NO_SESSION);
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
   const res = mockRes();
   await handler(mockReq({
     method: 'POST',
     body: { action: 'login', studentId: 'A001', email: 'vivi@example.com' },
   }), res);
-  assert.equal(res.statusCode, 200, 'student login must pass even without coach session');
-  assert.equal(res.body.student.student_id, 'A001');
-  assert.equal(res.body.student.current_day, 3);
-  // Login intentionally doesn't return email to the client
-  assert.equal(res.body.student.email, undefined);
-});
-
-test('🛑 students.js POST action=login: bad credentials → 401 (own auth, not the coach gate)', async () => {
-  // The 401 here is from the login auth (mismatched email), not the coach gate.
-  // Both yield 401 but the login branch returns AUTH_FAILED.
-  _setCoachSessionReader(NO_SESSION);
-  _setSqlClient(makeMockSql([{
-    student_id: 'A001',
-    email: 'stored@example.com',
-    current_module: 'self', current_week: 1, current_day: 1,
-    plan: 'trial', tier: 0,
-  }]));
-  const res = mockRes();
-  await handler(mockReq({
-    method: 'POST',
-    body: { action: 'login', studentId: 'A001', email: 'wrong@example.com' },
-  }), res);
-  assert.equal(res.statusCode, 401);
-  assert.equal(res.body.error, 'AUTH_FAILED',
-    'login bad-creds error code preserved (not the coach gate\'s "Unauthorized")');
-});
-
-test('🛑 students.js POST action=login: malformed input → 400 (own validation, not the gate)', async () => {
-  _setCoachSessionReader(NO_SESSION);
-  _setSqlClient(makeMockSql([]));
-  const res = mockRes();
-  await handler(mockReq({
-    method: 'POST',
-    body: { action: 'login', studentId: 'not-a-format', email: 'x@example.com' },
-  }), res);
-  assert.equal(res.statusCode, 400);
-  assert.equal(res.body.error, 'INVALID_INPUT');
+  assert.equal(res.statusCode, 401, 'action=login no longer accepted; coach gate fires');
+  assert.equal(sql.calls.length, 0, 'no DB query — gate fires before any work');
 });
 
 // ═════════════════════════════════════════════════════════

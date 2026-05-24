@@ -25,6 +25,8 @@ import { sendExportEmail } from '../lib/email/brevo.js';
 import {
   sanitizeStudentNote, containsForbiddenContent,
 } from '../lib/api/student-note-safe.js';
+// PR-4c-green Auth rebuild stage 1d — sessionId must belong to authenticated student.
+import { guardStudentOr401 } from '../lib/auth/student-session.js';
 
 // Anthropic SDK（lazy、跟 chat.js 對齊、test-friendly）
 let _anthropic = null;
@@ -303,6 +305,13 @@ export function parseGraduationResponse(raw) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // PR-4c-green Auth rebuild stage 1d — student session required. We can't read
+  // sid from body anymore, AND we must enforce that the sessionId being
+  // finalized actually belongs to the authenticated student (otherwise a
+  // student could finalize another student's session).
+  const sid = await guardStudentOr401(req, res);
+  if (!sid) return;
+
   const { sessionId, module } = req.body || {};
   if (!sessionId || !module) {
     return res.status(400).json({ error: 'Missing required fields: sessionId, module' });
@@ -329,6 +338,12 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'SESSION_NOT_FOUND' });
     }
     const existing = sessionRows[0];
+    // 🛑 Cross-student attack guard: sessionId must belong to the authenticated
+    // student. Otherwise return 403 + log so it surfaces in ops if exploited.
+    if (existing.student_id !== sid) {
+      console.warn(`[finalize-day 403] sid=${sid} attempted to finalize sessionId=${sessionId} owned by ${existing.student_id}`);
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
     // 幂等檢查：該天 daily note 已生成 + notebook_page 已寫 → 直接 return
     const existingNote = await sql`

@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import {
   signSession, setSessionCookie, plusDays, nowSec,
 } from '../../lib/auth/session.js';
-import { nextStudentId } from './email-login.js';
+import { nextStudentId } from '../../lib/auth/student-helpers.js';
 
 export const maxDuration = 10;
 

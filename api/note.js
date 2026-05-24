@@ -23,16 +23,16 @@
 import { neon } from '@neondatabase/serverless';
 import { sanitizeStudentNote, containsForbiddenContent } from '../lib/api/student-note-safe.js';
 import { guardCoachOr401 } from '../lib/auth/coach-session.js';
+// PR-4c-green Auth rebuild stage 1d — student path reads sid from session cookie.
+import { guardStudentOr401 } from '../lib/auth/student-session.js';
 
 export const maxDuration = 10;
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  const studentId = String(req.query?.studentId || '').trim();
   const module    = String(req.query?.module    || 'self').trim();
   const day       = parseInt(req.query?.day);
   const audience  = String(req.query?.audience  || 'student').toLowerCase();
-  if (!studentId) return res.status(400).json({ error: 'Missing required query: studentId' });
   if (!Number.isFinite(day) || day < 1 || day > 21) {
     return res.status(400).json({ error: 'Invalid day (1-21)' });
   }
@@ -41,15 +41,15 @@ export default async function handler(req, res) {
 
   try {
     if (audience === 'coach') {
-      // PR-4c-green Patrick 5/24 — gate the coach-internal branch behind
-      // getToken + COACH_EMAIL. Student-default path stays open (above this).
+      // Coach gate first. Then the coach IS allowed to specify any studentId
+      // via query (it's the whole point — coach reviews any student).
       if (!(await guardCoachOr401(req, res))) return;
-      // Coach path — return fullNote (coach-internal sections included).
-      // Keyed by (student_id, module, week=ceil(day/7), day, is_week_summary=false).
+      const coachStudentId = String(req.query?.studentId || '').trim();
+      if (!coachStudentId) return res.status(400).json({ error: 'Missing required query: studentId' });
       const week = Math.ceil(day / 7);
       const rows = await sql`
         SELECT note_text FROM damon_notes
-        WHERE student_id = ${studentId} AND module = ${module}
+        WHERE student_id = ${coachStudentId} AND module = ${module}
           AND week = ${week} AND day = ${day}
           AND is_week_summary = FALSE
         LIMIT 1
@@ -62,7 +62,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // STUDENT path — sessions.notebook_page (Vivi-warm) + sanitize.
+    // STUDENT path — studentId from SESSION COOKIE, never from query. Stage 1d
+    // 鐵則: client-supplied ?studentId=A999 is ignored entirely; the student
+    // can only ever read their own data.
+    const studentId = await guardStudentOr401(req, res);
+    if (!studentId) return;
+
     // The Nth chronological session = the journey's Nth day (matches the cell index).
     const rows = await sql`
       SELECT notebook_page FROM sessions
@@ -76,7 +81,6 @@ export default async function handler(req, res) {
     }
     const raw = rows[0].notebook_page;
     if (containsForbiddenContent(raw)) {
-      // Observability: log loudly so a drifted Sonnet output surfaces in ops.
       console.warn(`[note B1] notebook_page for ${studentId} day=${day} contained forbidden coach-internal content — sanitized at API boundary`);
     }
     return res.status(200).json({

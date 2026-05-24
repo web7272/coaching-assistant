@@ -34,6 +34,8 @@ import { checkAdvance } from '../lib/session/phase-advance.js';
 import {
   updateState, getUserProfile, incrementUserProfileCounters,
 } from '../lib/state/state-manager.js';
+// PR-4c-green Auth rebuild stage 1d — studentId from session cookie ONLY.
+import { guardStudentOr401 } from '../lib/auth/student-session.js';
 
 // v34 hotfix 6: Vercel Pro 預設 15s timeout、明寫 60s
 export const maxDuration = 60;
@@ -636,9 +638,16 @@ export function buildClosureHint({ turnCount, softLimit = SOFT_LIMIT_TURNS, hard
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Step 1 — parse（week/day 收下但 v5.0 不參與邏輯、僅過渡相容寫回 columns）
-  const { messages: rawMessagesIn, studentId, module, week, day, sessionNotes, today } = req.body || {};
-  if (!studentId || !module) {
+  // PR-4c-green Auth rebuild stage 1d — studentId from session cookie ALWAYS.
+  // 鐵則: a client putting `body.studentId='A999'` cannot read someone else's
+  // data. The body field is ignored entirely. 401 if no valid student session.
+  const studentId = await guardStudentOr401(req, res);
+  if (!studentId) return;
+
+  // Step 1 — parse the rest. `module` is the only client field we still trust;
+  // it's per-student so cross-student access isn't possible via this knob.
+  const { messages: rawMessagesIn, module, week, day, sessionNotes, today } = req.body || {};
+  if (!module) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 

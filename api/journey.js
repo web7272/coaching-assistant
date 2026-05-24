@@ -18,14 +18,19 @@ import {
   computeUnlockedCurrentDay,
 } from '../lib/api/journey-state.js';
 import { computePhaseReportStates } from '../lib/api/phase-state.js';
+// PR-4c-green Auth rebuild stage 1d — studentId now comes from the verified
+// student_session cookie, NEVER from client-supplied query. Client-passed
+// `?studentId=A999` is ignored entirely.
+import { guardStudentOr401 } from '../lib/auth/student-session.js';
 
 export const maxDuration = 10;
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  const studentId = String(req.query?.studentId || '').trim();
-  const module    = String(req.query?.module    || 'self').trim();
-  if (!studentId) return res.status(400).json({ error: 'Missing required query: studentId' });
+  // 鐵則: sid always from session, never from req.query. 401 if no valid session.
+  const studentId = await guardStudentOr401(req, res);
+  if (!studentId) return;
+  const module    = String(req.query?.module || 'self').trim();
 
   try {
     const sql = neon(process.env.DATABASE_URL);

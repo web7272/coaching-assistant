@@ -213,7 +213,9 @@ async function renderJourney() {
 
   let j;
   try {
-    j = await api(`/api/journey?studentId=${encodeURIComponent(state.studentId)}&module=${encodeURIComponent(state.module)}`);
+    // PR-4c-green Auth rebuild stage 1d — studentId no longer sent over the wire;
+    // server reads sid from the HttpOnly student_session cookie.
+    j = await api(`/api/journey?module=${encodeURIComponent(state.module)}`);
   } catch (e) {
     j = { module: state.module, moduleLabel: '看見自己', currentDay: state.currentDay || 0, days: [], graduation: { state: 'future' } };
   }
@@ -542,11 +544,11 @@ async function sendUserMessage(text) {
   state.conversation.push({ role: 'user', content: text });
   appendMessage('user', text);
   try {
+    // PR-4c-green Auth rebuild stage 1d — no studentId in body (server reads sid from cookie).
     const r = await api('/api/chat', {
       method: 'POST',
       body: {
         messages: state.conversation,
-        studentId: state.studentId,
         module: state.module,
         today: new Date().toLocaleDateString('sv'),
       },
@@ -592,12 +594,12 @@ async function requestKickoffOpening() {
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      // PR-4c-green Auth rebuild stage 1d — no studentId in body (server reads sid from cookie).
       const r = await api('/api/chat', {
         method: 'POST',
         body: {
           kickoff: true,
           // messages: [] — chat.js will synthesize the sentinel internally
-          studentId: state.studentId,
           module: state.module,
           today: new Date().toLocaleDateString('sv'),
         },
@@ -664,11 +666,12 @@ async function startClosureTransition() {
   // fire finalize-day NOW (in parallel with the 2.8s hold)
   // sessionId comes from the last /api/chat response (stashed in state._lastSessionId)
   state.finalizing = true;
+  // PR-4c-green Auth rebuild stage 1d — no studentId in body. Server enforces
+  // that sessionId belongs to the authenticated student (sid from cookie).
   const finalizeP = api('/api/finalize-day', {
     method: 'POST',
     body: {
       sessionId:  state._lastSessionId,
-      studentId:  state.studentId,
       module:     state.module,
       sessionDay: state.currentDay,
     },
@@ -730,7 +733,8 @@ async function renderNote(day) {
     state._pendingNote = null;
   } else {
     try {
-      const r = await api(`/api/note?studentId=${encodeURIComponent(state.studentId)}&module=${encodeURIComponent(state.module)}&day=${day}`);
+      // PR-4c-green Auth rebuild stage 1d — no studentId param (server reads sid from cookie).
+      const r = await api(`/api/note?module=${encodeURIComponent(state.module)}&day=${day}`);
       text = r.exists ? r.noteText : '（這一天的筆記還沒有。）';
     } catch (e) {
       text = '（沒能取回今天的筆記，待會再試。）';
@@ -778,7 +782,8 @@ async function renderPhaseReport(phaseId) {
 
   let r;
   try {
-    r = await api(`/api/phase-report?studentId=${encodeURIComponent(state.studentId)}&module=${encodeURIComponent(state.module)}&phase=${phaseId}`);
+    // PR-4c-green Auth rebuild stage 1d — no studentId param (server reads sid from cookie).
+    r = await api(`/api/phase-report?module=${encodeURIComponent(state.module)}&phase=${phaseId}`);
   } catch (e) {
     if (teaching) {
       const p = document.createElement('p');
@@ -833,7 +838,8 @@ async function renderGraduation() {
   letter.innerHTML = ''; poem.innerHTML = ''; decl.textContent = '—'; notice.classList.add('hidden');
 
   let g;
-  try { g = await api(`/api/graduation?studentId=${encodeURIComponent(state.studentId)}&module=${encodeURIComponent(state.module)}`); }
+  // PR-4c-green Auth rebuild stage 1d — no studentId param (server reads sid from cookie).
+  try { g = await api(`/api/graduation?module=${encodeURIComponent(state.module)}`); }
   catch (e) { g = { exists: false }; }
   if (!g.exists) {
     const p = document.createElement('p'); p.textContent = '（結業內容還沒生成。）'; letter.appendChild(p);

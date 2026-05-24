@@ -30,6 +30,8 @@ import {
 } from '../lib/api/student-note-safe.js';
 // PR-4c-green Patrick 5/24 — shared coach-session gate (audience=coach branch).
 import { guardCoachOr401 } from '../lib/auth/coach-session.js';
+// PR-4c-green Auth rebuild stage 1d — student path reads sid from session cookie.
+import { guardStudentOr401 } from '../lib/auth/student-session.js';
 
 export const maxDuration = 30;
 export const config = { maxDuration: 30 };
@@ -100,7 +102,6 @@ export function buildBreakthroughUserMessage(damonNotes) {
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  const studentId = String(req.query?.studentId || '').trim();
   const module    = String(req.query?.module    || 'self').trim();
   const phaseId   = parseInt(req.query?.phase);
   // PR-4c-green P5 — audience=coach returns the un-sanitized breakthrough so the
@@ -108,13 +109,22 @@ export default async function handler(req, res) {
   // Default audience = student → sanitizer runs as before.
   const audience  = String(req.query?.audience  || 'student').trim();
   const isCoach   = audience === 'coach';
-  if (!studentId) return res.status(400).json({ error: 'Missing required query: studentId' });
   if (!Number.isInteger(phaseId) || phaseId < 1 || phaseId > 5) {
     return res.status(400).json({ error: 'Invalid phase (1-5)' });
   }
-  // PR-4c-green Patrick 5/24 — gate audience=coach behind getToken + COACH_EMAIL.
-  // Student-default audience stays open (reads sanitized cache).
-  if (isCoach && !(await guardCoachOr401(req, res))) return;
+
+  // PR-4c-green Auth rebuild stage 1d — studentId source split by audience:
+  //   - coach: studentId from query (coach reviews any student); coach gate verifies role
+  //   - student: studentId from SESSION COOKIE only; client-supplied query is ignored
+  let studentId;
+  if (isCoach) {
+    if (!(await guardCoachOr401(req, res))) return;
+    studentId = String(req.query?.studentId || '').trim();
+    if (!studentId) return res.status(400).json({ error: 'Missing required query: studentId' });
+  } else {
+    studentId = await guardStudentOr401(req, res);
+    if (!studentId) return;
+  }
 
   const sql = neon(process.env.DATABASE_URL);
 
