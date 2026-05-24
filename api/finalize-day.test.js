@@ -7,7 +7,6 @@ import assert from 'node:assert/strict';
 import {
   resolveSessionDay,
   weekFromSessionDay,
-  isWeekBoundary,
   isGraduationDay,
   extractKeyPhrase,
   extractTakeawayAnchor,
@@ -68,28 +67,8 @@ test('weekFromSessionDay: day → week (3 weeks × 7 days)', () => {
 });
 
 // ─────────────────────────────────────────────────────────
-// 🛑 isWeekBoundary — 7 / 14 / 21 only（PR-4c：v4 day===6 廢、改 v5 邊界）
-// ─────────────────────────────────────────────────────────
-
-test('🛑 isWeekBoundary: true only on day 7 / 14 / 21', () => {
-  assert.equal(isWeekBoundary(7), true);
-  assert.equal(isWeekBoundary(14), true);
-  assert.equal(isWeekBoundary(21), true);
-});
-
-test('🛑 isWeekBoundary: every other day in 1-21 → false', () => {
-  for (const d of [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20]) {
-    assert.equal(isWeekBoundary(d), false, `day ${d} should NOT be a week boundary`);
-  }
-});
-
-test('🛑 isWeekBoundary: day 6 (v4 boundary) is NOT a v5 boundary', () => {
-  assert.equal(isWeekBoundary(6), false,
-    'v4.0 used day===6 as the week boundary; PR-4c moved to 7/14/21');
-});
-
-// ─────────────────────────────────────────────────────────
 // isGraduationDay — only day 21
+// (isWeekBoundary tests retired with 週報 — PR-4c-green 5/24 cleanup)
 // ─────────────────────────────────────────────────────────
 
 test('isGraduationDay: true only at day 21', () => {

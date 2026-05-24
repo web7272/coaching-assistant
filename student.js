@@ -1,5 +1,5 @@
 /* student.js — v5.0 紙感 student SPA
-   Routes: #/entry, #/journey, #/conversation, #/note?day=N, #/week?week=N, #/graduation
+   Routes: #/entry, #/journey, #/conversation, #/note?day=N, #/phase-report?phase=N, #/graduation
    ⚠️ Hard rules respected (UI §六/§九):
      no streak / no X-of-21 counter / no progress bar / no typing dots /
      no loading spinner / no red error / no auto-scroll / no greeting名稱
@@ -69,7 +69,8 @@ async function api(path, opts) {
 }
 
 // ─── view router ───────────────────────────────────────────────────
-const VIEWS = ['entry', 'journey', 'conversation', 'note', 'week-report', 'graduation', 'phase-report'];
+// PR-4c-green 5/24 cleanup — 'week-report' view retired (5 phase reports 取代).
+const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report'];
 
 function showView(name) {
   for (const v of VIEWS) {
@@ -115,7 +116,6 @@ async function route() {
     case 'journey':      showView('journey');      await renderJourney(); break;
     case 'conversation': showView('conversation'); await renderConversation(); break;
     case 'note':         showView('note');         await renderNote(parseInt(params.day) || state.currentDay); break;
-    case 'week':         showView('week-report');  await renderWeekReport(parseInt(params.week) || 1); break;
     case 'phase-report': showView('phase-report'); await renderPhaseReport(parseInt(params.phase) || 1); break;
     case 'graduation':   showView('graduation');   await renderGraduation(); break;
     default:             location.hash = '#/entry';
@@ -201,7 +201,7 @@ async function renderJourney() {
   try {
     j = await api(`/api/journey?studentId=${encodeURIComponent(state.studentId)}&module=${encodeURIComponent(state.module)}`);
   } catch (e) {
-    j = { module: state.module, moduleLabel: '看見自己', currentDay: state.currentDay || 0, days: [], weeks: [], graduation: { state: 'future' } };
+    j = { module: state.module, moduleLabel: '看見自己', currentDay: state.currentDay || 0, days: [], graduation: { state: 'future' } };
   }
 
   state.currentDay = j.currentDay || 0;
@@ -731,31 +731,7 @@ async function renderNote(day) {
   }
 }
 
-// ─── §4.6 week report ──────────────────────────────────────────────
-async function renderWeekReport(week) {
-  document.getElementById('week-header-label').textContent = `看見自己 · 第${weekZh(week)}週`;
-  document.getElementById('week-subtitle').textContent = `第${weekZh(week)}週`;
-  const title = document.getElementById('week-title');
-  const body  = document.getElementById('week-body');
-  title.textContent = '—';
-  body.innerHTML = '';
-  try {
-    const r = await api(`/api/week-report?studentId=${encodeURIComponent(state.studentId)}&module=${encodeURIComponent(state.module)}&week=${week}`);
-    if (!r.exists) {
-      title.textContent = '—';
-      const p = document.createElement('p'); p.textContent = '（這一週的整理還沒有。）'; body.appendChild(p);
-      return;
-    }
-    title.textContent = r.title || '—';
-    const paras = String(r.body || '').split(/\n\s*\n/);
-    for (const p of paras) {
-      const el = document.createElement('p'); el.textContent = p; body.appendChild(el);
-    }
-  } catch (e) {
-    const el = document.createElement('p'); el.textContent = '（沒能取回這一週的整理，待會再試。）'; body.appendChild(el);
-  }
-}
-function weekZh(n) { return ['一', '二', '三'][n - 1] || String(n); }
+// §4.6 week report — retired (PR-4c-green 5/24 cleanup, 5 phase reports replaces it).
 
 // ─── §5.5 Phase Report — 你的寶藏 (P4 green) ──────────────────────
 const PHASE_REPORT_LABELS = ['PHASE I', 'PHASE II', 'PHASE III', 'PHASE IV', 'PHASE V'];
@@ -876,7 +852,6 @@ document.addEventListener('click', (e) => {
   if (nav === 'journey')      location.hash = '#/journey';
   if (nav === 'conversation') location.hash = '#/conversation';
   if (nav === 'note')         location.hash = '#/note';
-  if (nav === 'week')         location.hash = '#/week';
   if (nav === 'graduation')   location.hash = '#/graduation';
   if (nav === 'logout')       { clearState(); location.hash = '#/entry'; }
 });

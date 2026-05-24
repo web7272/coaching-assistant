@@ -71,15 +71,16 @@ export function weekFromSessionDay(sessionDay) {
   return Math.ceil(sessionDay / 7);
 }
 
-/** 週報觸發點：sessionDay ∈ {7, 14, 21}（07 §3-B 拍板）。 */
-export function isWeekBoundary(sessionDay) {
-  return sessionDay === 7 || sessionDay === 14 || sessionDay === 21;
-}
-
 /** Day 21 = graduation。 */
 export function isGraduationDay(sessionDay) {
   return sessionDay === 21;
 }
+
+/* PR-4c-green 5/24 cleanup — isWeekBoundary + generateWeekSummary retired.
+   產品決策：5 phase reports 取代週報。Day 7/14 不再 fire summary Sonnet 寫
+   is_week_summary=true row；is_week_summary 欄位本身留著（schema 用於 daily
+   note 的 default=false + UNIQUE composite key），只是不再寫 true row。
+   舊資料 row 留著無害、不需要 migration。 */
 
 // ════════════════════════════════════════════════════════════════
 // PR-4c-2 pure helpers — daily_takeaways extraction + graduation Markdown
@@ -314,7 +315,6 @@ export default async function handler(req, res) {
   }
   const week = weekFromSessionDay(sessionDay);
   const day = sessionDay;
-  const weekBoundary = isWeekBoundary(sessionDay);
   const graduation = isGraduationDay(sessionDay);
 
   try {
@@ -349,7 +349,6 @@ export default async function handler(req, res) {
         alreadyDone: true,
         damonNotePublic: existing.damon_note_public,
         notebookPage: sanitizeStudentNote(existing.notebook_page),  // B1: scrub before student render
-        isWeekBoundary: weekBoundary,
         isGraduation: graduation,
       });
     }
@@ -365,19 +364,9 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'NOTE_GENERATION_FAILED' });
     }
 
-    // ============================================================
-    // PR-4c：週報觸發從 day===6 改 sessionDay ∈ {7, 14, 21}
-    // - summary row 寫進 damon_notes（is_week_summary=true）
-    // - UNIQUE (student_id, module, week, day, is_week_summary) → daily + summary 共存於同天
-    // - fail-soft：summary 失敗不阻塞 daily return
-    // ============================================================
-    if (weekBoundary) {
-      try {
-        await generateWeekSummary(sql, existing.student_id, module, week, sessionDay);
-      } catch (e) {
-        console.error('[week-summary] generation failed (fail-soft):', e.message);
-      }
-    }
+    // PR-4c-green 5/24 cleanup — 週報退場、產品改 5 phase reports。
+    // 原 Day 7/14 generateWeekSummary 寫 is_week_summary=true row 的呼叫 +
+    // function 本身已移除（function 定義原在檔尾、一併刪）。
 
     // ════════════════════════════════════════════════════════════════
     // PR-4c-2 P0-4 — daily_takeaways append（每天）+ Day 21 結業生成 + export email
@@ -495,7 +484,6 @@ export default async function handler(req, res) {
       alreadyDone: false,
       damonNotePublic: noteResult.publicNote,
       notebookPage: sanitizeStudentNote(noteResult.notebookPage),  // B1: scrub before student render
-      isWeekBoundary: weekBoundary,
       isGraduation: graduation,
     });
 
@@ -503,88 +491,4 @@ export default async function handler(req, res) {
     console.error('finalize-day error:', e);
     return res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
   }
-}
-
-// ════════════════════════════════════════════════════════════════
-// generateWeekSummary —
-// 在 sessionDay ∈ {7,14,21} 邊界跑完 daily Damon Note 後、撈該週 daily notes、
-// Anthropic 濃縮成 per-week summary、寫進 damon_notes (is_week_summary=true)。
-//
-// PR-4c 改動：
-//   - summary row 的 `day` 欄位從 hardcoded 6 → summaryRowDay 參數（boundary 7/14/21）
-//   - prompt 加一行「第一行給一個 ≤12 字主題短句」（07 §3-E：GET /api/week-report.title 來源）
-// 對應 slim.js KEY_FIELDS_ALWAYS（關鍵句 / SC 觀察 / 還沒碰到的）+ 該週 conditional 欄位
-// ════════════════════════════════════════════════════════════════
-async function generateWeekSummary(sql, studentId, module, week, summaryRowDay) {
-  // 1. 撈該週 daily Damon Note（is_week_summary=false）
-  const weekDailyNotes = await sql`
-    SELECT day, note_text FROM damon_notes
-    WHERE student_id = ${studentId} AND module = ${module}
-      AND week = ${week} AND is_week_summary = false
-    ORDER BY day ASC
-  `;
-
-  if (weekDailyNotes.length === 0) {
-    console.warn(`[week-summary] no daily notes for ${studentId} ${module} W${week}, skip`);
-    return;
-  }
-
-  // 2. 該週採集的 conditional 欄位提醒（依 week 動態、v4.0 6天週遺留語意；
-  //    v5.0 Damon Note prompt 重新設計留未來 task、PR-4c 不改）
-  let conditionalHint = '';
-  if (week === 1) {
-    conditionalHint = '【Scope 證據】（Week 1 採集的具體事件原文、Week 3 Day 3 調用）';
-  } else if (week === 2) {
-    conditionalHint = '【賦予新角色狀態】（Day 3 完成的整合：已答應 / 卡點 / 新角色名稱）';
-  } else if (week === 3) {
-    conditionalHint = `【確定類別 + Scope】（D3）
-【Transfer 結果】（D4、新 SC 句 + 評分變化 + 時間軸渲染感受）
-【微證據 + 反例預演結果】（D5）
-【宣言】（D6、完整宣言句 + 「你現在是誰？」原文）`;
-  }
-
-  // 3. summary prompt（PR-4c：第一行加主題短句、供 GET /api/week-report .title）
-  const summaryPrompt = `以下是學員 ${module} 模組 Week ${week} 的 ${weekDailyNotes.length} 天 Damon Note。
-請濃縮成 1 份 per-week summary。
-
-⚠️ 格式：第一行請給一個 ≤12 字的主題短句（不加標點、無引號、單獨成行）、之後空一行、再開始 body。
-範例第一行：「從不能停，到可以決定」
-
-之後 body 保留以下欄位（依該週採集情況）：
-
-【關鍵句】本週最有能量的 1-2 句、原文加引號
-【SC 觀察】本週 SC 輪廓、走到哪一層、反覆出現的詞（用「可能」「假設」「猜想」緩衝詞）
-【還沒碰到的】下週入口
-
-${conditionalHint}
-
-要求：
-- 不重複每天細節、不寫流水帳、只保留跨日連續性的脈絡
-- 保留學員原話的引用（加引號）
-- SC 觀察是假設、不是判斷
-- 總長度 ~500-700 字（max_tokens 1024、~1500 tokens 中文）
-
-該週 ${weekDailyNotes.length} 天 Damon Notes：
-
-${weekDailyNotes.map(n => `[Day ${n.day}]\n${n.note_text}`).join('\n\n---\n\n')}`;
-
-  // 4. Anthropic SDK call
-  const response = await getAnthropic().messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: summaryPrompt }],
-  });
-  const summaryText = response.content[0].text;
-
-  // 5. INSERT INTO damon_notes (..., is_week_summary=true)
-  // UNIQUE (student_id, module, week, day, is_week_summary)
-  // 同天 daily (false) + summary (true) 兩 row 共存
-  await sql`
-    INSERT INTO damon_notes (student_id, module, week, day, note_text, is_week_summary)
-    VALUES (${studentId}, ${module}, ${week}, ${summaryRowDay}, ${summaryText}, true)
-    ON CONFLICT (student_id, module, week, day, is_week_summary)
-    DO UPDATE SET note_text = EXCLUDED.note_text, updated_at = NOW()
-  `;
-
-  console.log(`[week-summary] generated for ${studentId} ${module} W${week} day=${summaryRowDay} (${summaryText.length} chars)`);
 }

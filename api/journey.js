@@ -1,19 +1,20 @@
 // api/journey.js
 // GET /api/journey?studentId=A001&module=self
 // Per docs/v5-spec/engineering/07-pr4c-ui-integration-and-data-contract.md §3-C
+// (with PR-4c-green updates — weeks[] retired, phases[] added — spec 09 §10)
 //
 // Response shape (strict, do not extend without ping):
 //   {
 //     module, moduleLabel, currentDay,
-//     days:  [{ day, state, phrase }],
-//     weeks: [{ week, state }],
+//     days:       [{ day, state, phrase }],   // 21 cells
+//     phases:     [{ phase, state }],         // 5 phase reports (treasure shelf)
 //     graduation: { state }
 //   }
 
 import { neon } from '@neondatabase/serverless';
 import { getUserProfile } from '../lib/state/state-manager.js';
 import {
-  computeDailyCells, computeWeeklyCells, computeGraduationCell, MODULE_LABEL,
+  computeDailyCells, computeGraduationCell, MODULE_LABEL,
   computeUnlockedCurrentDay,
 } from '../lib/api/journey-state.js';
 import { computePhaseReportStates } from '../lib/api/phase-state.js';
@@ -68,27 +69,15 @@ export default async function handler(req, res) {
       lastSessionComplete,
     });
 
-    // weeks with summary — read damon_notes is_week_summary=true (collapse to Set)
-    let weeksWithSummary = new Set();
-    try {
-      const rows = await sql`
-        SELECT DISTINCT week FROM damon_notes
-        WHERE student_id = ${studentId} AND module = ${module} AND is_week_summary = TRUE
-      `;
-      weeksWithSummary = new Set(rows.map(r => r.week));
-    } catch (e) {
-      console.warn('[journey] weeksWithSummary lookup failed:', e.message);
-    }
-
+    // PR-4c-green 5/24 cleanup — 週報 + weeks[] field retired. Spec 09 §10:
+    // 5 phase reports 取代週報。weeksWithSummary lookup + weeks[] payload field
+    // both removed; nothing live reads either. The is_week_summary column on
+    // damon_notes stays (composite UNIQUE key still in use for daily rows).
     return res.status(200).json({
       module,
       moduleLabel: MODULE_LABEL,                                  // 硬傷 1: 一律「看見自己」
       currentDay,
       days:       computeDailyCells({ currentDay, dailyTakeaways }),
-      // weeks[] kept in the response for back-compat with anything pre-P4 that
-      // still reads it; the v2.1-green frontend ignores it and reads phases[]
-      // instead (spec 09 §10: weeks → phases, week reports retired).
-      weeks:      computeWeeklyCells({ currentDay, weeksWithSummary }),
       // PR-4c-green P4: 5 Phase Report states (locked/unlocked) for the
       // treasure shelf. Spec 09 §5.5 + §10.
       phases:     computePhaseReportStates(currentPhase),
