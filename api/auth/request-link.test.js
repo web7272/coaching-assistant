@@ -4,7 +4,11 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import handler, { _setSqlClient, _setSendMagicLinkFn } from './request-link.js';
+import handler, {
+  _setSqlClient,
+  _setSendMagicLinkFn,
+  resolveBaseUrl,
+} from './request-link.js';
 
 function makeMockSql(rows = []) {
   const calls = [];
@@ -36,6 +40,7 @@ beforeEach(() => {
   _setSqlClient(null);
   _setSendMagicLinkFn(null);
   process.env.APP_BASE_URL = 'https://preview.example.com';
+  delete process.env.VERCEL_URL;
 });
 
 // ── valid request → always 200 + DB insert + link sent ──
@@ -138,6 +143,62 @@ test('🛑 handler: token_hash stored, not raw token (DB dump can\'t replay)', a
   const { createHash } = await import('node:crypto');
   const expectedHash = createHash('sha256').update(rawToken).digest('hex');
   assert.equal(expectedHash, storedHash);
+});
+
+// ── resolveBaseUrl (PR-4c-green Auth rebuild 1g — fallback chain) ──
+
+test('🛑 resolveBaseUrl: APP_BASE_URL wins when present + http(s)-prefixed', () => {
+  process.env.APP_BASE_URL = 'https://preview.example.com';
+  process.env.VERCEL_URL = 'random-vercel.app';
+  assert.equal(resolveBaseUrl(), 'https://preview.example.com');
+});
+
+test('🛑 resolveBaseUrl: APP_BASE_URL with trailing slashes → stripped', () => {
+  process.env.APP_BASE_URL = 'https://preview.example.com/////';
+  assert.equal(resolveBaseUrl(), 'https://preview.example.com');
+});
+
+test('🛑 resolveBaseUrl: APP_BASE_URL missing → falls back to https://${VERCEL_URL}', () => {
+  delete process.env.APP_BASE_URL;
+  process.env.VERCEL_URL = 'my-preview-abc123.vercel.app';
+  assert.equal(resolveBaseUrl(), 'https://my-preview-abc123.vercel.app');
+});
+
+test('🛑 resolveBaseUrl: APP_BASE_URL malformed (no http://) → falls back to VERCEL_URL', () => {
+  // Vivi-was-here scenario: someone sets APP_BASE_URL='preview.example.com'
+  // forgetting the scheme. We treat that as malformed + fall through.
+  process.env.APP_BASE_URL = 'preview.example.com';
+  process.env.VERCEL_URL = 'my-vercel.app';
+  assert.equal(resolveBaseUrl(), 'https://my-vercel.app');
+});
+
+test('🛑 resolveBaseUrl: VERCEL_URL with stray https:// prefix → not double-prepended', () => {
+  // Defensive: if some env-loader weirdly sets VERCEL_URL = 'https://x' we
+  // strip the duplicated scheme rather than producing 'https://https://x'.
+  delete process.env.APP_BASE_URL;
+  process.env.VERCEL_URL = 'https://x.vercel.app';
+  assert.equal(resolveBaseUrl(), 'https://x.vercel.app');
+});
+
+test('🛑 resolveBaseUrl: both env vars unset → localhost fallback (dev only)', () => {
+  delete process.env.APP_BASE_URL;
+  delete process.env.VERCEL_URL;
+  assert.equal(resolveBaseUrl(), 'http://localhost:3000');
+});
+
+test('🛑 resolveBaseUrl: APP_BASE_URL whitespace → trimmed before scheme check', () => {
+  process.env.APP_BASE_URL = '  https://preview.example.com  ';
+  assert.equal(resolveBaseUrl(), 'https://preview.example.com');
+});
+
+test('🛑 handler: VERCEL_URL fallback flows into magic-link URL when APP_BASE_URL missing', async () => {
+  delete process.env.APP_BASE_URL;
+  process.env.VERCEL_URL = 'my-preview.vercel.app';
+  _setSqlClient(makeMockSql([]));
+  let capturedLink = null;
+  _setSendMagicLinkFn(async (_email, link) => { capturedLink = link; });
+  await handler(mockReq({ body: { email: 'a@b.com' } }), mockRes());
+  assert.match(capturedLink, /^https:\/\/my-preview\.vercel\.app\/auth\?token=[a-f0-9]{64}$/);
 });
 
 // ── method enforcement ──

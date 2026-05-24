@@ -40,6 +40,37 @@ let _sendMagicLinkFn = null;
 export function _setSendMagicLinkFn(fn) { _sendMagicLinkFn = fn; }
 function sender() { return _sendMagicLinkFn || sendMagicLink; }
 
+/**
+ * PR-4c-green Auth rebuild 1g — resolve the base URL for the magic-link, with
+ * a defensive fallback chain so a missing/typoed APP_BASE_URL doesn't blow up
+ * the auth flow.
+ *
+ *   1. APP_BASE_URL if it looks like a real URL (starts with http:// or https://)
+ *   2. https://${VERCEL_URL}   — Vercel auto-sets this to the deployment host
+ *                                (without the scheme) for every preview + prod
+ *      build. Means a fresh preview branch「just works」 without needing the
+ *      env var to be re-pointed every time.
+ *   3. http://localhost:3000   — last-resort dev fallback. If we reach this in
+ *      production something is mis-configured, but the link will still be in
+ *      the email + the Vercel log so it's recoverable.
+ *
+ * Pure helper (exported for testing).
+ *
+ * @returns {string} base URL without trailing slash
+ */
+export function resolveBaseUrl() {
+  const app = process.env.APP_BASE_URL;
+  if (typeof app === 'string' && /^https?:\/\//i.test(app.trim())) {
+    return app.trim().replace(/\/+$/, '');
+  }
+  const vercel = process.env.VERCEL_URL;
+  if (typeof vercel === 'string' && vercel.trim().length > 0) {
+    // VERCEL_URL is scheme-less ("my-preview.vercel.app"); always https in prod.
+    return `https://${vercel.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '')}`;
+  }
+  return 'http://localhost:3000';
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -65,7 +96,7 @@ export default async function handler(req, res) {
       VALUES (${tokenHash}, ${email}, ${preferredName}, ${pace}, ${expiresAt})
     `;
 
-    const base = process.env.APP_BASE_URL || 'http://localhost:3000';
+    const base = resolveBaseUrl();
     const link = `${base}/auth?token=${token}`;
     try {
       await sender()(email, link);
