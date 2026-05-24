@@ -493,6 +493,26 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 
 .btn-row { margin-top: 26px; display: flex; justify-content: center; gap: 12px; }
 
+/* §5.5 Phase Report — 你的寶藏 (P4 green).
+   Longer than a daily note (里程碑份量); PHASE N eyebrow in sans + gold;
+   ✦ separator between teaching (上半 fixed §8) and breakthrough (下半 generated). */
+.paper-card--phase { max-width: 480px; padding: 42px 36px 32px; }
+.paper-card__eyebrow--phase {
+  font-family: var(--font-sans);     /* §5.5: "PHASE N" sans 10 lts4 --gold-accent */
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--gold-accent);
+}
+.phase-section-sep {
+  margin: 28px auto;
+  text-align: center;
+  color: var(--gold-accent);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  letter-spacing: 8px;
+  opacity: 0.85;
+}
+
 /* §5.6 graduation specifics */
 .poem-block { margin: 40px auto 36px; text-align: center; }
 .poem-line { font-family: var(--font-serif); font-size: 13px; line-height: 2.4; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 6px; }

@@ -69,7 +69,7 @@ async function api(path, opts) {
 }
 
 // ─── view router ───────────────────────────────────────────────────
-const VIEWS = ['entry', 'journey', 'conversation', 'note', 'week-report', 'graduation'];
+const VIEWS = ['entry', 'journey', 'conversation', 'note', 'week-report', 'graduation', 'phase-report'];
 
 function showView(name) {
   for (const v of VIEWS) {
@@ -116,6 +116,7 @@ async function route() {
     case 'conversation': showView('conversation'); await renderConversation(); break;
     case 'note':         showView('note');         await renderNote(parseInt(params.day) || state.currentDay); break;
     case 'week':         showView('week-report');  await renderWeekReport(parseInt(params.week) || 1); break;
+    case 'phase-report': showView('phase-report'); await renderPhaseReport(parseInt(params.phase) || 1); break;
     case 'graduation':   showView('graduation');   await renderGraduation(); break;
     default:             location.hash = '#/entry';
   }
@@ -308,11 +309,14 @@ const PHASE_NAMES = [
 ];
 const PHASE_ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 
-function renderTreasureShelf(phases /* P2: may be undefined */) {
+function renderTreasureShelf(phases /* /api/journey returns this at P4+ */) {
   const shelf = document.getElementById('treasure-shelf');
   if (!shelf) return;
   shelf.innerHTML = '';
 
+  // P4: phases[] now comes from /api/journey (computePhaseReportStates(currentPhase))
+  // — server-decided which treasures are unlocked. Pre-P4 clients (or a defensive
+  // server fallback) may not send the array; in that case all stay locked.
   const states = Array.isArray(phases) && phases.length === 5
     ? phases.map(p => (p && p.state) || 'locked')
     : Array.from({ length: 5 }, () => 'locked');
@@ -328,7 +332,6 @@ function renderTreasureShelf(phases /* P2: may be undefined */) {
     btn.innerHTML = `${TREASURE_SVG}<span class="treasure-box__roman">${PHASE_ROMAN[i]}</span>`;
     if (stateName === 'unlocked') {
       btn.addEventListener('click', () => {
-        // P4 will route to /#/phase-report?phase=N once that page lands.
         location.hash = `#/phase-report?phase=${i + 1}`;
       });
     }
@@ -703,6 +706,78 @@ async function renderWeekReport(week) {
   }
 }
 function weekZh(n) { return ['一', '二', '三'][n - 1] || String(n); }
+
+// ─── §5.5 Phase Report — 你的寶藏 (P4 green) ──────────────────────
+const PHASE_REPORT_LABELS = ['PHASE I', 'PHASE II', 'PHASE III', 'PHASE IV', 'PHASE V'];
+
+async function renderPhaseReport(phaseId) {
+  // header「{name} · 你的寶藏」(spec §5.5 — note: 「你的寶藏」 not 「你的旅程」)
+  const headerName = state.preferredName || '你';
+  const headerEl = document.getElementById('phase-header-label');
+  if (headerEl) headerEl.textContent = `${headerName} · 你的寶藏`;
+
+  const eyebrow      = document.getElementById('phase-eyebrow');
+  const title        = document.getElementById('phase-title');
+  const teaching     = document.getElementById('phase-teaching');
+  const breakthrough = document.getElementById('phase-breakthrough');
+
+  // reset
+  if (eyebrow)      eyebrow.textContent      = PHASE_REPORT_LABELS[phaseId - 1] || 'PHASE I';
+  if (title)        title.textContent        = '—';
+  if (teaching)     teaching.innerHTML       = '';
+  if (breakthrough) breakthrough.innerHTML   = '';
+
+  if (!Number.isInteger(phaseId) || phaseId < 1 || phaseId > 5) {
+    if (teaching) {
+      const p = document.createElement('p');
+      p.textContent = '（這個寶藏的編號不對，回到旅程再試一次。）';
+      teaching.appendChild(p);
+    }
+    return;
+  }
+
+  let r;
+  try {
+    r = await api(`/api/phase-report?studentId=${encodeURIComponent(state.studentId)}&module=${encodeURIComponent(state.module)}&phase=${phaseId}`);
+  } catch (e) {
+    if (teaching) {
+      const p = document.createElement('p');
+      p.textContent = '（沒能取回這個寶藏，待會再試。）';
+      teaching.appendChild(p);
+    }
+    return;
+  }
+
+  if (title)   title.textContent = r.name || '—';
+  if (eyebrow) eyebrow.textContent = 'PHASE ' + (r.roman || PHASE_REPORT_LABELS[phaseId - 1].replace('PHASE ', ''));
+
+  if (!r.exists) {
+    if (teaching) {
+      const p = document.createElement('p');
+      p.textContent = '（這個寶藏還沒解鎖。繼續走、它會在路上等你。）';
+      teaching.appendChild(p);
+    }
+    return;
+  }
+
+  // teaching (upper half — fixed §8 distillation)
+  if (teaching && r.teaching) {
+    for (const para of String(r.teaching).split(/\n\s*\n/)) {
+      const p = document.createElement('p');
+      p.textContent = para;
+      teaching.appendChild(p);
+    }
+  }
+
+  // breakthrough (lower half — generated 突破彙整)
+  if (breakthrough && r.breakthrough) {
+    for (const para of String(r.breakthrough).split(/\n\s*\n/)) {
+      const p = document.createElement('p');
+      p.textContent = para;
+      breakthrough.appendChild(p);
+    }
+  }
+}
 
 // ─── §5.6 graduation (PR-4c-green: 「{name} · 第二十一天」 header) ───
 async function renderGraduation() {

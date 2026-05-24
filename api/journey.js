@@ -16,6 +16,7 @@ import {
   computeDailyCells, computeWeeklyCells, computeGraduationCell, MODULE_LABEL,
   computeUnlockedCurrentDay,
 } from '../lib/api/journey-state.js';
+import { computePhaseReportStates } from '../lib/api/phase-state.js';
 
 export const maxDuration = 10;
 
@@ -40,20 +41,25 @@ export default async function handler(req, res) {
     const dailyTakeaways = Array.isArray(profile?.daily_takeaways) ? profile.daily_takeaways : [];
     const exportPromptGeneratedAt = profile?.export_prompt_generated_at || null;
 
-    // Fetch pace + last session's day_complete (defensively — no row → defaults)
+    // Fetch pace + last session's day_complete + current_phase (defensively — no row → defaults)
     let pace = 'daily';
     let lastSessionComplete = false;
+    let currentPhase = null;
     try {
       const pr = await sql`SELECT pace FROM students WHERE student_id = ${studentId} LIMIT 1`;
       if (pr.length > 0 && pr[0].pace) pace = pr[0].pace;
     } catch (e) { console.warn('[journey] pace lookup failed:', e.message); }
     try {
+      // PR-4c-green P4 — also grab session_state.current_phase for phases[] derivation
       const lr = await sql`
-        SELECT day_complete FROM sessions
+        SELECT day_complete, session_state FROM sessions
         WHERE student_id = ${studentId} AND module = ${module}
         ORDER BY created_at DESC LIMIT 1
       `;
-      lastSessionComplete = !!(lr[0] && lr[0].day_complete);
+      if (lr.length > 0) {
+        lastSessionComplete = !!lr[0].day_complete;
+        currentPhase = lr[0].session_state?.current_phase || null;
+      }
     } catch (e) { console.warn('[journey] last session lookup failed:', e.message); }
 
     const currentDay = computeUnlockedCurrentDay({
@@ -79,7 +85,13 @@ export default async function handler(req, res) {
       moduleLabel: MODULE_LABEL,                                  // 硬傷 1: 一律「看見自己」
       currentDay,
       days:       computeDailyCells({ currentDay, dailyTakeaways }),
+      // weeks[] kept in the response for back-compat with anything pre-P4 that
+      // still reads it; the v2.1-green frontend ignores it and reads phases[]
+      // instead (spec 09 §10: weeks → phases, week reports retired).
       weeks:      computeWeeklyCells({ currentDay, weeksWithSummary }),
+      // PR-4c-green P4: 5 Phase Report states (locked/unlocked) for the
+      // treasure shelf. Spec 09 §5.5 + §10.
+      phases:     computePhaseReportStates(currentPhase),
       graduation: computeGraduationCell({ currentDay, exportPromptGeneratedAt }),
     });
   } catch (e) {
