@@ -18,7 +18,7 @@
 //   COACH path (audience='coach'): returns damon_notes.note_text — the fullNote
 //     with all coach-internal sections.
 //     PR-4c-green Patrick 5/24 follow-up — gated behind guardCoachOr401
-//     (getToken + COACH_EMAIL). 401 if no coach session. PR-4c-5 debt cleared.
+//     (HMAC coach_session cookie since auth-rebuild 1a). 401 if no coach session.
 
 import { neon } from '@neondatabase/serverless';
 import { sanitizeStudentNote, containsForbiddenContent } from '../lib/api/student-note-safe.js';

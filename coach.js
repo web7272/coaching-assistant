@@ -131,9 +131,9 @@ async function renderStudent(sid) {
 
   // PR-4c-green Patrick 5/24 — coach-only full transcript collapsible.
   // Lives below the day-note. Hidden until a day is picked; pinned to the
-  // currently-selected day. Lazy-fetches via /api/admin/transcript (the
-  // getToken + COACH_EMAIL gated endpoint) on first open per day; cached
-  // per session so re-toggling within the same day doesn't re-hit the DB.
+  // currently-selected day. Lazy-fetches via /api/admin/transcript (gated by
+  // the HMAC coach_session cookie set by /api/coach-auth) on first open per
+  // day; cached per session so re-toggling within the same day doesn't re-hit.
   const transcriptWrap   = document.getElementById('coach-transcript-wrap');
   const transcriptToggle = document.getElementById('coach-transcript-toggle');
   const transcriptBody   = document.getElementById('coach-transcript-body');

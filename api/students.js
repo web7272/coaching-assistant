@@ -159,7 +159,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       // PR-4c-green Patrick 5/24 — coach-only (list contains email + can enumerate
       // every student; single-student GET also coach-side, student SPA never
-      // hits this — student login uses /api/auth/email-login).
+      // hits this — student login uses /api/auth/request-link + verify-link).
       if (!(await guardCoachOr401(req, res))) return;
       const studentId = req.query.studentId
         ? String(req.query.studentId).toUpperCase().trim()
