@@ -76,10 +76,12 @@ export default async function handler(req, res) {
   try {
     const sql = neon(process.env.DATABASE_URL);
 
-    // 1. lookup existing student by email
+    // 1. lookup existing student by email — LOWER(TRIM(email)) so trailing whitespace
+    //    accidentally stored by older admin tooling still matches; mirror migration 019's
+    //    UNIQUE INDEX expression so the lookup and the index agree.
     const found = await sql`
       SELECT student_id, current_module, current_day, preferred_name, pace
-      FROM students WHERE LOWER(email) = ${email}
+      FROM students WHERE LOWER(TRIM(email)) = ${email}
       LIMIT 1
     `;
     if (found.length > 0) {
@@ -111,16 +113,43 @@ export default async function handler(req, res) {
     `;
     const newId = nextStudentId(last[0]?.student_id ?? null);
 
-    await sql`
-      INSERT INTO students
-        (student_id, email, plan, tier, current_module, current_week, current_day,
-         self_week_completed, money_unlocked, relationship_unlocked,
-         preferred_name, pace)
-      VALUES
-        (${newId}, ${email}, 'trial', 0, 'self', 1, 1,
-         0, FALSE, FALSE,
-         ${preferredName}, ${pace})
-    `;
+    // PR-4c-green bug 4 — race-safe INSERT.
+    //   Two simultaneous requests with the same email could both miss step 1 and reach
+    //   step 2; migration 019's UNIQUE INDEX makes the loser's INSERT throw 23505
+    //   (unique_violation). On that error: re-SELECT (the winner's row is now visible)
+    //   and return it — same outcome as if step 1 had matched.
+    try {
+      await sql`
+        INSERT INTO students
+          (student_id, email, plan, tier, current_module, current_week, current_day,
+           self_week_completed, money_unlocked, relationship_unlocked,
+           preferred_name, pace)
+        VALUES
+          (${newId}, ${email}, 'trial', 0, 'self', 1, 1,
+           0, FALSE, FALSE,
+           ${preferredName}, ${pace})
+      `;
+    } catch (insertErr) {
+      // Postgres unique_violation = '23505'; @neondatabase/serverless exposes .code
+      if (insertErr && (insertErr.code === '23505' || /unique/i.test(insertErr.message || ''))) {
+        const racedRow = await sql`
+          SELECT student_id, current_module, current_day, preferred_name, pace
+          FROM students WHERE LOWER(TRIM(email)) = ${email}
+          LIMIT 1
+        `;
+        if (racedRow.length > 0) {
+          console.warn(`[email-login] race-resolved: ${email} → ${racedRow[0].student_id} (winner) instead of ${newId}`);
+          return res.status(200).json({
+            studentId:     racedRow[0].student_id,
+            module:        racedRow[0].current_module || 'self',
+            currentDay:    racedRow[0].current_day || 1,
+            preferredName: preferredName ?? racedRow[0].preferred_name ?? null,
+            pace:          pace ?? racedRow[0].pace ?? 'daily',
+          });
+        }
+      }
+      throw insertErr;
+    }
 
     return res.status(200).json({
       studentId:     newId,
