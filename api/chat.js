@@ -322,7 +322,11 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
 
   // {{current_phase_context}} — PR-4c-1b：phase_1 router_phase-aware
   // (opening 變體含起手式 / elicitation 變體用鏈式追問、避免開場重複)
-  const phaseCtx = contextFor(phase, sessionState.router_phase);
+  // PR-4c-green E4 fix: when E4 day-opening inject is active, swap the cold
+  // 起手式 variant for the "defer to inject" variant — see contextFor opts.
+  const phaseCtx = contextFor(phase, sessionState.router_phase, {
+    dayOpeningInjectActive: !!sessionState.day_opening_inject_active,
+  });
   if (phaseCtx) lines.push('\n' + phaseCtx);
 
   // Integration Retention conditional（spec 04 §5）
@@ -415,7 +419,9 @@ export function maybeAutoTransitionRouterPhase({ stateForPrompt, detectorPatch =
   // detector 或 phase-advance 已動過 router_phase → 尊重它、不覆寫
   if (detectorPatch && detectorPatch.router_phase != null) return null;
   if (advancePatch  && advancePatch.router_phase  != null) return null;
-  return { router_phase: 'elicitation' };
+  // PR-4c-green E4 fix — also clear day_opening_inject_active so turn 2 uses
+  // phase_1.elicitation 鏈式追問 cleanly, never the deferred variant.
+  return { router_phase: 'elicitation', day_opening_inject_active: false };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -441,6 +447,34 @@ export function maybeAutoTransitionRouterPhase({ stateForPrompt, detectorPatch =
 //   auto-transition (maybeAutoTransitionRouterPhase) flips to elicitation →
 //   student's real first message — router_phase=elicitation → chain-追問.
 // ════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════
+// PR-4c-green E4 fix — should we dispatch new_session_day this turn?
+//
+// Root cause of A001 Day 2 冷起手式:
+//   The previous gate was `if (isNew)` — only fired E4 when loadOrCreateSession
+//   *created* a new row this request. But Day 2's session row already exists by
+//   the time the kickoff request lands (day_complete=FALSE, in-progress) → load
+//   path returns isNew=false → E4 skip → main LLM ships phase_1 cold 起手式.
+//
+// Fix: gate on a per-session flag (day_opening_done_this_session) so we always
+//   dispatch new_session_day exactly once per session row — regardless of which
+//   request created the row. The flag lives in session_state JSONB which is
+//   per-day (migration 018 UNIQUE on student_id+module+day), so it resets
+//   naturally between days.
+//
+// Idempotence: dispatch may be the no-op handled=false (Day 1 / brand new
+//   student / no takeaway yet) — still mark the flag, so we don't retry
+//   the no-op cascade on every subsequent turn.
+//
+// @param {object} sessionState
+// @returns {boolean}
+// ════════════════════════════════════════════════════════════════
+
+export function shouldDispatchDayOpening(sessionState) {
+  if (!sessionState || typeof sessionState !== 'object') return true;
+  return !sessionState.day_opening_done_this_session;
+}
 
 export const KICKOFF_TRIGGER_CONTENT =
   '[session-start trigger — 本場第一輪、請依當前 phase_context + router_phase'
@@ -616,7 +650,9 @@ export default async function handler(req, res) {
     let detectorPatch = {};
 
     // 7a — new_session_day lifecycle（E4 day opening；handler 自己 gate 有無資產）
-    if (isNew) {
+    //   PR-4c-green E4 fix: gate on session-state flag, not isNew (which only
+    //   covers fresh row inserts). See shouldDispatchDayOpening() comment block.
+    if (shouldDispatchDayOpening(sessionState)) {
       try {
         const r = await detectorRegistry.dispatch('new_session_day', ctx);
         const out = collectDetectorOutput(r);
@@ -625,6 +661,10 @@ export default async function handler(req, res) {
       } catch (e) {
         console.error('new_session_day dispatch failed:', e.message);
       }
+      // Stamp the flag regardless of whether E4 handled — idempotent retry
+      // protection within the same session row. Flag resets naturally on Day N+1
+      // (new session row → fresh session_state).
+      detectorPatch.day_opening_done_this_session = true;
     }
 
     // 7b — user_turn Sequential cascade

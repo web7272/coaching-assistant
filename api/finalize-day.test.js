@@ -148,10 +148,22 @@ test('🛑 extractTakeawayAnchor: long sentence → first chunk before sentence 
   // …and result is capped at 12 chars (above is 11 chars, still cap-safe)
 });
 
-test('🛑 extractTakeawayAnchor: very long unbroken text → hard-capped at 12 chars', () => {
+// PR-4c-green E4 fix (Patrick 5/24): replaced the prior 「hard-cap at 12 chars」 test.
+// Old behavior produced garbled mid-word cutoffs (A001 D1 stored
+//「感覺追求金錢豐盛沒有比追」). New rule: no natural boundary within 12 chars →
+// return null; caller falls back to extractKeyPhrase + CSS text-overflow.
+test('🛑 extractTakeawayAnchor: very long unbroken text → null (no garbled cutoff)', () => {
   const note = `【關鍵句】\n這個非常非常非常非常非常非常非常長的話沒有句點\n\n【其他】`;
-  const out = extractTakeawayAnchor(note);
-  assert.ok(out.length <= 12, `expected length ≤ 12, got ${out.length}`);
+  assert.equal(extractTakeawayAnchor(note), null,
+    'no natural boundary ≤12 chars → return null, never a slice(0,12) garble');
+});
+
+test('🛑 extractTakeawayAnchor: A001 D1 actual garble case → null', () => {
+  // The exact string the A001 D1 Damon Note shipped — "感覺追求金錢豐盛沒有比追…"
+  // had no comma / 、 / 。 within 12 chars and was previously stored garbled.
+  const note = `【關鍵句】\n感覺追求金錢豐盛沒有比追求真實的自己更重要\n\n【其他】`;
+  assert.equal(extractTakeawayAnchor(note), null,
+    'A001 5/23 regression — must not store mid-word cutoff anymore');
 });
 
 test('extractTakeawayAnchor: strips quotes — fullwidth + ASCII', () => {

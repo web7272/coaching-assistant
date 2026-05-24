@@ -109,12 +109,14 @@ export function extractKeyPhrase(fullNote) {
  * Extract a SHORT anchor (1-2 詞 / ≤ ~12 chars) for daily_takeaways — the
  * 結業 21 句詩 seed and the takeaway-planter spec's "1-2 個字 anchor".
  *
- * PR-4c-4d B2 fix: prior implementation stored the entire 【關鍵句】 sentence
+ * PR-4c-4d B2: prior implementation stored the entire 【關鍵句】 sentence
  * which overflowed cells in the journey grid and made the 21-poem unreadable.
- * Heuristic (no LLM call): take the 【關鍵句】, slice at the first sentence
- * boundary, strip quotes, cap at 12 chars defensively. Without LLM-assisted
- * summarisation this can't guarantee 1-2 chars on every input, but defends
- * against the long-paragraph overflow Vivi saw.
+ * PR-4c-green E4 fix (Patrick 5/24): the hard slice(0, 12) used to fire on
+ * sentences with no natural boundary and produced garbled cutoffs (A001 D1
+ * stored 「感覺追求金錢豐盛沒有比追」 — mid-word). Now: only return a short
+ * anchor when there's a natural boundary within 12 chars; otherwise return
+ * null so the caller can fall back to the full keyPhrase. "Term 欄別塞截斷
+ * 亂碼" — Patrick's rule.
  *
  * @param {string} fullNote
  * @returns {string|null}
@@ -122,13 +124,14 @@ export function extractKeyPhrase(fullNote) {
 export function extractTakeawayAnchor(fullNote) {
   const keyPhrase = extractKeyPhrase(fullNote);
   if (!keyPhrase) return null;
-  // Slice at first sentence-ending punctuation (CJK + ASCII)
+  // Slice at first sentence-ending punctuation (CJK + ASCII).
   const firstChunk = keyPhrase.split(/[。，、！？\s,.!?\n]/)[0];
-  // Re-strip surrounding quotes defensively
   const cleaned = (firstChunk || '').replace(/^[「『"'\s]+|[」』"'\s]+$/g, '').trim();
   if (!cleaned) return null;
-  // Hard cap — 12 chars (~6 Chinese chars equivalent)
-  return cleaned.length > 12 ? cleaned.slice(0, 12) : cleaned;
+  // No natural boundary within 12 chars → don't garble. Caller falls back to
+  // the full keyPhrase via extractKeyPhrase + display layer's text-overflow.
+  if (cleaned.length > 12) return null;
+  return cleaned;
 }
 
 /**
@@ -380,24 +383,30 @@ export default async function handler(req, res) {
     // PR-4c-2 P0-4 — daily_takeaways append（每天）+ Day 21 結業生成 + export email
     // ════════════════════════════════════════════════════════════════
 
-    // (1) 每天：抽 Damon Note 【關鍵句】 → 短錨點（≤12 chars）→ append daily_takeaways（dedup-by-day）
-    //     失敗 fail-soft、不阻塞主回應（21 句詩有 1-2 格缺、優於整段 500 erroring）
-    //     PR-4c-4d B2: use extractTakeawayAnchor (short) not extractKeyPhrase (full sentence)
-    //                  — overflowed cells in #16 preview + made 結業 21 句詩 unreadable.
-    const takeawayTerm = extractTakeawayAnchor(noteResult.fullNote);
-    if (takeawayTerm) {
+    // (1) 每天：抽 Damon Note 【關鍵句】 → 兩條輸出
+    //     PR-4c-green E4 fix (Patrick 5/24): 拆成 short anchor + full keyPhrase。
+    //
+    //   - daily_takeaways[].term: 短 anchor 優先（給 journey grid + 21 句詩用）；
+    //     anchor 因句長無自然 boundary 而為 null 時、fallback 整句 keyPhrase（CSS
+    //     text-overflow:ellipsis 處理長度）。「term 欄別塞截斷亂碼」(Patrick rule).
+    //   - last_session_day_summary.last_takeaway_term: 整句 keyPhrase（給 E4
+    //     跨日引用用、Sonnet 自己挑「一個詞」或「整句」、不在這裡硬切）。
+    //
+    //   兩條 fail-soft、不阻塞主回應。
+    const keyPhrase  = extractKeyPhrase(noteResult.fullNote);
+    const shortAnchor = extractTakeawayAnchor(noteResult.fullNote);
+    const displayTerm = shortAnchor || keyPhrase;   // never a garbled cutoff
+    if (displayTerm) {
       try {
-        await appendDailyTakeaway(existing.student_id, { day: sessionDay, term: takeawayTerm });
+        await appendDailyTakeaway(existing.student_id, { day: sessionDay, term: displayTerm });
       } catch (e) {
         console.error('[daily_takeaways] append failed (fail-soft):', e.message);
       }
-      // PR-4c-green bug 3 — also write last_session_day_summary.last_takeaway_term.
-      // This is the field E4 day-opening-selector.prompt_content expects to fill the
-      // V1/V2/V5 variants; without it, Day N+1 's 跨日引用 has no anchor to reference.
-      // Shallow-merge via setLastSessionDaySummary (race-safe Postgres `||`).
       try {
         await setLastSessionDaySummary(existing.student_id, {
-          last_takeaway_term: takeawayTerm,
+          // E4 day-opening selector reads this. Full keyPhrase (not the short
+          // anchor) — Sonnet decides how to use it per the V1-V5 variant.
+          last_takeaway_term: keyPhrase || displayTerm,
           last_takeaway_day: sessionDay,
         });
       } catch (e) {

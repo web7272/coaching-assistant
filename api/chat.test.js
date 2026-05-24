@@ -20,6 +20,7 @@ import {
   buildKickoffMessages,
   normalizeDateString,
   decideSessionAction,
+  shouldDispatchDayOpening,
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 
@@ -322,11 +323,13 @@ test('buildClosureHint: non-number turnCount → null', () => {
 // PR-4c-1b: maybeAutoTransitionRouterPhase — 開場重複 bug fix
 // ═════════════════════════════════════════════════════════
 
-test('🛑 auto-transition: phase_1 + opening + no other touches → { router_phase: elicitation }', () => {
+test('🛑 auto-transition: phase_1 + opening + no other touches → elicitation + clears day_opening_inject_active', () => {
   const out = maybeAutoTransitionRouterPhase({
     stateForPrompt: { current_phase: 'phase_1', router_phase: 'opening' },
   });
-  assert.deepEqual(out, { router_phase: 'elicitation' });
+  // PR-4c-green E4 fix: also clears the day-opening flag so turn 2 uses
+  // phase_1.elicitation 鏈式追問 cleanly, never the deferred variant.
+  assert.deepEqual(out, { router_phase: 'elicitation', day_opening_inject_active: false });
 });
 
 test('🛑 auto-transition: idempotent — already elicitation → null (turn 2+ no re-fire)', () => {
@@ -393,6 +396,59 @@ test('auto-transition: router_phase already non-opening (e.g. deep_signal_handof
     }),
     null,
   );
+});
+
+// ═════════════════════════════════════════════════════════
+// PR-4c-green E4 fix — shouldDispatchDayOpening + inject-active phase context
+// 釘死 Patrick 5/24 ping: 「E4 在 isNew=false 但 new-session-day 的情境會 dispatch」
+// ═════════════════════════════════════════════════════════
+
+test('🛑 shouldDispatchDayOpening: empty session_state → true (Day 2 kickoff, no flag yet)', () => {
+  // This is the bug fix — previously gated on `isNew`; Day 2's session row was
+  // already created by the time kickoff fires → isNew=false → E4 skipped.
+  // Now gated on a per-session flag instead, so isNew is irrelevant.
+  assert.equal(shouldDispatchDayOpening({}), true);
+  assert.equal(shouldDispatchDayOpening(null), true);
+  assert.equal(shouldDispatchDayOpening(undefined), true);
+});
+
+test('🛑 shouldDispatchDayOpening: flag already set → false (turn 2+ within same session, no re-fire)', () => {
+  assert.equal(
+    shouldDispatchDayOpening({ day_opening_done_this_session: true }),
+    false,
+  );
+});
+
+test('shouldDispatchDayOpening: falsy flag → still dispatch', () => {
+  assert.equal(shouldDispatchDayOpening({ day_opening_done_this_session: false }), true);
+  assert.equal(shouldDispatchDayOpening({ day_opening_done_this_session: null }),  true);
+  assert.equal(shouldDispatchDayOpening({ day_opening_done_this_session: 0 }),     true);
+});
+
+test('🛑 buildDynamicContext: phase_1 + opening + day_opening_inject_active=true → deferred variant (suppresses 起手式)', () => {
+  // The whole reason for this fix: E4 fired, set the flag, contextFor must
+  // return the "defer to inject" variant — not the cold 起手式 that competed
+  // with the inject and won on A001 Day 2.
+  const txt = buildDynamicContext(
+    {
+      current_phase: 'phase_1',
+      router_phase: 'opening',
+      day_opening_inject_active: true,
+    },
+    {}, 1,
+  );
+  assert.match(txt, /由 \[SYSTEM INJECT — Day Opening Active Reference\] 主導開場/);
+  assert.match(txt, /不另起 phase_1 起手式/);
+  assert.doesNotMatch(txt, /在你的生命裡、你想要什麼\?/,
+    '冷起手式必須消失（compete with E4 inject 就是這個 bug 的根）');
+});
+
+test('buildDynamicContext: phase_1 + opening + no flag → cold 起手式 (Day 1 unchanged)', () => {
+  const txt = buildDynamicContext(
+    { current_phase: 'phase_1', router_phase: 'opening' },
+    {}, 0,
+  );
+  assert.match(txt, /起手式「在你的生命裡、你想要什麼\?」/);
 });
 
 // ═════════════════════════════════════════════════════════
