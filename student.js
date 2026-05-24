@@ -153,6 +153,11 @@ function renderEntry() {
   emailEl.addEventListener('input', clearInvalid);
   nameEl.addEventListener('input', clearInvalid);
 
+  // PR-4c-green Auth rebuild stage 1c — magic-link flow replaces direct
+  // email-as-identity. Submit no longer puts the student into the app; it
+  // POSTs to /api/auth/request-link, the server emails a one-time link
+  // (?token=…), the student clicks it → /auth.html → /api/auth/verify-link
+  // sets the HttpOnly student_session cookie → redirects into /#/journey.
   form.onsubmit = async (e) => {
     e.preventDefault();
     clearInvalid();
@@ -165,24 +170,33 @@ function renderEntry() {
     const paceChoice = (form.querySelector('input[name="pace"]:checked')?.value === 'self-paced')
       ? 'self-paced' : 'daily';
 
+    const originalLabel = btn.textContent;
     btn.disabled = true;
+    btn.textContent = '送出中…';
     try {
-      const r = await api('/api/auth/email-login', {
+      // request-link always returns 200 ok:true (no email-existence leak)
+      await api('/api/auth/request-link', {
         method: 'POST',
         body: { email, preferredName, pace: paceChoice },
       });
-      state.studentId     = r.studentId;
-      state.email         = email;
-      state.preferredName = r.preferredName ?? preferredName ?? null;
-      state.pace          = r.pace || paceChoice || 'daily';
-      state.module        = r.module || 'self';
-      state.currentDay    = r.currentDay || 1;
-      saveState();
-      location.hash = '#/journey';
+      // Replace the form with a calm confirmation. Don't go into the app —
+      // student needs to open their inbox + click the link.
+      const container = form.closest('.entry-container') || form.parentNode;
+      const confirm = document.createElement('div');
+      confirm.style.cssText = 'text-align:center;margin-top:32px;line-height:2;';
+      confirm.innerHTML = `
+        <p class="hint-italic" style="font-size:14px;color:var(--text-primary);">
+          登入連結已寄到<br><strong style="color:var(--green-forest);">${email}</strong>
+        </p>
+        <p class="hint-italic" style="font-size:12px;color:var(--text-secondary);margin-top:14px;">
+          打開信箱、點一下、就進來了。<br>連結 20 分鐘內有效。
+        </p>
+      `;
+      form.replaceWith(confirm);
     } catch (e2) {
       setInvalid(emailEl, '沒能送出，我們再試一次。');
-    } finally {
       btn.disabled = false;
+      btn.textContent = originalLabel;
     }
   };
 }

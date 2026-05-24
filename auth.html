@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登入中 · 看見自己</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<!-- PR-4c-green Auth rebuild stage 1c — magic-link callback page.
+     Reads ?token=, POSTs to /api/auth/verify-link. On success the server sets
+     the HttpOnly student_session cookie + we redirect into the SPA. -->
+<div id="app">
+  <section id="view-auth" class="view" aria-label="登入中">
+    <div class="entry-container" style="padding-top:96px;text-align:center;">
+      <p class="conv-waiting" id="auth-status">
+        <span class="star">✦</span><span class="text">正在打開你的旅程…</span>
+      </p>
+    </div>
+  </section>
+</div>
+
+<script>
+(async function() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('token');
+  const status = document.getElementById('auth-status');
+  function fail(msg) {
+    status.innerHTML = '';
+    const p = document.createElement('p');
+    p.className = 'hint-italic';
+    p.textContent = msg;
+    status.appendChild(p);
+    // Offer a way back to the entry page after a moment.
+    setTimeout(() => { location.href = '/#/entry'; }, 4000);
+  }
+
+  if (!token) { fail('連結缺少 token、回主頁重新登入。'); return; }
+  try {
+    const res = await fetch('/api/auth/verify-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) { fail('連結失效或過期、回主頁重新登入。'); return; }
+    // ok: server set student_session cookie + returned student info.
+    // 1d will make the SPA pick studentId from cookie; for now we just go into
+    // the app and let the entry / journey load happen normally.
+    location.href = '/#/journey';
+  } catch (e) {
+    fail('沒能登入，待會再試。');
+  }
+})();
+</script>
+</body>
+</html>
