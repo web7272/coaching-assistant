@@ -411,9 +411,11 @@ const TREASURE_SVG = `
   <circle cx="12" cy="13.5" r="1.6" fill="currentColor"/>
 </svg>`;
 
-// ─── §4.3 conversation ────────────────────────────────────────────
+// ─── §5.3 conversation (PR-4c-green: 「{name} · 第N天」 header per spec) ───
 async function renderConversation() {
-  document.getElementById('conv-header-label').textContent = `看見自己 · 第${state.currentDay || 1}天`;
+  // P3: header = 「{preferredName} · 第N天」 (was 「看見自己 · 第N天」)
+  const headerName = state.preferredName || '你';
+  document.getElementById('conv-header-label').textContent = `${headerName} · 第${state.currentDay || 1}天`;
   const scroll = document.getElementById('conv-scroll');
   scroll.innerHTML = '';
   // Re-render persisted conversation (localStorage survives refresh)
@@ -636,15 +638,27 @@ async function startClosureTransition() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ─── §4.5 note ─────────────────────────────────────────────────────
+// ─── §5.4 note (PR-4c-green: 「{name} · 第N天」 + context-aware buttons) ───
 async function renderNote(day) {
-  document.getElementById('note-header-label').textContent = `看見自己 · 第${day}天`;
+  // P3: header「{preferredName} · 第N天」(was「看見自己 · 第N天」)
+  const headerName = state.preferredName || '你';
+  document.getElementById('note-header-label').textContent = `${headerName} · 第${day}天`;
   const body = document.getElementById('note-body');
   body.innerHTML = '';
 
-  // if we have a pendingNote from the §5.2 transition, use it; else fetch
+  // P3: button row context per spec §5.4 —
+  //   from conversation (closure transition just brought us here) →
+  //     【回到旅程】 + 【明天見】
+  //   from a journey cell click (re-read past day) →
+  //     【回到旅程】 only
+  // _pendingNote is set ONLY by startClosureTransition; presence = from-conversation.
+  const fromConversation = !!(state._pendingNote && state._pendingNote.day === day);
+  const tomorrowBtn = document.getElementById('note-btn-tomorrow');
+  if (tomorrowBtn) tomorrowBtn.classList.toggle('hidden', !fromConversation);
+
+  // Note body — bridge from §5.2 closure if present, otherwise fetch from /api/note.
   let text = null;
-  if (state._pendingNote && state._pendingNote.day === day) {
+  if (fromConversation) {
     text = state._pendingNote.body;
     state._pendingNote = null;
   } else {
@@ -690,8 +704,13 @@ async function renderWeekReport(week) {
 }
 function weekZh(n) { return ['一', '二', '三'][n - 1] || String(n); }
 
-// ─── §4.7 graduation ───────────────────────────────────────────────
+// ─── §5.6 graduation (PR-4c-green: 「{name} · 第二十一天」 header) ───
 async function renderGraduation() {
+  // P3: header「{preferredName} · 第二十一天」
+  const headerName = state.preferredName || '你';
+  const headerEl = document.getElementById('grad-header-label');
+  if (headerEl) headerEl.textContent = `${headerName} · 第二十一天`;
+
   const letter   = document.getElementById('grad-letter');
   const poem     = document.getElementById('grad-poem');
   const decl     = document.getElementById('grad-declaration');

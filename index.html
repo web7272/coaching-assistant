@@ -105,7 +105,8 @@
                Enter still sends; Shift+Enter still newlines. -->
           <button type="button" id="conv-send-btn" class="conv-send-btn" aria-label="送出" disabled>送出</button>
         </div>
-        <p class="conv-hint">⋯ 想沉默一下，AI 會在這裡等你</p>
+        <!-- P3 (PR-4c-green) §5.3: simpler、warmer (was 「⋯ 想沉默一下，AI 會在這裡等你」) -->
+        <p class="conv-hint">慢慢來，我等你</p>
         <!-- P3 (PR-4c-4f) — Day-1-only chain-追問 explainer (toggled by student.js).
              Tells the new student the teacher's repeated「對你有什麼重要?」is deliberate. -->
         <p id="conv-chain-hint" class="conv-hint--chain hidden">
@@ -120,7 +121,7 @@
     </div>
   </section>
 
-  <!-- ─────────── §4.5 教練筆記 ─────────── -->
+  <!-- ─────────── §5.4 教練卡 — green sweep + new copy ─────────── -->
   <section id="view-note" class="view paper-page" aria-label="教練筆記">
     <header class="app-header" style="width:100%;"><span class="label" id="note-header-label">看見自己 · 第N天</span></header>
     <div style="height:52px"></div>
@@ -132,10 +133,14 @@
       <div id="note-body" class="paper-card__body"></div>
       <div class="paper-card__sig">— 教練</div>
     </article>
-    <div class="status-row"><span class="star">✦</span>已收下</div>
-    <div class="btn-row">
-      <button class="paper-btn" data-nav="journey">回到你的旅程</button>
-      <button class="paper-btn" data-nav="journey">明天見</button>
+    <!-- P3 (PR-4c-green): 「已收下」 → 「已收進你的旅程」 per spec §5.4 -->
+    <div class="status-row"><span class="star">✦</span>已收進你的旅程</div>
+    <!-- P3: button row context-aware — student.js toggles 「明天見」 visibility
+         (shown only when arriving from the conversation closure transition;
+         hidden when re-reading via a journey cell click). -->
+    <div class="btn-row" id="note-btn-row">
+      <button class="paper-btn" data-nav="journey">回到旅程</button>
+      <button class="paper-btn" data-nav="journey" id="note-btn-tomorrow">明天見</button>
     </div>
   </section>
 
@@ -152,16 +157,15 @@
       <div id="week-body" class="paper-card__body"></div>
       <div class="paper-card__sig">— 教練</div>
     </article>
-    <div class="status-row"><span class="star">✦</span>已收下</div>
+    <div class="status-row"><span class="star">✦</span>已收進你的旅程</div>
     <div class="btn-row">
-      <button class="paper-btn" data-nav="journey">回到你的旅程</button>
-      <button class="paper-btn" data-nav="journey">明天見</button>
+      <button class="paper-btn" data-nav="journey">回到旅程</button>
     </div>
   </section>
 
-  <!-- ─────────── §4.7 結業 ─────────── -->
+  <!-- ─────────── §5.6 結業 — green sweep + new copy ─────────── -->
   <section id="view-graduation" class="view paper-page" aria-label="結業">
-    <header class="app-header" style="width:100%;"><span class="label">看見自己 · 第二十一天</span></header>
+    <header class="app-header" style="width:100%;"><span class="label" id="grad-header-label">看見自己 · 第二十一天</span></header>
     <div style="height:52px"></div>
     <article class="paper-card paper-card--graduation">
       <div class="paper-card__header">
@@ -171,7 +175,7 @@
 
       <div id="grad-letter" class="paper-card__body" style="text-align:center;"></div>
 
-      <div class="poem-block" id="grad-poem"><!-- 21 句詩 ‧ joined → 3 lines --></div>
+      <div class="poem-block" id="grad-poem"><!-- 21 句詩 · joined → 3 lines --></div>
 
       <div class="paper-card__divider" style="margin:0 auto 28px;"></div>
 
@@ -180,11 +184,12 @@
 
       <div class="paper-card__sig">— 教練見證</div>
     </article>
-    <p id="grad-export-notice" class="export-notice hidden">你的教練、已經寄到你的信箱了。</p>
-    <div class="status-row"><span class="star">✦</span>已收下</div>
+    <!-- P3 (PR-4c-green) §5.6: copy aligned to spec 08 (Day 21 emailed deep PDF) -->
+    <p id="grad-export-notice" class="export-notice hidden">你完整的旅程報告，已經寄到你的信箱了。</p>
+    <div class="status-row"><span class="star">✦</span>已收進你的旅程</div>
+    <!-- P3: 「先這樣」 dropped per spec §5.6 — single button only -->
     <div class="btn-row">
-      <button class="paper-btn" data-nav="journey">回到你的旅程</button>
-      <button class="paper-btn" data-nav="journey">先這樣</button>
+      <button class="paper-btn" data-nav="journey">回到旅程</button>
     </div>
   </section>
 
