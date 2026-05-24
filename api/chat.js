@@ -913,7 +913,11 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
 - 條件欄位（Scope 證據 / 賦予新角色狀態 / 確定類別 + Scope / Transfer 結果 / 微證據 + 反例預演結果 / 宣言）只在對應 week/day 採集、其他 day 不出現該欄位、不要寫「本日不採集」之類佔位字`,
         messages: [{
           role: 'user',
-          content: `模組：${moduleLabel}，第 ${week} 週，第 ${day} 天。\n\n${conversationText}\n\n請寫下今天的 Damon Note。`
+          // P5 (PR-4c-green): v5 canonical unit is sessionDay (1..21); the prior
+          // 「第 N 週，第 N 天」 framing is a v4 holdover. Week is still derivable but
+          // not surfaced in the daily prompt header — keeps the Damon Note's mental
+          // model aligned with the new 21-day rhythm.
+          content: `模組：${moduleLabel}，Day ${day}（共 21 天）。\n\n${conversationText}\n\n請寫下今天的 Damon Note。`
         }]
     });
 

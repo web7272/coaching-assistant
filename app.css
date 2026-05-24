@@ -552,7 +552,9 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .coach-list__open { font-family: var(--font-serif); font-size: 13px; color: var(--text-secondary); text-align: right; }
 .coach-section { margin-top: 32px; }
 .coach-h2 { font-family: var(--font-serif); font-size: 14px; letter-spacing: 2px; color: var(--text-secondary); margin-bottom: 10px; }
-.coach-mini-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; max-width: 480px;
+/* P5 (PR-4c-green): 3×7 daily only — 週報 I/II/III column retired (spec 09 §10).
+   Phase Reports render in a separate stacked section below the grid. */
+.coach-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; max-width: 480px;
   margin-bottom: 16px; }
 .coach-mini-cell { height: 38px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
   font-family: var(--font-serif); font-size: 11px; color: var(--text-primary); padding: 0 4px;

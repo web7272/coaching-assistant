@@ -101,6 +101,11 @@ export default async function handler(req, res) {
   const studentId = String(req.query?.studentId || '').trim();
   const module    = String(req.query?.module    || 'self').trim();
   const phaseId   = parseInt(req.query?.phase);
+  // PR-4c-green P5 — audience=coach returns the un-sanitized breakthrough so the
+  // coach sees the full Sonnet output (parallel to /api/note?audience=coach behavior).
+  // Default audience = student → sanitizer runs as before.
+  const audience  = String(req.query?.audience  || 'student').trim();
+  const isCoach   = audience === 'coach';
   if (!studentId) return res.status(400).json({ error: 'Missing required query: studentId' });
   if (!Number.isInteger(phaseId) || phaseId < 1 || phaseId > 5) {
     return res.status(400).json({ error: 'Invalid phase (1-5)' });
@@ -135,6 +140,10 @@ export default async function handler(req, res) {
     }
 
     // 3. Cache hit — phase_reports[N] already generated → return immediately
+    //    Cached breakthrough is the post-sanitization (student-safe) version, written
+    //    on first generation. For coach, return it as-is too — re-sanitization is a
+    //    no-op on already-clean text; the un-sanitized raw is not persisted (by design,
+    //    so a coach-only path can't leak forbidden content into the student cache).
     const cached = profile.last_session_day_summary?.phase_reports?.[String(phaseId)];
     if (cached?.breakthrough) {
       return res.status(200).json({
@@ -183,7 +192,8 @@ export default async function handler(req, res) {
     const breakthrough = sanitizeStudentNote(breakthroughRaw);
     const generatedAt = new Date().toISOString();
 
-    // 5. Cache it — shallow-merge new phase_reports map back via setLastSessionDaySummary
+    // 5. Cache the SANITIZED version — never persist the raw (defends against an
+    //    accidental future audience=coach path leaking back into student cache).
     try {
       const existing = profile.last_session_day_summary?.phase_reports || {};
       const updated  = { ...existing, [String(phaseId)]: { breakthrough, generatedAt } };
@@ -192,9 +202,13 @@ export default async function handler(req, res) {
       console.warn('[phase-report] cache write failed (fail-soft):', e.message);
     }
 
+    // PR-4c-green P5 — coach gets the raw Sonnet output (full version of 教練見證);
+    //    student gets the sanitized version. The cache (line 5) always stores sanitized.
     return res.status(200).json({
       phaseId, name, roman,
-      teaching, breakthrough, generatedAt,
+      teaching,
+      breakthrough: isCoach ? breakthroughRaw : breakthrough,
+      generatedAt,
       exists: true,
     });
 

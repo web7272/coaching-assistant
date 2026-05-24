@@ -24,7 +24,7 @@
     <div class="coach-section">
       <h2 class="coach-h2">學員 · 全部</h2>
       <p class="muted" style="font-family:var(--font-sans);font-size:12px;margin-bottom:14px;">
-        點任一行 → 看該學員的旅程 / 筆記 / 週報 / 結業。
+        點任一行 → 看該學員的旅程 / 筆記 / 寶藏（5 phase report）/ 結業。
       </p>
       <div class="coach-list" id="coach-students-list"></div>
     </div>
@@ -39,12 +39,15 @@
       </div>
       <p class="muted" id="coach-student-meta" style="font-family:var(--font-sans);font-size:12px;margin-bottom:18px;"></p>
 
-      <h2 class="coach-h2" style="margin-top:20px;">旅程縮圖</h2>
+      <h2 class="coach-h2" style="margin-top:20px;">旅程縮圖（21 天）</h2>
       <div id="coach-journey-grid" class="coach-mini-grid"></div>
       <div id="coach-grad-cell" style="max-width:480px;margin-top:6px;"></div>
 
-      <h2 class="coach-h2" style="margin-top:28px;">本週 / 上週週報</h2>
-      <div id="coach-week-reports" style="display:flex;flex-direction:column;gap:10px;"></div>
+      <!-- P5 (PR-4c-green): 週報 retired (spec 09 §10). The 3-bucket I/II/III grid
+           has been dropped in favor of 5 Phase Reports (spec 09 §5.5 / §8). Coach
+           sees the un-sanitized 突破彙整 via audience=coach. -->
+      <h2 class="coach-h2" style="margin-top:28px;">你的寶藏（5 個 Phase Report · 教練看完整版）</h2>
+      <div id="coach-phase-reports" style="display:flex;flex-direction:column;gap:10px;"></div>
 
       <h2 class="coach-h2" style="margin-top:28px;">展開某天筆記</h2>
       <div id="coach-day-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>

@@ -18,7 +18,10 @@ function show(viewId) {
 }
 
 function escapeText(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
-function roman(n) { return ['I', 'II', 'III'][n - 1] || ''; }
+// PR-4c-green P5: extended to 5 phases (was 3 weeks). The week-report I/II/III
+// grid is gone; the Phase Report shelf takes Roman 1..5.
+function roman(n) { return ['I', 'II', 'III', 'IV', 'V'][n - 1] || ''; }
+const PHASE_NAMES = ['找到你真正要的', '你是誰', '擴大地圖', '串連起來', '放手帶著走'];
 
 // ─── list view ─────────────────────────────────────────────────────
 async function renderList() {
@@ -59,13 +62,13 @@ async function renderStudent(sid) {
   show('student');
   document.getElementById('coach-student-title').textContent = `學員 · ${sid}`;
   document.getElementById('coach-student-meta').textContent = '';
-  const grid    = document.getElementById('coach-journey-grid');
+  const grid     = document.getElementById('coach-journey-grid');
   const gradCell = document.getElementById('coach-grad-cell');
-  const weekBox = document.getElementById('coach-week-reports');
-  const picker  = document.getElementById('coach-day-picker');
-  const noteEl  = document.getElementById('coach-day-note');
-  const gradEl  = document.getElementById('coach-graduation');
-  grid.innerHTML = ''; gradCell.innerHTML = ''; weekBox.innerHTML = '';
+  const phaseBox = document.getElementById('coach-phase-reports');
+  const picker   = document.getElementById('coach-day-picker');
+  const noteEl   = document.getElementById('coach-day-note');
+  const gradEl   = document.getElementById('coach-graduation');
+  grid.innerHTML = ''; gradCell.innerHTML = ''; phaseBox.innerHTML = '';
   picker.innerHTML = ''; noteEl.textContent = '點上方某一天看當日筆記。'; gradEl.textContent = '';
 
   let j;
@@ -76,9 +79,11 @@ async function renderStudent(sid) {
   }
   document.getElementById('coach-student-meta').textContent = `current_day = ${j.currentDay} · module = ${j.module}`;
 
-  // mini grid (3×8): daily 1-7 + weekly I, then 8-14 + II, then 15-21 + III
-  const days  = (j.days  || []);
-  const weeks = (j.weeks || []);
+  // PR-4c-green P5: mini grid is now 3×7 daily only (週報 retired per spec 09 §10).
+  // Old 3×8 layout had a 「week I/II/III」 column on the right — gone. Phase Reports
+  // render below as their own section instead.
+  const days   = (j.days   || []);
+  const phases = (j.phases || []);
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 7; col++) {
       const c = days[row * 7 + col] || { day: row * 7 + col + 1, state: 'future', phrase: null };
@@ -88,12 +93,6 @@ async function renderStudent(sid) {
       div.textContent = c.phrase || `D${c.day}`;
       grid.appendChild(div);
     }
-    const w = weeks[row] || { week: row + 1, state: 'future' };
-    const wd = document.createElement('div');
-    wd.className = `coach-mini-cell${w.state === 'active' ? ' coach-mini-cell--active' : w.state === 'revealed' ? ' coach-mini-cell--revealed' : ''}`;
-    wd.title = `Week ${w.week} · ${w.state}`;
-    wd.textContent = roman(w.week);
-    grid.appendChild(wd);
   }
   if (j.graduation) {
     const gc = document.createElement('div');
@@ -102,17 +101,32 @@ async function renderStudent(sid) {
     gradCell.appendChild(gc);
   }
 
-  // week reports — fetch each revealed/active week summary defensively
-  for (const w of weeks) {
-    if (w.state === 'future') continue;
+  // PR-4c-green P5: 5 Phase Reports (spec 09 §5.5). Fetch each unlocked phase
+  // with audience=coach so the breakthrough is the FULL Sonnet output (not the
+  // student-side sanitized version). Locked phases get a one-line placeholder.
+  for (let phaseId = 1; phaseId <= 5; phaseId++) {
+    const p = phases[phaseId - 1] || { state: 'locked' };
+    const card = document.createElement('div');
+    card.className = 'coach-pre';
+    if (p.state === 'locked') {
+      card.innerHTML = `<strong>Phase ${roman(phaseId)} · ${escapeText(PHASE_NAMES[phaseId - 1])}</strong>  <span class="muted" style="font-size:11px;">（尚未解鎖）</span>`;
+      phaseBox.appendChild(card);
+      continue;
+    }
     try {
-      const r = await api(`/api/week-report?studentId=${encodeURIComponent(sid)}&module=self&week=${w.week}`);
-      const card = document.createElement('div');
-      card.className = 'coach-pre';
-      const title = r.exists ? (r.title || '—') : '（還沒生成）';
-      card.innerHTML = `<strong>Week ${w.week}：${escapeText(title)}</strong>\n\n${escapeText(r.body || '')}`;
-      weekBox.appendChild(card);
-    } catch (e) { /* fail-soft per row */ }
+      const r = await api(`/api/phase-report?studentId=${encodeURIComponent(sid)}&module=self&phase=${phaseId}&audience=coach`);
+      const head = `<strong>Phase ${escapeText(r.roman || roman(phaseId))} · ${escapeText(r.name || PHASE_NAMES[phaseId - 1])}</strong>`;
+      if (!r.exists) {
+        card.innerHTML = `${head}  <span class="muted" style="font-size:11px;">（還沒生成）</span>`;
+      } else {
+        const teaching     = escapeText(r.teaching || '');
+        const breakthrough = escapeText(r.breakthrough || '');
+        card.innerHTML = `${head}\n\n【教學】\n${teaching}\n\n【你的突破（完整版）】\n${breakthrough}`;
+      }
+    } catch (e) {
+      card.innerHTML = `<strong>Phase ${roman(phaseId)}</strong>  <span class="muted" style="font-size:11px;">沒能取回：${escapeText(e.message)}</span>`;
+    }
+    phaseBox.appendChild(card);
   }
 
   // day picker — every day with revealed/active-filled state gets a button
