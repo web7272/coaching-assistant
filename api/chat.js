@@ -164,11 +164,12 @@ export function normalizeDateString(d) {
  * results + pace + today's calendar date.
  *
  * Returns:
- *   { action: 'reuse',  sessionDay }       — there's an in-progress session, continue it
- *   { action: 'create', sessionDay }       — open a fresh Day-N row (calendar-day boundary
- *                                            OR self-paced post-finalize same-day)
- *   { action: 'locked', sessionDay }       — daily mode + last session already complete today,
- *                                            Day N+1 unlock waits for the next calendar day
+ *   { action: 'reuse',  sessionDay }                        — in-progress session, continue
+ *   { action: 'create', sessionDay }                        — open a fresh Day-N row
+ *   { action: 'locked', sessionDay }                        — daily mode, Day N+1 waits for next calendar day
+ *   { action: 'awaiting_prior_finalize', sessionDay, priorDay } — PR-4c-green E4 修法 1: would create
+ *                                                                  Day N+1 but prior day's finalize race
+ *                                                                  is still in flight (caller waits/retries)
  *
  * sessionDay derivation:
  *   reuse  → inProgress.day
@@ -177,6 +178,7 @@ export function normalizeDateString(d) {
  *                                               (which bumps session_day_count without
  *                                               creating sessions rows)
  *   locked → prior.day                       — informational
+ *   awaiting_prior_finalize → priorDay + 1   — informational; same value `create` would return
  *
  * @param {object} args
  * @param {{day?:number}|null} args.inProgress       — most-recent day_complete=FALSE row (or null)
@@ -184,9 +186,22 @@ export function normalizeDateString(d) {
  * @param {'daily'|'self-paced'} args.pace
  * @param {string} args.sessionDate                  — today's 'YYYY-MM-DD'
  * @param {number} args.userSessionDayCount          — user_profile_evolution.session_day_count
- * @returns {{ action:'reuse'|'create'|'locked', sessionDay:number }}
+ * @param {boolean} [args.priorDayFinalized=true]    — PR-4c-green E4 修法 1: caller-computed
+ *                                                     "has prior day's finalize-day write landed?".
+ *                                                     true means safe to create Day N+1.
+ *                                                     false means race is in flight + we're still
+ *                                                     within the recency window → block.
+ *                                                     Defaults to true → all existing callers
+ *                                                     keep their behavior; only the chat.js handler
+ *                                                     (which knows daily_takeaways + prior.updated_at)
+ *                                                     supplies false.
+ * @returns {{ action:'reuse'|'create'|'locked'|'awaiting_prior_finalize', sessionDay:number, priorDay?:number }}
  */
-export function decideSessionAction({ inProgress, prior, pace, sessionDate, userSessionDayCount = 0 } = {}) {
+export function decideSessionAction({
+  inProgress, prior, pace, sessionDate,
+  userSessionDayCount = 0,
+  priorDayFinalized = true,
+} = {}) {
   if (inProgress) {
     return { action: 'reuse', sessionDay: inProgress.day || 1 };
   }
@@ -195,7 +210,52 @@ export function decideSessionAction({ inProgress, prior, pace, sessionDate, user
   if (pace === 'daily' && priorDateStr && priorDateStr === sessionDate) {
     return { action: 'locked', sessionDay: priorDay };
   }
+  // PR-4c-green E4 修法 1 — finalize race gate.
+  //   Self-paced (gap_days=0, no calendar-day lock) lets the student tap into Day N+1
+  //   before /api/finalize-day finishes writing yesterday's daily_takeaways +
+  //   last_session_day_summary. Result: E4 reads empty assets → falls back to cold
+  //   起手式 (A001 Day 2 災難). When the caller signals priorDayFinalized=false
+  //   AND there's actually a prior day to be racing against (priorDay >= 1), block.
+  if (priorDay >= 1 && !priorDayFinalized) {
+    return { action: 'awaiting_prior_finalize', sessionDay: priorDay + 1, priorDay };
+  }
   return { action: 'create', sessionDay: (userSessionDayCount || 0) + 1 };
+}
+
+/**
+ * PR-4c-green E4 修法 1 — compute "has prior day's finalize-day write landed?"
+ *
+ * Two signals:
+ *   (a) daily_takeaways contains an entry for priorDay → finalize landed. Done.
+ *   (b) No entry, but prior.updated_at is older than the recency window
+ *       (default 90s, longer than any healthy finalize-day call) → assume the
+ *       race is over; either finalize succeeded without a 關鍵句 (no takeaway),
+ *       or it truly failed long ago. Don't lock forever — proceed and let E4
+ *       fall back to no-inject gracefully.
+ *
+ * Caller passes this into decideSessionAction's priorDayFinalized arg.
+ *
+ * @param {object} args
+ * @param {number} args.priorDay
+ * @param {Date|string|null} args.priorUpdatedAt
+ * @param {Array<{day?:number}>} [args.dailyTakeaways]
+ * @param {number} [args.recencyMs=90000]
+ * @param {Date} [args.now]    — injectable clock for tests
+ * @returns {boolean}
+ */
+export function isPriorDayFinalized({
+  priorDay, priorUpdatedAt, dailyTakeaways = [],
+  recencyMs = 90_000, now = new Date(),
+} = {}) {
+  if (!priorDay || priorDay < 1) return true;   // no prior, nothing to race against
+  const hasEntry = Array.isArray(dailyTakeaways)
+    && dailyTakeaways.some(t => Number(t?.day) === Number(priorDay));
+  if (hasEntry) return true;
+  if (!priorUpdatedAt) return true;             // no timestamp to gate on; don't lock
+  const t = priorUpdatedAt instanceof Date ? priorUpdatedAt : new Date(priorUpdatedAt);
+  if (Number.isNaN(t.getTime())) return true;
+  const ageMs = now.getTime() - t.getTime();
+  return ageMs >= recencyMs;                    // stale enough → stop waiting
 }
 
 /**
@@ -213,7 +273,13 @@ export function decideSessionAction({ inProgress, prior, pace, sessionDate, user
  *   pacingLocked?: boolean,
  * }>}
  */
-async function loadOrCreateSession(sql, { studentId, module, sessionDate, sessionNotes, pace = 'daily', userSessionDayCount = 0 }) {
+async function loadOrCreateSession(sql, {
+  studentId, module, sessionDate, sessionNotes,
+  pace = 'daily', userSessionDayCount = 0,
+  // PR-4c-green E4 修法 1 — passed from handler so we can detect finalize race
+  // before creating Day N+1's row.
+  dailyTakeaways = [],
+}) {
   // 1. Look for an in-progress session (day_complete=FALSE) — that's the current Day N being worked.
   const inProgressRows = await sql`
     SELECT id, day, questions_today, created_at, session_state
@@ -224,11 +290,13 @@ async function loadOrCreateSession(sql, { studentId, module, sessionDate, sessio
   `;
   const inProgress = inProgressRows[0] || null;
 
-  // 2. No in-progress — look up the most-recent prior row for carry-over + pace check
+  // 2. No in-progress — look up the most-recent prior row for carry-over + pace check + finalize-race check.
+  //    PR-4c-green E4 修法 1: added `updated_at` so we can recency-gate the
+  //    finalize race (don't lock forever if a real prior failure happened long ago).
   let prior = null;
   if (!inProgress) {
     const priorRows = await sql`
-      SELECT day, session_state, session_date
+      SELECT day, session_state, session_date, updated_at
       FROM sessions
       WHERE student_id = ${studentId} AND module = ${module}
       ORDER BY created_at DESC
@@ -237,7 +305,17 @@ async function loadOrCreateSession(sql, { studentId, module, sessionDate, sessio
     prior = priorRows[0] || null;
   }
 
-  const decision = decideSessionAction({ inProgress, prior, pace, sessionDate, userSessionDayCount });
+  // PR-4c-green E4 修法 1 — caller-computed race signal. True when prior day's
+  // daily_takeaways write landed (or the recency window expired).
+  const priorDayFinalized = isPriorDayFinalized({
+    priorDay:        prior?.day || 0,
+    priorUpdatedAt:  prior?.updated_at || null,
+    dailyTakeaways,
+  });
+
+  const decision = decideSessionAction({
+    inProgress, prior, pace, sessionDate, userSessionDayCount, priorDayFinalized,
+  });
 
   if (decision.action === 'reuse') {
     return {
@@ -259,6 +337,20 @@ async function loadOrCreateSession(sql, { studentId, module, sessionDate, sessio
       sessionState: prior?.session_state || {},
       isNew:        false,
       pacingLocked: true,
+    };
+  }
+
+  // PR-4c-green E4 修法 1 — race in flight; surface to handler → 409 retry.
+  if (decision.action === 'awaiting_prior_finalize') {
+    return {
+      sessionId:           null,
+      sessionDay:          decision.sessionDay,
+      turnCount:           0,
+      sessionStart:        new Date(),
+      sessionState:        prior?.session_state || {},
+      isNew:               false,
+      awaitingPriorFinalize: true,
+      priorDay:            decision.priorDay,
     };
   }
 
@@ -594,6 +686,8 @@ export default async function handler(req, res) {
       studentId, module, sessionDate, sessionNotes,
       pace,
       userSessionDayCount: userProfile?.session_day_count || 0,
+      // PR-4c-green E4 修法 1 — finalize race gate input
+      dailyTakeaways: userProfile?.daily_takeaways || [],
     });
     // PR-4c-4e — daily mode + last session already complete today → Day N+1 locked
     if (sess.pacingLocked) {
@@ -601,6 +695,20 @@ export default async function handler(req, res) {
         error:      'PACING_LOCKED',
         message:    '今天的對話已收尾、明天再回來。',
         sessionDay: sess.sessionDay,
+      });
+    }
+    // PR-4c-green E4 修法 1 — would create Day N+1 but prior day's finalize race
+    // is still in flight (no daily_takeaways entry yet + prior.updated_at recent).
+    // 409 with retry hint; frontend gates the kickoff fetch + auto-retries until clear.
+    // Self-paced is the most common path here — daily mode would already have
+    // returned PACING_LOCKED above.
+    if (sess.awaitingPriorFinalize) {
+      return res.status(409).json({
+        error:      'PRIOR_FINALIZE_PENDING',
+        message:    '教練還在寫昨天的字、稍等一下再回來。',
+        priorDay:   sess.priorDay,
+        sessionDay: sess.sessionDay,
+        retryAfterMs: 3000,
       });
     }
     const { sessionId, sessionStart, isNew } = sess;

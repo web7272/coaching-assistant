@@ -548,6 +548,11 @@ async function sendUserMessage(text) {
  * spinner, no typing dots — §五.四 / §六). Replaces the placeholder with the AI
  * opening when it arrives. Persists the opening to state.conversation so refresh
  * doesn't double-fire.
+ *
+ * PR-4c-green E4 修法 1 — auto-retry on 409 PRIOR_FINALIZE_PENDING. Self-paced
+ * students can race ahead of yesterday's finalize-day write; backend returns 409
+ * with a retryAfterMs hint, frontend waits + retries (max ~30s total). Swaps the
+ * placeholder copy to「教練還在寫昨天的字…」so the wait is legible.
  */
 async function requestKickoffOpening() {
   const scroll = document.getElementById('conv-scroll');
@@ -557,31 +562,59 @@ async function requestKickoffOpening() {
   placeholder.innerHTML = '<span class="star">✦</span><span class="text">教練在打開今天…</span>';
   scroll.appendChild(placeholder);
 
-  try {
-    const r = await api('/api/chat', {
-      method: 'POST',
-      body: {
-        kickoff: true,
-        // messages: [] — chat.js will synthesize the sentinel internally
-        studentId: state.studentId,
-        module: state.module,
-        today: new Date().toLocaleDateString('sv'),
-      },
-    });
-    if (r && r.sessionId) state._lastSessionId = r.sessionId;
-    const aiContent = r.content || '';
-    state.conversation.push({ role: 'assistant', content: aiContent });
-    saveState();
-    placeholder.remove();
-    appendMessage('assistant', aiContent);
-  } catch (e) {
-    placeholder.remove();
-    const div = document.createElement('div');
-    div.className = 'hint-italic';
-    div.style.marginBottom = '22px';
-    div.textContent = '沒能打開今天，待會再試。';
-    scroll.appendChild(div);
+  const MAX_RETRIES = 10;     // ~30s cap @ 3s each — finalize-day's Sonnet call rarely exceeds this
+  const FALLBACK_BACKOFF_MS = 3000;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const r = await api('/api/chat', {
+        method: 'POST',
+        body: {
+          kickoff: true,
+          // messages: [] — chat.js will synthesize the sentinel internally
+          studentId: state.studentId,
+          module: state.module,
+          today: new Date().toLocaleDateString('sv'),
+        },
+      });
+      if (r && r.sessionId) state._lastSessionId = r.sessionId;
+      const aiContent = r.content || '';
+      state.conversation.push({ role: 'assistant', content: aiContent });
+      saveState();
+      placeholder.remove();
+      appendMessage('assistant', aiContent);
+      return;
+    } catch (e) {
+      // PR-4c-green E4 修法 1 — finalize race: wait, swap copy, retry.
+      if (e && e.status === 409 && typeof e.body === 'string' && e.body.includes('PRIOR_FINALIZE_PENDING')) {
+        let retryAfter = FALLBACK_BACKOFF_MS;
+        try {
+          const parsed = JSON.parse(e.body);
+          if (typeof parsed.retryAfterMs === 'number') retryAfter = parsed.retryAfterMs;
+        } catch { /* keep fallback */ }
+        // Swap copy so the wait reads as「教練還沒寫完昨天的字」, not stuck-open-loading
+        placeholder.querySelector('.text').textContent = '教練還在寫昨天的字…';
+        await sleep(retryAfter);
+        continue;
+      }
+      // Any other error → bail with the existing米棕 hint-italic message
+      placeholder.remove();
+      const div = document.createElement('div');
+      div.className = 'hint-italic';
+      div.style.marginBottom = '22px';
+      div.textContent = '沒能打開今天，待會再試。';
+      scroll.appendChild(div);
+      return;
+    }
   }
+
+  // Exhausted retries — fall back to the calm hint, let user retry manually
+  placeholder.remove();
+  const div = document.createElement('div');
+  div.className = 'hint-italic';
+  div.style.marginBottom = '22px';
+  div.textContent = '昨天的字還在寫、待會再回來。';
+  scroll.appendChild(div);
 }
 
 // §5.2 對話收尾轉場

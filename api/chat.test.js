@@ -21,6 +21,7 @@ import {
   normalizeDateString,
   decideSessionAction,
   shouldDispatchDayOpening,
+  isPriorDayFinalized,
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 
@@ -591,4 +592,133 @@ test('decideSessionAction: in-progress wins over pace/lock — never lock with a
     userSessionDayCount: 1,
   });
   assert.equal(r.action, 'reuse');
+});
+
+// ═════════════════════════════════════════════════════════
+// PR-4c-green E4 修法 1 — finalize race gate (Patrick 5/24 主因)
+// 釘死 Patrick's 3 verification cases:
+//   (a) E4 在 isNew=false + new-program-day 仍 dispatch  ← covered by shouldDispatchDayOpening tests above
+//   (b) self-paced gap_days=0 仍 dispatch                ← decideSessionAction self-paced create path (existing test)
+//   (c) prior-day 未 finalize 時 Day N+1 不在空資產下開場 ← awaiting_prior_finalize action below
+// ═════════════════════════════════════════════════════════
+
+test('🛑 decideSessionAction: self-paced + prior day not finalized → awaiting_prior_finalize (NOT cold-start create)', () => {
+  // Self-paced Day 1 just收尾, daily_takeaways write still in flight.
+  // The cold create would seed Day 2 with empty assets → A001 Day 2 災難.
+  const r = decideSessionAction({
+    inProgress: null,
+    prior: { day: 1, session_date: '2026-05-23' },
+    pace: 'self-paced',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+    priorDayFinalized: false,
+  });
+  assert.equal(r.action, 'awaiting_prior_finalize');
+  assert.equal(r.sessionDay, 2);
+  assert.equal(r.priorDay, 1);
+});
+
+test('decideSessionAction: priorDayFinalized=true (default) → create (backward-compat)', () => {
+  // Existing callers don't pass priorDayFinalized; default true preserves behavior.
+  const r = decideSessionAction({
+    inProgress: null,
+    prior: { day: 1, session_date: '2026-05-23' },
+    pace: 'self-paced',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+  });
+  assert.equal(r.action, 'create');
+});
+
+test('decideSessionAction: Day 1 fresh student (no prior) + priorDayFinalized=false → still create', () => {
+  // priorDayFinalized=false only blocks when there IS a prior day to race against.
+  // Brand-new students reach this branch on first-ever entry and must NOT lock.
+  const r = decideSessionAction({
+    inProgress: null,
+    prior: null,
+    pace: 'self-paced',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 0,
+    priorDayFinalized: false,
+  });
+  assert.equal(r.action, 'create');
+  assert.equal(r.sessionDay, 1);
+});
+
+test('decideSessionAction: in-progress beats awaiting_prior_finalize (active session wins)', () => {
+  const r = decideSessionAction({
+    inProgress: { day: 2 },
+    prior: { day: 1, session_date: '2026-05-23' },
+    pace: 'self-paced',
+    sessionDate: '2026-05-23',
+    userSessionDayCount: 1,
+    priorDayFinalized: false,
+  });
+  assert.equal(r.action, 'reuse', 'in-progress means student is already past the race');
+});
+
+// ─── isPriorDayFinalized — the caller-side computation ───
+
+test('🛑 isPriorDayFinalized: daily_takeaways has entry for priorDay → true (race done)', () => {
+  assert.equal(isPriorDayFinalized({
+    priorDay: 1,
+    priorUpdatedAt: new Date(),
+    dailyTakeaways: [{ day: 1, term: '可以決定' }],
+  }), true);
+});
+
+test('🛑 isPriorDayFinalized: no entry + recent updated_at → false (race in flight)', () => {
+  const now = new Date('2026-05-24T12:00:00Z');
+  const justNow = new Date('2026-05-24T11:59:50Z');   // 10 seconds ago
+  assert.equal(isPriorDayFinalized({
+    priorDay: 1,
+    priorUpdatedAt: justNow,
+    dailyTakeaways: [],
+    now,
+  }), false, 'recent finalize, no takeaway yet → race is in flight');
+});
+
+test('isPriorDayFinalized: no entry + stale updated_at → true (give up the race-wait)', () => {
+  const now = new Date('2026-05-24T12:00:00Z');
+  const longAgo = new Date('2026-05-24T11:55:00Z');   // 5 min ago, well past 90s window
+  assert.equal(isPriorDayFinalized({
+    priorDay: 1,
+    priorUpdatedAt: longAgo,
+    dailyTakeaways: [],
+    now,
+  }), true, 'stale → either finalize had no 關鍵句 or it truly failed — don\'t lock forever');
+});
+
+test('isPriorDayFinalized: priorDay = 0 (no prior) → true (nothing to race)', () => {
+  assert.equal(isPriorDayFinalized({ priorDay: 0 }), true);
+  assert.equal(isPriorDayFinalized({ priorDay: null }), true);
+  assert.equal(isPriorDayFinalized({}), true);
+});
+
+test('isPriorDayFinalized: takeaway entry present + stale timestamp → still true', () => {
+  // Entry takes precedence; recency is just the fallback escape valve.
+  const now = new Date('2026-05-24T12:00:00Z');
+  const longAgo = new Date('2026-05-24T11:00:00Z');
+  assert.equal(isPriorDayFinalized({
+    priorDay: 1,
+    priorUpdatedAt: longAgo,
+    dailyTakeaways: [{ day: 1, term: '可以決定' }],
+    now,
+  }), true);
+});
+
+test('isPriorDayFinalized: no priorUpdatedAt (legacy row pre-updated_at column) → true', () => {
+  assert.equal(isPriorDayFinalized({
+    priorDay: 1, priorUpdatedAt: null, dailyTakeaways: [],
+  }), true, 'no timestamp to gate on → don\'t lock');
+});
+
+test('isPriorDayFinalized: ISO-string priorUpdatedAt → parsed correctly', () => {
+  const now = new Date('2026-05-24T12:00:00Z');
+  assert.equal(isPriorDayFinalized({
+    priorDay: 1,
+    priorUpdatedAt: '2026-05-24T11:59:30Z',   // 30s ago
+    dailyTakeaways: [],
+    now,
+  }), false, 'string timestamp inside recency window');
 });
