@@ -13,10 +13,13 @@
 //   user_profile_evolution.export_prompt_generated_at          → exportedToEmail
 
 import { getUserProfile } from '../lib/state/state-manager.js';
-// PR-4c-green Auth rebuild stage 1d — auto-detect: coach session → query
-// studentId (coach reviews any student); else student session → sid from cookie
-// (client-supplied studentId in query ignored).
-import { assertCoachSession } from '../lib/auth/coach-session.js';
+// PR-4c-green Auth rebuild stage 1d / 5/25 follow-up:
+//   audience='coach' → guardCoachOr401 + ?studentId from query (coach 看任何學員)
+//   audience=default → guardStudentOr401, sid from cookie (鐵則: query 完全忽略)
+// Switched from auto-detect (assertCoachSession-first) to explicit audience
+// param for consistency with note.js / phase-report.js / journey.js — coach.js
+// always sends `&audience=coach` explicitly.
+import { guardCoachOr401 } from '../lib/auth/coach-session.js';
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
 
 export const maxDuration = 10;
@@ -45,13 +48,14 @@ export function projectPoem21(dailyTakeaways) {
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const audience = String(req.query?.audience || 'student').toLowerCase();
 
-  // Resolve studentId: coach session → trust query (coach reviews any student);
-  // else require a student session and use sid from cookie. A student WITHOUT
-  // a coach session cannot read another student's graduation by passing
-  // ?studentId=A999 in the query — that branch routes to the cookie-only path.
+  // Resolve studentId by audience (explicit, matches note.js / phase-report.js):
+  //   coach   → coach session + ?studentId from query (coach 看任何學員)
+  //   student → student session + sid from cookie  (鐵則: query 完全忽略)
   let studentId;
-  if (await assertCoachSession(req)) {
+  if (audience === 'coach') {
+    if (!(await guardCoachOr401(req, res))) return;
     studentId = String(req.query?.studentId || '').trim();
     if (!studentId) return res.status(400).json({ error: 'Missing required query: studentId' });
   } else {

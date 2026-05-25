@@ -18,19 +18,34 @@ import {
   computeUnlockedCurrentDay,
 } from '../lib/api/journey-state.js';
 import { computePhaseReportStates } from '../lib/api/phase-state.js';
-// PR-4c-green Auth rebuild stage 1d — studentId now comes from the verified
-// student_session cookie, NEVER from client-supplied query. Client-passed
-// `?studentId=A999` is ignored entirely.
+// PR-4c-green Auth rebuild stage 1d — student path: sid from verified
+// student_session cookie ONLY (?studentId query 完全忽略, 鐵則).
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
+// 5/25 (Vivi: 教練後台所有學員顯示同一人) — coach path: ?studentId query
+// trusted only when guardCoachOr401 passes. Matches note.js / phase-report.js
+// explicit `audience=coach` pattern (was missing here, so coach.js's
+// `?studentId=A002` was ignored and all coaches saw their own student_session).
+import { guardCoachOr401 } from '../lib/auth/coach-session.js';
 
 export const maxDuration = 10;
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  // 鐵則: sid always from session, never from req.query. 401 if no valid session.
-  const studentId = await guardStudentOr401(req, res);
-  if (!studentId) return;
-  const module    = String(req.query?.module || 'self').trim();
+  const module   = String(req.query?.module   || 'self').trim();
+  const audience = String(req.query?.audience || 'student').toLowerCase();
+
+  // Resolve studentId by audience:
+  //   coach    → coach session gate + ?studentId from query (coach 看任何學員)
+  //   student  → student session gate, sid from cookie (鐵則: query 完全忽略)
+  let studentId;
+  if (audience === 'coach') {
+    if (!(await guardCoachOr401(req, res))) return;
+    studentId = String(req.query?.studentId || '').trim();
+    if (!studentId) return res.status(400).json({ error: 'Missing required query: studentId' });
+  } else {
+    studentId = await guardStudentOr401(req, res);
+    if (!studentId) return;
+  }
 
   try {
     const sql = neon(process.env.DATABASE_URL);

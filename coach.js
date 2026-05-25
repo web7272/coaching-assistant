@@ -72,7 +72,10 @@ async function renderStudent(sid) {
   picker.innerHTML = ''; noteEl.textContent = '點上方某一天看當日筆記。'; gradEl.textContent = '';
 
   let j;
-  try { j = await api(`/api/journey?studentId=${encodeURIComponent(sid)}&module=self`); }
+  // 5/25 fix (Vivi: 所有學員顯示同一人) — add explicit audience=coach so the
+  // server uses ?studentId from query (coach gate) instead of falling back to
+  // this browser's student_session cookie (which would always show A001).
+  try { j = await api(`/api/journey?studentId=${encodeURIComponent(sid)}&module=self&audience=coach`); }
   catch (e) {
     grid.innerHTML = `<p class="muted">${escapeText('沒能取回旅程：' + e.message)}</p>`;
     return;
@@ -264,7 +267,8 @@ async function renderStudent(sid) {
 
   // graduation
   try {
-    const g = await api(`/api/graduation?studentId=${encodeURIComponent(sid)}&module=self`);
+    // 5/25 fix — explicit audience=coach (see /api/journey call above).
+    const g = await api(`/api/graduation?studentId=${encodeURIComponent(sid)}&module=self&audience=coach`);
     if (!g.exists) {
       gradEl.textContent = '（結業內容還沒生成。）';
     } else {

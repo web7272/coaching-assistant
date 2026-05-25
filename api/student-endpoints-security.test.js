@@ -260,7 +260,10 @@ test('🛑 SECURITY: /api/graduation — student auth A001 + ?studentId=A999 →
     `graduation must never query for A999. Saw: ${JSON.stringify(seenStudentIds)}`);
 });
 
-test('🛑 SECURITY: /api/graduation — coach auth → query studentId IS used (coach reviews any student, by design)', async () => {
+test('🛑 SECURITY: /api/graduation — audience=coach + coach auth → query studentId IS used (coach reviews any student, by design)', async () => {
+  // 5/25 update: graduation switched from auto-detect (assertCoachSession-first)
+  // to explicit `audience=coach` param matching note/phase-report/journey.
+  // Coach.js was simultaneously updated to send `&audience=coach`.
   _setCoachSessionReader(COACH_SESSION);
   _setStudentSessionReader(NO_SESSION);
   const seenStudentIds = [];
@@ -270,9 +273,11 @@ test('🛑 SECURITY: /api/graduation — coach auth → query studentId IS used 
     }
     return [];
   }));
-  await graduationHandler(mockReq({ query: { studentId: 'A999', module: 'self' } }), mockRes());
+  await graduationHandler(mockReq({
+    query: { audience: 'coach', studentId: 'A999', module: 'self' },
+  }), mockRes());
   assert.ok(seenStudentIds.includes('A999'),
-    `coach with a session SHOULD be able to read A999. Saw: ${JSON.stringify(seenStudentIds)}`);
+    `coach with audience=coach + session SHOULD read A999. Saw: ${JSON.stringify(seenStudentIds)}`);
 });
 
 // ═════════════════════════════════════════════════════════
