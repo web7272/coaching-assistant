@@ -583,6 +583,19 @@ function appendMessage(role, content, doScroll = true) {
 async function sendUserMessage(text) {
   state.conversation.push({ role: 'user', content: text });
   appendMessage('user', text);
+  // Vivi 5/24: typing indicator while Sonnet is composing (3-15s normal).
+  // Without it「使用者以為卡住/壞掉」. Paper aesthetic — ✦ + 「教練在想…」,
+  // no SaaS spinner. Always removed before the real reply (success), the
+  // error hint (fail), or the closure transition kicks in.
+  const scroll = document.getElementById('conv-scroll');
+  const typing = document.createElement('div');
+  typing.className = 'conv-typing';
+  typing.setAttribute('aria-live', 'polite');
+  typing.innerHTML = '<span class="star">✦</span><span class="text">教練在想…</span>';
+  scroll.appendChild(typing);
+  // Single small nudge so the indicator is in view; §五.四 no continuous auto-scroll.
+  scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' });
+
   try {
     // PR-4c-green Auth rebuild stage 1d — no studentId in body (server reads sid from cookie).
     const r = await api('/api/chat', {
@@ -593,18 +606,20 @@ async function sendUserMessage(text) {
         today: new Date().toLocaleDateString('sv'),
       },
     });
+    typing.remove();
     if (r && r.sessionId) state._lastSessionId = r.sessionId;
     const aiContent = r.content || '';
     state.conversation.push({ role: 'assistant', content: aiContent });
     appendMessage('assistant', aiContent);
     if (r.dayComplete) await startClosureTransition();
   } catch (e) {
+    typing.remove();
     // §六: 米棕色平靜 inline message (not red banner)
     const div = document.createElement('div');
     div.className = 'hint-italic';
     div.style.marginBottom = '22px';
     div.textContent = '沒能送出，我們再試一次。';
-    document.getElementById('conv-scroll').appendChild(div);
+    scroll.appendChild(div);
   }
 }
 

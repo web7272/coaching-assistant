@@ -532,6 +532,19 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .conv-waiting .text { font-family: var(--font-serif); font-style: italic; font-size: 13px; letter-spacing: 1px; color: var(--text-secondary); }
 @keyframes conv-waiting-fade { to { opacity: 1; } }
 
+/* Mid-conversation typing indicator — Vivi 5/24:「沒回饋會被當壞掉」.
+   Left-aligned like AI message side. Tighter margins than .conv-waiting
+   (which is a page-level kickoff/closure indicator); this sits snug under
+   the user's just-sent bubble. ✦ paper-breathe carries the「I'm composing」
+   signal — no SaaS spinner. */
+.conv-typing { display: flex; align-items: center; margin: 4px 0 16px;
+  opacity: 0; animation: conv-waiting-fade 300ms ease-out forwards; }
+.conv-typing .star { color: var(--gold-accent); margin-right: 8px;
+  font-family: var(--font-sans); font-size: 10px; display: inline-block;
+  animation: paper-breathe 1.6s ease-in-out infinite; }
+.conv-typing .text { font-family: var(--font-serif); font-style: italic;
+  font-size: 14px; letter-spacing: 0.5px; color: var(--text-secondary); }
+
 @keyframes paper-breathe {
   0%, 100% { opacity: 0.5; }
   50%      { opacity: 1; }
