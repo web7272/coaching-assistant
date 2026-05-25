@@ -21,7 +21,9 @@
 //     (HMAC coach_session cookie since auth-rebuild 1a). 401 if no coach session.
 
 import { neon } from '@neondatabase/serverless';
-import { sanitizeStudentNote, containsForbiddenContent } from '../lib/api/student-note-safe.js';
+import {
+  sanitizeStudentNote, containsForbiddenContent, safeNoteForStudent,
+} from '../lib/api/student-note-safe.js';
 import { guardCoachOr401 } from '../lib/auth/coach-session.js';
 // PR-4c-green Auth rebuild stage 1d — student path reads sid from session cookie.
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
@@ -83,8 +85,17 @@ export default async function handler(req, res) {
     if (containsForbiddenContent(raw)) {
       console.warn(`[note B1] notebook_page for ${studentId} day=${day} contained forbidden coach-internal content — sanitized at API boundary`);
     }
+    // Patrick 5/25 — fail-closed wrapper. If sanitize result still contains
+    // forbidden markers (e.g. Sonnet output used「## 【深度層次】」 markdown header
+    // that an older sanitizer build failed to strip), return safe fallback so
+    // we never ship coach-internal content to a student even when our scrubber
+    // misses an edge case.
     return res.status(200).json({
-      day, noteText: sanitizeStudentNote(raw), exists: true,
+      day,
+      noteText: safeNoteForStudent(raw, {
+        observe: (label) => console.warn(`[note B1] ${label} (student=${studentId} day=${day})`),
+      }),
+      exists: true,
     });
   } catch (e) {
     console.error('[note] error:', e);

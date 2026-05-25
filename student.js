@@ -742,10 +742,24 @@ async function startClosureTransition() {
   convView.classList.add('fade-out');
   await sleep(400);
 
-  // route to note for today, with the body if finalize returned it
-  state._pendingNote = (finalizeResult && finalizeResult.ok)
-    ? { day: state.currentDay, body: finalizeResult.damonNotePublic || '（教練筆記稍後送達）' }
-    : { day: state.currentDay, body: '（教練筆記稍後送達）' };
+  // 🚨 Patrick 5/25 leak fix: route closure note from finalizeResult.notebookPage
+  // (sanitized, fail-closed by /api/finalize-day's safeNoteForStudent) — NEVER
+  // from damonNotePublic (the raw publicNote from generateDamonNote, which on
+  // A001 Day 3 shipped 【深度層次】 + Layer 1-5 to the student SPA).
+  //
+  // Defense in depth: also re-check at the client boundary — if any 【…】
+  // bracket marker survives, swap for safe fallback. Server already does
+  // fail-closed; this is the same property enforced at the last possible
+  // moment before the DOM render.
+  const FORBIDDEN_RE = /【(深度層次|SC 觀察|還沒碰到的|關鍵句|今天的模式|採集追蹤|Scope 證據|賦予新角色狀態|確定類別 \+ Scope|Transfer 結果|微證據|宣言)|Layer\s?[1-5]\b|\bL[1-5]\b|工具[一二三四1234]/u;
+  const SAFE_FALLBACK = '（教練筆記稍後送達）';
+  let closureBody = SAFE_FALLBACK;
+  if (finalizeResult && finalizeResult.ok && typeof finalizeResult.notebookPage === 'string') {
+    closureBody = FORBIDDEN_RE.test(finalizeResult.notebookPage)
+      ? SAFE_FALLBACK
+      : (finalizeResult.notebookPage || SAFE_FALLBACK);
+  }
+  state._pendingNote = { day: state.currentDay, body: closureBody };
 
   state.finalizing = false;
   state.conversation = [];           // next day starts fresh in memory

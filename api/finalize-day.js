@@ -23,7 +23,7 @@ import {
 } from '../lib/state/state-manager.js';
 import { sendExportEmail } from '../lib/email/brevo.js';
 import {
-  sanitizeStudentNote, containsForbiddenContent,
+  sanitizeStudentNote, containsForbiddenContent, safeNoteForStudent,
 } from '../lib/api/student-note-safe.js';
 // PR-4c-green Auth rebuild stage 1d — sessionId must belong to authenticated student.
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
@@ -359,11 +359,19 @@ export default async function handler(req, res) {
       if (containsForbiddenContent(existing.notebook_page)) {
         console.warn(`[finalize-day B1] notebook_page for session=${sessionId} contained forbidden coach-internal content — sanitized at API boundary`);
       }
+      // Patrick 5/25 leak fix:
+      //   damonNotePublic REMOVED from student response — that field was
+      //   sourced from generateDamonNote's publicNote (zero sanitization),
+      //   and student.js startClosureTransition was reading it raw. On A001
+      //   Day 3 it shipped 【深度層次】 + Layer 1-5 to the student SPA.
+      //   notebookPage now runs through safeNoteForStudent (sanitize +
+      //   fail-closed: if forbidden survives, returns safe fallback).
       return res.status(200).json({
         ok: true,
         alreadyDone: true,
-        damonNotePublic: existing.damon_note_public,
-        notebookPage: sanitizeStudentNote(existing.notebook_page),  // B1: scrub before student render
+        notebookPage: safeNoteForStudent(existing.notebook_page, {
+          observe: (label) => console.warn(`[finalize-day B1] ${label} (session=${sessionId})`),
+        }),
         isGraduation: graduation,
       });
     }
@@ -494,11 +502,14 @@ export default async function handler(req, res) {
     if (noteResult.notebookPage && containsForbiddenContent(noteResult.notebookPage)) {
       console.warn(`[finalize-day B1] freshly-generated notebook_page contained forbidden coach-internal content — sanitized at API boundary`);
     }
+    // Patrick 5/25 leak fix — see「alreadyDone」 branch comment above.
+    // damonNotePublic removed; notebookPage runs through fail-closed sanitizer.
     return res.status(200).json({
       ok: true,
       alreadyDone: false,
-      damonNotePublic: noteResult.publicNote,
-      notebookPage: sanitizeStudentNote(noteResult.notebookPage),  // B1: scrub before student render
+      notebookPage: safeNoteForStudent(noteResult.notebookPage, {
+        observe: (label) => console.warn(`[finalize-day B1] ${label} (session=${sessionId})`),
+      }),
       isGraduation: graduation,
     });
 
