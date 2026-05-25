@@ -107,29 +107,34 @@ async function renderStudent(sid) {
   // PR-4c-green P5: 5 Phase Reports (spec 09 §5.5). Fetch each unlocked phase
   // with audience=coach so the breakthrough is the FULL Sonnet output (not the
   // student-side sanitized version). Locked phases get a one-line placeholder.
-  for (let phaseId = 1; phaseId <= 5; phaseId++) {
-    const p = phases[phaseId - 1] || { state: 'locked' };
-    const card = document.createElement('div');
-    card.className = 'coach-pre';
-    if (p.state === 'locked') {
-      card.innerHTML = `<strong>Phase ${roman(phaseId)} · ${escapeText(PHASE_NAMES[phaseId - 1])}</strong>  <span class="muted" style="font-size:11px;">（尚未解鎖）</span>`;
-      phaseBox.appendChild(card);
-      continue;
-    }
-    try {
-      const r = await api(`/api/phase-report?studentId=${encodeURIComponent(sid)}&module=self&phase=${phaseId}&audience=coach`);
-      const head = `<strong>Phase ${escapeText(r.roman || roman(phaseId))} · ${escapeText(r.name || PHASE_NAMES[phaseId - 1])}</strong>`;
-      if (!r.exists) {
-        card.innerHTML = `${head}  <span class="muted" style="font-size:11px;">（還沒生成）</span>`;
-      } else {
-        const teaching     = escapeText(r.teaching || '');
-        const breakthrough = escapeText(r.breakthrough || '');
-        card.innerHTML = `${head}\n\n【教學】\n${teaching}\n\n【你的突破（完整版）】\n${breakthrough}`;
+  // 5/25 Vivi: phase reports section 在 coach.html hidden (教學內容未定). Guard
+  // 跳過 5 phase fetches — 隱藏時就不浪費 API 呼叫. 恢復＝拿掉 coach.html 上的
+  // hidden 屬性, 不用動這段 code.
+  if (phaseBox && !phaseBox.hidden) {
+    for (let phaseId = 1; phaseId <= 5; phaseId++) {
+      const p = phases[phaseId - 1] || { state: 'locked' };
+      const card = document.createElement('div');
+      card.className = 'coach-pre';
+      if (p.state === 'locked') {
+        card.innerHTML = `<strong>Phase ${roman(phaseId)} · ${escapeText(PHASE_NAMES[phaseId - 1])}</strong>  <span class="muted" style="font-size:11px;">（尚未解鎖）</span>`;
+        phaseBox.appendChild(card);
+        continue;
       }
-    } catch (e) {
-      card.innerHTML = `<strong>Phase ${roman(phaseId)}</strong>  <span class="muted" style="font-size:11px;">沒能取回：${escapeText(e.message)}</span>`;
+      try {
+        const r = await api(`/api/phase-report?studentId=${encodeURIComponent(sid)}&module=self&phase=${phaseId}&audience=coach`);
+        const head = `<strong>Phase ${escapeText(r.roman || roman(phaseId))} · ${escapeText(r.name || PHASE_NAMES[phaseId - 1])}</strong>`;
+        if (!r.exists) {
+          card.innerHTML = `${head}  <span class="muted" style="font-size:11px;">（還沒生成）</span>`;
+        } else {
+          const teaching     = escapeText(r.teaching || '');
+          const breakthrough = escapeText(r.breakthrough || '');
+          card.innerHTML = `${head}\n\n【教學】\n${teaching}\n\n【你的突破（完整版）】\n${breakthrough}`;
+        }
+      } catch (e) {
+        card.innerHTML = `<strong>Phase ${roman(phaseId)}</strong>  <span class="muted" style="font-size:11px;">沒能取回：${escapeText(e.message)}</span>`;
+      }
+      phaseBox.appendChild(card);
     }
-    phaseBox.appendChild(card);
   }
 
   // PR-4c-green Patrick 5/24 — coach-only full transcript collapsible.

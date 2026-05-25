@@ -65,9 +65,12 @@
       <p class="journey-sub">一步一步，走進自己</p>
     </div>
 
-    <!-- Vivi 5/24: 5 寶藏移到 21 天格子上面、在標題副標之後、grid 之前 -->
-    <h3 class="treasure-title">你的寶藏</h3>
-    <div class="treasure-shelf" id="treasure-shelf">
+    <!-- Vivi 5/24: 5 寶藏移到 21 天格子上面、在標題副標之後、grid 之前.
+         Vivi 5/25 上架前：寶藏教學內容還沒寫好（之後 Vivi+Damon 來）→ 兩個元素加
+         `hidden`、可逆地藏起來. 不要做天數解鎖邏輯（phase-state.js 不動）.
+         之後恢復＝拿掉這兩個 hidden 屬性即可. -->
+    <h3 class="treasure-title" hidden>你的寶藏</h3>
+    <div class="treasure-shelf" id="treasure-shelf" hidden>
       <!-- 5 phase treasures (locked at P2 — phases[] endpoint lands at P4) -->
     </div>
 

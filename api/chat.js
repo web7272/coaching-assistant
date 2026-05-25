@@ -30,7 +30,8 @@ import {
   detectNewSessionDay, buildResetPatch, PHASE_PROGRESS_NEVER_RESET,
 } from '../lib/session/day-boundary.js';
 import { contextFor } from '../lib/session/phase-context.js';
-import { checkAdvance } from '../lib/session/phase-advance.js';
+// v5.0 (spec 09 §12)：對話 phase 天數驅動 (checkAdvance retired at runtime).
+import { phaseForDay, phaseEntryPatch } from '../lib/session/phase-advance.js';
 import {
   updateState, getUserProfile, incrementUserProfileCounters,
 } from '../lib/state/state-manager.js';
@@ -757,6 +758,16 @@ export default async function handler(req, res) {
     const { sessionId, sessionStart, isNew } = sess;
     let { turnCount, sessionState } = sess;
 
+    // Step 5b — v5.0 天數驅動 phase (取代壞掉的 checkAdvance、見 spec 09 §12)
+    // current_phase 由 sessionDay 定、每 turn 重算 (自我修復卡住的舊狀態);
+    // 跨階時用 phaseEntryPatch re-init phase-scoped 進度 + 歸零 takeaway count.
+    const dayPhase = phaseForDay(sess.sessionDay);
+    const isPhaseEntry = sessionState.current_phase !== dayPhase;
+    const dayPhasePatch = isPhaseEntry
+      ? phaseEntryPatch(dayPhase)
+      : { current_phase: dayPhase };
+    sessionState = { ...sessionState, ...dayPhasePatch };
+
     // Step 6 — INSERT user message + bump questions_today
     // PR-4c-4c: skip both for kickoff (synthetic sentinel is not real student content)
     const userMessage = messages[messages.length - 1];
@@ -859,14 +870,9 @@ export default async function handler(req, res) {
       VALUES (${sessionId}, 'assistant', ${content}, ${turnCount})
     `;
 
-    // Step 11 — phase advance + state persist
-    let advance = null;
-    try {
-      advance = checkAdvance(stateForPrompt);
-    } catch (e) {
-      console.error('checkAdvance failed:', e.message);
-    }
-    const advancePatch = advance ? advance.patch : {};
+    // Step 11 — state persist
+    // v5.0 (spec 09 §12)：phase 推進 = dayPhasePatch (computed in Step 5b、
+    // 天數驅動). checkAdvance no longer wired; advancePatch={}.
 
     // PR-4c-4c kickoff: persist only the AI opening as last_ai_question;
     // do NOT bump turn_count_this_session or last_user_response (sentinel is meta).
@@ -881,10 +887,10 @@ export default async function handler(req, res) {
 
     // PR-4c-1b：fix 開場重複 bug — phase_1 turn 1 結束後 router_phase opening→elicitation
     const autoRouterPatch = maybeAutoTransitionRouterPhase({
-      stateForPrompt, detectorPatch, advancePatch,
+      stateForPrompt, detectorPatch, advancePatch: {},
     }) || {};
 
-    const fullPatch = { ...detectorPatch, ...advancePatch, ...turnPatch, ...autoRouterPatch };
+    const fullPatch = { ...detectorPatch, ...dayPhasePatch, ...turnPatch, ...autoRouterPatch };
     try {
       await updateState(sessionId, fullPatch);
     } catch (e) {
@@ -939,9 +945,10 @@ export default async function handler(req, res) {
       content,
       turnCount,
       sessionId,
-      phase: advance ? advance.to : stateForPrompt.current_phase,
+      // v5.0 spec 09 §12 — phase is天數-driven; phaseAdvanced=true at the cross-day boundary turn.
+      phase: stateForPrompt.current_phase,
       routerPhase: fullPatch.router_phase || sessionState.router_phase || null,
-      phaseAdvanced: !!advance,
+      phaseAdvanced: isPhaseEntry,
       // PR-4c：session_end 寫活、frontend 依 dayComplete=true 觸發 §5.2 轉場 + POST /api/finalize-day
       dayComplete,
       notesGenerating: dayComplete,

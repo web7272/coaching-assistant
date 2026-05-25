@@ -275,9 +275,11 @@ async function renderJourney() {
     grid.appendChild(renderDayTile(cell));
   }
 
-  // 5 treasure boxes (one per phase). P2 hardcodes all locked — phases[] endpoint
-  // is P4. Click is no-op until then. Visible labels = roman; full names in title.
-  renderTreasureShelf(j.phases /* may be undefined at P2 */);
+  // 5 treasure boxes (one per phase). P4 endpoint serves phases[].
+  // 5/25 Vivi：寶藏暫藏 (教學內容未定). index.html 已把標題 + 架設 hidden;
+  // 恢復＝拿掉 index.html 上的 hidden 屬性. 這裡 guard 避免在隱藏元素上做工.
+  const _treasureShelf = document.getElementById('treasure-shelf');
+  if (_treasureShelf && !_treasureShelf.hidden) renderTreasureShelf(j.phases);
 
   // Day-1 bottom prompt
   const prompt = document.getElementById('journey-prompt');
@@ -514,8 +516,35 @@ async function renderConversation() {
   // (per UI spec + storyboard "Day 1 對話 第一個問句"). The 起手式 text comes from
   // the phase-context opening variant in the server's system prompt — frontend
   // does NOT hard-code the question.
+  //
+  // PR-4c-green Patrick 5/25 (Day-4 實測 C2) — 關視窗重開續上:
+  //   localStorage 清掉 / 別台機器 / 別瀏覽器 → state.conversation 為空、但
+  //   server 上今天的 session 可能已經開始. 在 kickoff 之前先問 server 有沒有
+  //   未完成的 conversation 要還原；有 → 不要 kickoff、把 server 的 messages
+  //   塞回 state + 補 render；沒 → fall through 走原本的 kickoff 路徑.
+  //   鐵則 1d：endpoint 從 cookie 取 studentId、忽略 client 傳的.
   if (state.conversation.length === 0) {
-    await requestKickoffOpening();
+    let restored = false;
+    try {
+      const r = await api(`/api/conversation-today?module=${encodeURIComponent(state.module || 'self')}&today=${encodeURIComponent(new Date().toLocaleDateString('sv'))}`);
+      if (r && r.hasInProgress && Array.isArray(r.messages) && r.messages.length > 0) {
+        if (r.sessionId) state._lastSessionId = r.sessionId;
+        for (const m of r.messages) {
+          if (m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string') {
+            state.conversation.push({ role: m.role, content: m.content });
+            appendMessage(m.role, m.content, /*scroll=*/false);
+          }
+        }
+        saveState();
+        restored = true;
+      }
+    } catch (e) {
+      // 還原 endpoint 失敗 → fall through 走 kickoff (新的一天的最安全 fallback).
+      // 不打擾學員、不顯示 SaaS error；reset 後若真的 day 已開始、Sonnet 會自己
+      // 從 phase-context 走 elicitation 變體、不會重複起手式 (E4 inject 接管).
+      console.warn('[conversation-today] restore failed, falling back to kickoff:', e?.message || e);
+    }
+    if (!restored) await requestKickoffOpening();
   }
 
   // auto-resize textarea + manage send-button disabled state

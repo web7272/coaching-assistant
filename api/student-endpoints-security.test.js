@@ -25,6 +25,7 @@ import noteHandler            from './note.js';
 import phaseReportHandler     from './phase-report.js';
 import graduationHandler      from './graduation.js';
 import finalizeDayHandler     from './finalize-day.js';
+import conversationTodayHandler, { _setSqlClient as _setConvTodaySql } from './conversation-today.js';
 
 import { _setStudentSessionReader } from '../lib/auth/student-session.js';
 import { _setCoachSessionReader }   from '../lib/auth/coach-session.js';
@@ -83,6 +84,7 @@ beforeEach(() => {
   _setStudentSessionReader(null);
   _setCoachSessionReader(null);
   _setStateManagerSql(null);
+  _setConvTodaySql(null);
   process.env.SESSION_SECRET = 'test-secret-32-bytes-of-entropy-aaaaaaaa';
   // neon() validates URL shape at construction — a valid-looking stub is enough.
   // The actual SQL never runs for endpoints that go through state-manager's mock
@@ -306,3 +308,55 @@ test('🛑 SECURITY: /api/finalize-day — no session → 401', async () => {
 // What we CAN assert at this layer: missing session → 401, before any work.
 // Cross-student sessionId protection is documented + grep-locatable in
 // api/finalize-day.js (search「[finalize-day 403]」).
+
+// ═════════════════════════════════════════════════════════
+// /api/conversation-today (Day-4 C2 — restore in-progress conversation)
+// ═════════════════════════════════════════════════════════
+
+test('🛑 SECURITY: /api/conversation-today — no session → 401', async () => {
+  _setStudentSessionReader(NO_SESSION);
+  const res = mockRes();
+  await conversationTodayHandler(mockReq({
+    query: { studentId: 'A999', module: 'self' },
+  }), res);
+  assert.equal(res.statusCode, 401);
+});
+
+test('🛑 SECURITY: /api/conversation-today — coach session alone → 401 (student gate)', async () => {
+  _setCoachSessionReader(COACH_SESSION);
+  _setStudentSessionReader(NO_SESSION);
+  const res = mockRes();
+  await conversationTodayHandler(mockReq({
+    query: { studentId: 'A999', module: 'self' },
+  }), res);
+  assert.equal(res.statusCode, 401,
+    'this is a student-only endpoint; coach session must not open it');
+});
+
+test('🛑 SECURITY: /api/conversation-today — auth as A001 + ?studentId=A999 → SQL sees A001 only', async () => {
+  _setStudentSessionReader(sessionFor('A001'));
+  const seenStudentIds = [];
+  _setConvTodaySql((strings, ...values) => {
+    for (const v of values) if (typeof v === 'string' && /^A\d{3}$/.test(v)) seenStudentIds.push(v);
+    return Promise.resolve([]);   // no in-progress session
+  });
+  const res = mockRes();
+  await conversationTodayHandler(mockReq({
+    query: { studentId: 'A999', module: 'self' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  assert.ok(seenStudentIds.includes('A001'),
+    `expected SQL to see A001 from session. Saw: ${JSON.stringify(seenStudentIds)}`);
+  assert.ok(!seenStudentIds.includes('A999'),
+    `conversation-today must NEVER query for A999 from URL. Saw: ${JSON.stringify(seenStudentIds)}`);
+  // Body must not echo A999 either.
+  assert.equal(JSON.stringify(res.body).includes('A999'), false,
+    'response body must never echo client-supplied A999');
+});
+
+test('🛑 SECURITY: /api/conversation-today — non-GET → 405', async () => {
+  _setStudentSessionReader(sessionFor('A001'));
+  const res = mockRes();
+  await conversationTodayHandler(mockReq({ method: 'POST' }), res);
+  assert.equal(res.statusCode, 405);
+});

@@ -43,20 +43,22 @@
       <div id="coach-journey-grid" class="coach-mini-grid"></div>
       <div id="coach-grad-cell" style="max-width:480px;margin-top:6px;"></div>
 
-      <!-- P5 (PR-4c-green): 週報 retired (spec 09 §10). The 3-bucket I/II/III grid
-           has been dropped in favor of 5 Phase Reports (spec 09 §5.5 / §8). Coach
-           sees the un-sanitized 突破彙整 via audience=coach. -->
-      <h2 class="coach-h2" style="margin-top:28px;">你的寶藏（5 個 Phase Report · 教練看完整版）</h2>
-      <div id="coach-phase-reports" style="display:flex;flex-direction:column;gap:10px;"></div>
+      <!-- P5 (PR-4c-green): 週報 retired (spec 09 §10). 5 Phase Reports (spec 09
+           §5.5 / §8) — coach sees un-sanitized 突破彙整 via audience=coach.
+           Vivi 5/25 上架前：教學內容未定 → 標題 + 容器加 hidden、可逆地藏起來.
+           恢復＝拿掉這兩個 hidden 屬性. -->
+      <h2 class="coach-h2" style="margin-top:28px;" hidden>你的寶藏（5 個 Phase Report · 教練看完整版）</h2>
+      <div id="coach-phase-reports" style="display:flex;flex-direction:column;gap:10px;" hidden></div>
 
       <h2 class="coach-h2" style="margin-top:28px;">展開某天筆記</h2>
       <div id="coach-day-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
       <div id="coach-day-note" class="coach-pre" style="min-height:80px;">點上方某一天看當日筆記。</div>
 
-      <!-- PR-4c-green Patrick 5/24 — coach-only full transcript review (鐵律 #2 上鎖).
-           Collapsed by default; lazy-fetches /api/admin/transcript on first open.
-           Student SPA never gets a path to this content. -->
-      <div id="coach-transcript-wrap" style="margin-top:14px;display:none;">
+      <!-- Vivi 5/25 C3 — 完整對話 (教練專用) 拉出來、跟「展開某天筆記」平行的獨立區塊
+           (不再是巢狀子層). PR-4c-green Patrick 5/24: 鐵律 #2 上鎖、lazy-fetch
+           /api/admin/transcript、collapsed by default. Student SPA never gets here. -->
+      <h2 class="coach-h2" style="margin-top:28px;">完整對話（教練專用）</h2>
+      <div id="coach-transcript-wrap" style="display:none;">
         <button type="button" id="coach-transcript-toggle" class="paper-btn"
                 style="padding:8px 14px;font-size:12px;letter-spacing:1px;"
                 aria-expanded="false" aria-controls="coach-transcript-body">
@@ -65,6 +67,10 @@
         <div id="coach-transcript-body" class="coach-pre"
              style="display:none;margin-top:10px;min-height:60px;"></div>
       </div>
+      <p id="coach-transcript-hint" class="muted"
+         style="font-family:var(--font-serif);font-style:italic;font-size:12px;color:var(--text-faint);margin-top:8px;">
+        點上方任一天筆記、這裡才會出現該天逐字按鈕。
+      </p>
 
       <h2 class="coach-h2" style="margin-top:28px;">結業（若已生成）</h2>
       <div id="coach-graduation" class="coach-pre" style="min-height:60px;"></div>
