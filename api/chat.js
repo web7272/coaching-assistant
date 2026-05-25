@@ -414,6 +414,40 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
     ? `owned qualities（最近 3 個 anchor）：${anchorTerms.join('、')}`
     : 'owned qualities：（尚無、從零採集）');
 
+  // ⭐ PR-4c-green 5/24 root cause fix — surface yesterday's takeaway material
+  // into the dynamic context so the E4 day-opening inject actually has something
+  // to weave in. Without this, the inject says「引用 last_takeaway_term」 but
+  // Sonnet can't see the value → ignores it (A002) or fabricates (A001).
+  //
+  // Two signals (E4 inject reads either):
+  //   last_takeaway_term — full sentence from last finalize-day (≤ ~6 weeks old)
+  //   daily_takeaways — array of {day, term} entries (we surface the latest)
+  const lastSummary = (userProfile.last_session_day_summary
+    && typeof userProfile.last_session_day_summary === 'object')
+    ? userProfile.last_session_day_summary : {};
+  const lastTakeawayTerm = typeof lastSummary.last_takeaway_term === 'string'
+    && lastSummary.last_takeaway_term.length > 0
+      ? lastSummary.last_takeaway_term : null;
+  const dailyTakeaways = Array.isArray(userProfile.daily_takeaways)
+    ? userProfile.daily_takeaways : [];
+  const latestDailyTakeaway = dailyTakeaways
+    .filter(t => t && typeof t.term === 'string' && t.term.length > 0)
+    .sort((a, b) => (b.day || 0) - (a.day || 0))[0] || null;
+
+  if (lastTakeawayTerm || latestDailyTakeaway) {
+    lines.push('━━━ 昨天的素材（E4 開場引用、不直引、抓「意思」）━━━');
+    if (lastTakeawayTerm) {
+      lines.push(`last_takeaway_term：「${lastTakeawayTerm}」`);
+    }
+    if (latestDailyTakeaway) {
+      lines.push(`daily_takeaways[最後一筆]：Day ${latestDailyTakeaway.day} →「${latestDailyTakeaway.term}」`);
+    }
+  } else {
+    // Explicit empty signal so the inject's「模式 B 安全暖開場」 path is
+    // unambiguous. Sonnet must NOT fabricate when this line is here.
+    lines.push('昨天的素材：（無真實素材 — 走安全暖開場、絕對不杜撰「你昨天說…」）');
+  }
+
   // {{current_phase_context}} — PR-4c-1b：phase_1 router_phase-aware
   // (opening 變體含起手式 / elicitation 變體用鏈式追問、避免開場重複)
   // PR-4c-green E4 fix: when E4 day-opening inject is active, swap the cold

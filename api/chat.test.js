@@ -155,6 +155,72 @@ test('buildDynamicContext: anchors fallback text when none', () => {
   );
 });
 
+// ⭐ PR-4c-green 5/24 (Patrick 真機 A002 root cause) — buildDynamicContext MUST
+// surface last_takeaway_term + latest daily_takeaways entry so Sonnet can see
+// yesterday's material. Without this, the E4 inject says「引用 last_takeaway_term」
+// but the value never reaches the prompt → Sonnet ignores it (A002) or
+// fabricates (A001 hallucination).
+
+test('🛑 buildDynamicContext: surfaces last_takeaway_term from last_session_day_summary', () => {
+  const txt = buildDynamicContext({}, {
+    last_session_day_summary: {
+      last_takeaway_term: '我知道我的東西真的對人有幫助',
+    },
+  }, 0);
+  assert.match(txt, /━━━ 昨天的素材/, 'must label the section so the E4 inject can find it');
+  assert.match(txt, /last_takeaway_term：「我知道我的東西真的對人有幫助」/);
+});
+
+test('🛑 buildDynamicContext: surfaces latest daily_takeaways entry (most recent day)', () => {
+  const txt = buildDynamicContext({}, {
+    daily_takeaways: [
+      { day: 1, term: '可以決定' },
+      { day: 3, term: '被看見' },
+      { day: 2, term: '是繼承的' },
+    ],
+  }, 0);
+  // Latest by day number = Day 3
+  assert.match(txt, /daily_takeaways\[最後一筆\]：Day 3 →「被看見」/);
+});
+
+test('🛑 buildDynamicContext: BOTH signals surfaced when both exist', () => {
+  const txt = buildDynamicContext({}, {
+    last_session_day_summary: { last_takeaway_term: '我可以決定' },
+    daily_takeaways: [{ day: 1, term: '可以決定' }],
+  }, 0);
+  assert.match(txt, /last_takeaway_term：「我可以決定」/);
+  assert.match(txt, /daily_takeaways\[最後一筆\]：Day 1 →「可以決定」/);
+});
+
+test('🛑 buildDynamicContext: no material → explicit empty signal (forbid fabrication path)', () => {
+  // The empty-signal line is what tells Sonnet「mode B safe opener、絕不杜撰」.
+  const txt = buildDynamicContext({}, {}, 0);
+  assert.match(txt, /昨天的素材：（無真實素材 — 走安全暖開場、絕對不杜撰「你昨天說…」）/);
+  // Must NOT print「━━━ 昨天的素材」 header when empty — that header is for
+  //「I have stuff for you」 signal only; conflating empty + present is what
+  // led Sonnet to fabricate in A001.
+  assert.doesNotMatch(txt, /━━━ 昨天的素材/);
+});
+
+test('🛑 buildDynamicContext: empty/garbage takeaway entries → no spurious material line', () => {
+  // Defensive against bad data (PR-4c-green E4 修法 4 already prefers null
+  // over garbled cutoffs, but pre-fix data still in the DB shouldn't poison).
+  const txt = buildDynamicContext({}, {
+    last_session_day_summary: { last_takeaway_term: '' },     // empty string
+    daily_takeaways: [{ day: 1, term: '' }, { day: 2 /* no term */ }],
+  }, 0);
+  assert.match(txt, /無真實素材/, 'all-empty → empty signal');
+});
+
+test('buildDynamicContext: daily_takeaways present but last_takeaway_term missing → still surfaces material', () => {
+  const txt = buildDynamicContext({}, {
+    daily_takeaways: [{ day: 2, term: '可以決定' }],
+  }, 0);
+  assert.match(txt, /━━━ 昨天的素材/);
+  assert.match(txt, /daily_takeaways\[最後一筆\]：Day 2 →「可以決定」/);
+  assert.doesNotMatch(txt, /last_takeaway_term：/);
+});
+
 // ─────────────────────────────────────────────────────────
 // buildSystemPromptArrayV5 — cache breakpoint
 // ─────────────────────────────────────────────────────────
@@ -438,7 +504,7 @@ test('🛑 buildDynamicContext: phase_1 + opening + day_opening_inject_active=tr
     },
     {}, 1,
   );
-  assert.match(txt, /由 \[SYSTEM INJECT — Day Opening Active Reference\] 主導開場/);
+  assert.match(txt, /\[SYSTEM INJECT — Day Opening Active Reference\][\s\S]*?主導開場/);
   assert.match(txt, /不另起 phase_1 起手式/);
   assert.doesNotMatch(txt, /在你的生命裡、你想要什麼\?/,
     '冷起手式必須消失（compete with E4 inject 就是這個 bug 的根）');
