@@ -1027,8 +1027,13 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
     if (messages.length < 2) return null;
 
     const moduleLabel = module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係';
+    // PR-4c-green Vivi 5/24 polish: user-facing「Damon」 → 「教練」.
+    // 內部識別碼保留 (table damon_notes / col damon_note / fn generateDamonNote /
+    // 「Damon Cart」 persona — that's the methodology brand the coach reads by).
+    // Sonnet's persona stays「Damon Cart」 since it doesn't echo in output;
+    // but the note's own naming + 「Damon 語氣」 vernacular flips to「教練」.
     const conversationText = messages.map(m =>
-      `${m.role === 'user' ? '【學員】' : '【Damon】'} ${m.content}`
+      `${m.role === 'user' ? '【學員】' : '【教練】'} ${m.content}`
     ).join('\n\n');
 
     const response = await getAnthropic().messages.create({
@@ -1036,7 +1041,7 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
         max_tokens: 1500,
         system: `你是 Damon Cart、一個 Self Concept 教練。
 你剛完成了一段和學員的對話。
-請用教練的視角寫下今天的 Damon Note。
+請用教練的視角寫下今天的教練筆記。
 
 格式（嚴格按照、每個標題獨立一行、順序對齊 v3.3）：
 
@@ -1070,7 +1075,7 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
 用「學員繞過去了」「學員沒進去」這種敘事描述、暗示 Day 2+ 可以接的入口。
 
 【明天的入口】
-一個具體的問句、明天可以直接問學員的那種。用 Damon 的語氣。
+一個具體的問句、明天可以直接問學員的那種。用教練的語氣。
 ⚠️ 必須是「主動發問」而不是「回問記憶」（不要寫「你還記得嗎」「昨天我們停在哪」）。
 
 ⚠️ v34 工具二來源標籤分流（如果學員今天有用工具二）：
@@ -1078,7 +1083,7 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
 - 學員選 2B 句 → 那個填空詞 + 觸發 #5「保護什麼」答覆 → 寫進【SC 觀察】、明確標註「（反應模式、不是 SC、是慣性）」
 - 學員選 2C 句 → 那個填空詞 + 觸發 #6 Step2「來源」答覆 → 寫進【還沒碰到的】、明確標註「Week 2 信念入口、待 Step3 反例提問」
 
-【Day 1-6 採集追蹤】（v34 守則七、每天 Damon Note 必寫）
+【Day 1-6 採集追蹤】（v34 守則七、每天教練筆記必寫）
 
 今天用了哪些工具？
 （工具一慾望 / 工具二 2A SC 池 / 工具二 2B Reactive 池 / 工具二 2C Belief 池 / 工具三自我關係 / 工具四不對勁 / 比喻路徑 / 畫面路徑 / 停頓觸發）
@@ -1106,9 +1111,9 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
           role: 'user',
           // P5 (PR-4c-green): v5 canonical unit is sessionDay (1..21); the prior
           // 「第 N 週，第 N 天」 framing is a v4 holdover. Week is still derivable but
-          // not surfaced in the daily prompt header — keeps the Damon Note's mental
+          // not surfaced in the daily prompt header — keeps the note's mental
           // model aligned with the new 21-day rhythm.
-          content: `模組：${moduleLabel}，Day ${day}（共 21 天）。\n\n${conversationText}\n\n請寫下今天的 Damon Note。`
+          content: `模組：${moduleLabel}，Day ${day}（共 21 天）。\n\n${conversationText}\n\n請寫下今天的教練筆記。`
         }]
     });
 

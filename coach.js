@@ -182,8 +182,11 @@ async function renderStudent(sid) {
   function setTranscriptCollapsed(collapsed) {
     transcriptBody.style.display = collapsed ? 'none' : 'block';
     transcriptToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    transcriptToggle.textContent = (collapsed ? '▸ ' : '▾ ')
-      + '展開完整對話（教練專用）';
+    // Vivi 5/24:「展開↔收起」 (was「▸/▾ 展開完整對話」 both sides — same word
+    // confused testers who didn't notice the arrow change).
+    transcriptToggle.textContent = collapsed
+      ? '▸ 展開完整對話（教練專用）'
+      : '▾ 收起完整對話（教練專用）';
   }
 
   // Wire the toggle once per renderStudent call (idempotent — replaceWith resets listener).
@@ -204,14 +207,40 @@ async function renderStudent(sid) {
   setTranscriptCollapsed(true);
   transcriptWrap.style.display = 'none';
 
-  // day picker — every day with revealed/active-filled state gets a button
+  // day picker — every day with revealed/active-filled state gets a button.
+  // Vivi 5/24: click SAME day = collapse (toggle off + revert to placeholder).
+  // Click DIFFERENT day = switch + load. Active button gets a visual mark so
+  // the coach knows which day's note is currently shown.
+  const NOTE_PLACEHOLDER = '點上方某一天看當日筆記。';
+  let currentNoteDay = null;
+  function setActiveDayBtn(day) {
+    for (const b of picker.querySelectorAll('button')) {
+      b.classList.toggle('paper-btn--active', Number(b.dataset.day) === day);
+    }
+  }
   for (const d of days) {
     if (d.state === 'future' || d.state === 'active-empty') continue;
     const btn = document.createElement('button');
     btn.className = 'paper-btn';
     btn.style.cssText = 'padding:6px 12px;font-size:12px;letter-spacing:1px;';
+    btn.dataset.day = String(d.day);
     btn.textContent = `D${d.day}${d.phrase ? ' · ' + d.phrase : ''}`;
     btn.addEventListener('click', async () => {
+      // Toggle off: same day clicked while already shown → collapse + clear.
+      if (currentNoteDay === d.day) {
+        currentNoteDay = null;
+        noteEl.textContent = NOTE_PLACEHOLDER;
+        setActiveDayBtn(null);
+        // Also hide the transcript wrap (no day in focus).
+        transcriptCurrentDay = null;
+        transcriptWrap.style.display = 'none';
+        setTranscriptCollapsed(true);
+        transcriptBody.innerHTML = '';
+        return;
+      }
+      // Switch / first click: load the note for this day.
+      currentNoteDay = d.day;
+      setActiveDayBtn(d.day);
       noteEl.textContent = '讀取中…';
       try {
         // B1 (PR-4c-4d): coach side reads fullNote via audience=coach (returns
@@ -223,8 +252,8 @@ async function renderStudent(sid) {
       } catch (e) {
         noteEl.textContent = '沒能取回筆記：' + e.message;
       }
-      // PR-4c-green Patrick 5/24 — pin transcript to this day, surface the
-      // collapsible. Body stays collapsed until coach clicks the toggle.
+      // Pin transcript to this day, surface the collapsible. Body stays
+      // collapsed until coach clicks the transcript toggle.
       transcriptCurrentDay = d.day;
       transcriptWrap.style.display = 'block';
       setTranscriptCollapsed(true);

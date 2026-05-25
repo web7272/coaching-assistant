@@ -123,6 +123,14 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 }
 .btn-paper:hover,
 .paper-btn:hover { background: #F4ECDA; }
+/* Vivi 5/24: coach day-note picker active-day visual mark. Tiny ring so the
+   coach knows which day is currently shown + clicking the same day again
+   toggles the note collapsed. */
+.paper-btn--active {
+  background: var(--bg-mint);
+  border-color: var(--green-walked);
+  color: var(--green-forest);
+}
 
 /* Override layout of legacy .conv-send-btn so it stays inline with the textarea */
 .conv-send-btn { padding: 12px 22px; letter-spacing: 2px; font-size: 14px;
