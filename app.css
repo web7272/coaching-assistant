@@ -489,10 +489,13 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   .day-hero       { max-width: 280px; margin-bottom: 18px; }
   .day-hero--note { max-width: 280px; }
 }
-.msg-ai { font-family: var(--font-serif); font-size: 17px; line-height: 1.8; color: var(--text-primary); margin-bottom: 28px; white-space: pre-wrap; }
-.msg-user-wrap { display: flex; justify-content: flex-end; margin-bottom: 18px; }
-.msg-user { background: var(--bubble-user); padding: 12px 16px; border-radius: 16px 16px 4px 16px; max-width: 80%;
-  font-family: var(--font-sans); font-size: 15px; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap; }
+/* Conversation messages — Vivi 5/24 polish:「字間距太大、要收緊一點」.
+   line-height: 1.8→1.55 / 1.6→1.5; margin-bottom: 28→16 / 18→12 → 一屏多看幾句、
+   更像在講話。Font size + family unchanged. */
+.msg-ai { font-family: var(--font-serif); font-size: 17px; line-height: 1.55; color: var(--text-primary); margin-bottom: 16px; white-space: pre-wrap; }
+.msg-user-wrap { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.msg-user { background: var(--bubble-user); padding: 10px 14px; border-radius: 16px 16px 4px 16px; max-width: 80%;
+  font-family: var(--font-sans); font-size: 15px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; }
 .callback { background: var(--paper-card); border-left: 2px solid var(--green-walked); border-radius: 0 8px 8px 0;
   padding: 14px 18px; margin-bottom: 22px; }
 .callback__label { font-family: var(--font-sans); font-size: 11px; letter-spacing: 1px; color: var(--text-secondary); margin-bottom: 8px; }
@@ -506,12 +509,15 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .conv-hint { margin-top: 10px; font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.5px; color: var(--text-faint); }
 
 /* §5.3 收尾 — token sweep; ✦ now gold per §1 */
+/* 收尾 loading — Vivi 5/24:「太淡、要更顯眼」 (paper aesthetic, no SaaS spinner).
+   Bumped font 13→16, weight on text via color shift secondary→primary, star
+   bigger 9→12 + still breathing. Layout padding + transition unchanged. */
 .conv-closure { border-top: 0.5px solid var(--border-line); padding: 28px 28px 36px; text-align: center;
   background: var(--bg-mint); opacity: 0; transition: opacity 400ms ease-out; }
 .conv-closure.shown { opacity: 1; }
-.conv-closure .star { color: var(--gold-accent); margin-right: 8px; font-family: var(--font-sans); font-size: 9px; display: inline-block; }
+.conv-closure .star { color: var(--gold-accent); margin-right: 10px; font-family: var(--font-sans); font-size: 12px; display: inline-block; }
 .conv-closure.shown .star { animation: paper-breathe 2.4s ease-in-out infinite; }
-.conv-closure .text { font-family: var(--font-serif); font-style: italic; font-size: 13px; letter-spacing: 1px; color: var(--text-secondary); }
+.conv-closure .text { font-family: var(--font-serif); font-style: italic; font-size: 16px; letter-spacing: 1.5px; color: var(--text-primary); }
 
 .conv-input-bar.exiting { opacity: 0; transform: translateY(8px); transition: opacity 250ms ease-out, transform 250ms ease-out; }
 
