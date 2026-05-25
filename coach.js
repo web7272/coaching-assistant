@@ -48,7 +48,7 @@ async function renderList() {
     row.innerHTML = `
       <div class="coach-list__sid">${escapeText(s.student_id)}</div>
       <div class="coach-list__email">${escapeText(s.email || '—')}</div>
-      <div class="coach-list__day">Day ${escapeText(s.current_day ?? '—')}</div>
+      <div class="coach-list__day">Day ${escapeText(s.effective_day ?? s.current_day ?? '—')}</div>
       <div class="coach-list__open">看 →</div>`;
     const open = () => { location.hash = `#/student/${encodeURIComponent(s.student_id)}`; };
     row.addEventListener('click', open);
@@ -137,15 +137,12 @@ async function renderStudent(sid) {
     }
   }
 
-  // PR-4c-green Patrick 5/24 — coach-only full transcript collapsible.
-  // Lives below the day-note. Hidden until a day is picked; pinned to the
-  // currently-selected day. Lazy-fetches via /api/admin/transcript (gated by
-  // the HMAC coach_session cookie set by /api/coach-auth) on first open per
-  // day; cached per session so re-toggling within the same day doesn't re-hit.
-  const transcriptWrap   = document.getElementById('coach-transcript-wrap');
-  const transcriptToggle = document.getElementById('coach-transcript-toggle');
+  // 完整對話（教練專用）— 自己一排天數按鈕、跟筆記區脫鉤 (Vivi 5/25 C3 修正).
+  // lazy-fetch /api/admin/transcript（HMAC coach_session cookie gated）、per-day 快取.
+  const transcriptPicker = document.getElementById('coach-transcript-picker');
   const transcriptBody   = document.getElementById('coach-transcript-body');
   const transcriptCache  = new Map();   // dayN → rendered HTML
+  const TRANSCRIPT_PLACEHOLDER = '點上方某一天看完整逐字對話。';
   let transcriptCurrentDay = null;
 
   function renderTranscript(payload, day) {
@@ -167,11 +164,8 @@ async function renderStudent(sid) {
     }).join('');
   }
 
-  async function loadTranscriptIfNeeded(day) {
-    if (transcriptCache.has(day)) {
-      transcriptBody.innerHTML = transcriptCache.get(day);
-      return;
-    }
+  async function loadTranscript(day) {
+    if (transcriptCache.has(day)) { transcriptBody.innerHTML = transcriptCache.get(day); return; }
     transcriptBody.innerHTML = '<div class="coach-transcript-empty">讀取中…</div>';
     try {
       const r = await api(`/api/admin/transcript?studentId=${encodeURIComponent(sid)}&module=self&day=${day}`);
@@ -187,33 +181,35 @@ async function renderStudent(sid) {
     }
   }
 
-  function setTranscriptCollapsed(collapsed) {
-    transcriptBody.style.display = collapsed ? 'none' : 'block';
-    transcriptToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    // Vivi 5/24:「展開↔收起」 (was「▸/▾ 展開完整對話」 both sides — same word
-    // confused testers who didn't notice the arrow change).
-    transcriptToggle.textContent = collapsed
-      ? '▸ 展開完整對話（教練專用）'
-      : '▾ 收起完整對話（教練專用）';
+  function setActiveTranscriptBtn(day) {
+    for (const b of transcriptPicker.querySelectorAll('button')) {
+      b.classList.toggle('paper-btn--active', Number(b.dataset.day) === day);
+    }
   }
 
-  // Wire the toggle once per renderStudent call (idempotent — replaceWith resets listener).
-  const freshToggle = transcriptToggle.cloneNode(true);
-  transcriptToggle.replaceWith(freshToggle);
-  // re-grab references after replaceWith
-  const toggleEl = document.getElementById('coach-transcript-toggle');
-  toggleEl.addEventListener('click', async () => {
-    const isCollapsed = toggleEl.getAttribute('aria-expanded') !== 'true';
-    if (isCollapsed) {
-      setTranscriptCollapsed(false);
-      if (transcriptCurrentDay != null) await loadTranscriptIfNeeded(transcriptCurrentDay);
-    } else {
-      setTranscriptCollapsed(true);
-    }
-  });
-  // Start collapsed + hidden (no day picked yet).
-  setTranscriptCollapsed(true);
-  transcriptWrap.style.display = 'none';
+  // 建自己的天數按鈕（跟筆記 picker 同樣只列 revealed / active-filled 的天）.
+  transcriptPicker.innerHTML = '';
+  transcriptBody.textContent = TRANSCRIPT_PLACEHOLDER;
+  for (const d of days) {
+    if (d.state === 'future' || d.state === 'active-empty') continue;
+    const tbtn = document.createElement('button');
+    tbtn.className = 'paper-btn';
+    tbtn.style.cssText = 'padding:6px 12px;font-size:12px;letter-spacing:1px;';
+    tbtn.dataset.day = String(d.day);
+    tbtn.textContent = `D${d.day}`;
+    tbtn.addEventListener('click', async () => {
+      if (transcriptCurrentDay === d.day) {          // 再點同一天 = 收起
+        transcriptCurrentDay = null;
+        setActiveTranscriptBtn(null);
+        transcriptBody.textContent = TRANSCRIPT_PLACEHOLDER;
+        return;
+      }
+      transcriptCurrentDay = d.day;
+      setActiveTranscriptBtn(d.day);
+      await loadTranscript(d.day);
+    });
+    transcriptPicker.appendChild(tbtn);
+  }
 
   // day picker — every day with revealed/active-filled state gets a button.
   // Vivi 5/24: click SAME day = collapse (toggle off + revert to placeholder).
@@ -235,15 +231,12 @@ async function renderStudent(sid) {
     btn.textContent = `D${d.day}${d.phrase ? ' · ' + d.phrase : ''}`;
     btn.addEventListener('click', async () => {
       // Toggle off: same day clicked while already shown → collapse + clear.
+      // Vivi 5/25 C3 修正：筆記區只管筆記、不再 touch 完整對話區
+      // (transcript picker 自己有按鈕、自己管自己的 currentDay).
       if (currentNoteDay === d.day) {
         currentNoteDay = null;
         noteEl.textContent = NOTE_PLACEHOLDER;
         setActiveDayBtn(null);
-        // Also hide the transcript wrap (no day in focus).
-        transcriptCurrentDay = null;
-        transcriptWrap.style.display = 'none';
-        setTranscriptCollapsed(true);
-        transcriptBody.innerHTML = '';
         return;
       }
       // Switch / first click: load the note for this day.
@@ -260,12 +253,6 @@ async function renderStudent(sid) {
       } catch (e) {
         noteEl.textContent = '沒能取回筆記：' + e.message;
       }
-      // Pin transcript to this day, surface the collapsible. Body stays
-      // collapsed until coach clicks the transcript toggle.
-      transcriptCurrentDay = d.day;
-      transcriptWrap.style.display = 'block';
-      setTranscriptCollapsed(true);
-      transcriptBody.innerHTML = '';   // clear stale render from prior day
     });
     picker.appendChild(btn);
   }

@@ -15,6 +15,9 @@ import { neon } from '@neondatabase/serverless';
 // stays open (it validates student_id + email itself, the v4-compat student
 // login path). Every other method/action requires a coach OAuth session.
 import { guardCoachOr401 } from '../lib/auth/coach-session.js';
+// 5/25 (Vivi: 清單每個人都顯示 Day 1) — 用跟 /api/journey 詳情頁同一套天數算法
+// (students.current_day 只在註冊設 1 / PATCH 才動、平常不更新).
+import { computeUnlockedCurrentDay } from '../lib/api/journey-state.js';
 
 // v3.0 雙方案 plan enum（對齊 migration 007 + DB CHECK constraint students_plan_check）
 const VALID_PLANS = new Set(['trial', 'plan_a', 'plan_b']);
@@ -226,11 +229,52 @@ export default async function handler(req, res) {
         }
       }
 
-      const merged = students.map(s => ({
-        ...s,
-        days_completed: stats[s.student_id]?.days_completed ?? 0,
-        last_active: stats[s.student_id]?.last_active ?? null,
-      }));
+      // current_day per student — 跟 /api/journey 詳情頁同一套算法
+      // (computeUnlockedCurrentDay). 5/25 (Vivi: 清單每個人都顯示 Day 1) — 不要再讀
+      // students.current_day（那欄只在註冊設 1 / 教練手動 PATCH 才動、平常不會更新）.
+      let dayInfo = {};   // student_id → { sessionDayCount, lastComplete }
+      try {
+        const upe = await sql`
+          SELECT student_id, session_day_count
+          FROM user_profile_evolution WHERE module = 'self'
+        `;
+        for (const r of upe) {
+          dayInfo[r.student_id] = {
+            sessionDayCount: Number(r.session_day_count) || 0,
+            lastComplete: false,
+          };
+        }
+        const lastSess = await sql`
+          SELECT DISTINCT ON (student_id) student_id, day_complete
+          FROM sessions WHERE module = 'self'
+          ORDER BY student_id, created_at DESC
+        `;
+        for (const r of lastSess) {
+          if (!dayInfo[r.student_id]) {
+            dayInfo[r.student_id] = { sessionDayCount: 0, lastComplete: false };
+          }
+          dayInfo[r.student_id].lastComplete = !!r.day_complete;
+        }
+      } catch (eDay) {
+        console.warn('students effective_day compute failed, falling back to stored current_day:', eDay.message);
+      }
+
+      const merged = students.map(s => {
+        const di = dayInfo[s.student_id];
+        const effective_day = di
+          ? computeUnlockedCurrentDay({
+              pace: s.pace || 'daily',
+              sessionDayCount: di.sessionDayCount,
+              lastSessionComplete: di.lastComplete,
+            })
+          : (s.current_day ?? 1);
+        return {
+          ...s,
+          effective_day,
+          days_completed: stats[s.student_id]?.days_completed ?? 0,
+          last_active: stats[s.student_id]?.last_active ?? null,
+        };
+      });
 
       return res.status(200).json({ students: merged });
     }

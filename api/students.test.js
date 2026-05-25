@@ -143,16 +143,80 @@ test('🛑 students.js POST action=login: retired — now 401 from coach gate (n
 
 test('students.js GET (list) authorized → 200 with students array', async () => {
   _setCoachSessionReader(COACH_OK);
-  // Two-call dance: students list, then sessions stats (or fallback)
+  // 5/25 (Vivi: effective_day) — list 現在會多打 2 支 query (UPE + last session)
+  // 跑跟 /api/journey 同一套 computeUnlockedCurrentDay. 4-call dance:
+  //   1) SELECT * FROM students
+  //   2) sessions stats (days_completed / last_active)
+  //   3) user_profile_evolution (session_day_count)
+  //   4) DISTINCT ON sessions (last day_complete)
   _setSqlClient(makeMockSql([
-    [{ student_id: 'A001', email: 'a@b.com', plan: 'trial' }],   // SELECT * FROM students
+    [{ student_id: 'A001', email: 'a@b.com', plan: 'trial', pace: 'daily', current_day: 1 }],   // SELECT * FROM students
     [{ student_id: 'A001', days_completed: '3', last_active: '2026-05-23' }],   // sessions stats
+    [{ student_id: 'A001', session_day_count: 4 }],   // user_profile_evolution
+    [{ student_id: 'A001', day_complete: false }],   // last session (DISTINCT ON)
   ]));
   const res = mockRes();
   await handler(mockReq({ method: 'GET', query: {} }), res);
   assert.equal(res.statusCode, 200);
   assert.ok(Array.isArray(res.body.students), 'students array shape preserved');
   assert.equal(res.body.students[0].student_id, 'A001');
+});
+
+// 🛑 5/25 (Vivi: 清單每個人都顯示 Day 1) — effective_day 用 UPE.session_day_count
+// 算、不再讀 students.current_day (那欄只在註冊設 1).
+test('🛑 students.js GET list: effective_day = computeUnlockedCurrentDay(UPE + last session)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  _setSqlClient(makeMockSql([
+    // 3 students, all stuck at students.current_day=1 (because nothing updates it)
+    [
+      { student_id: 'A001', email: 'a@b.com', pace: 'daily',      current_day: 1 },
+      { student_id: 'A002', email: 'b@b.com', pace: 'self-paced', current_day: 1 },
+      { student_id: 'A003', email: 'c@b.com', pace: 'daily',      current_day: 1 },   // brand new
+    ],
+    [],   // sessions stats (none)
+    // user_profile_evolution: A001 已到 Day 4, A002 已到 Day 7, A003 沒 UPE row
+    [
+      { student_id: 'A001', session_day_count: 4 },
+      { student_id: 'A002', session_day_count: 7 },
+    ],
+    // last session day_complete: A001 sessions未完成 (今天還在), A002 已完成 → +1
+    [
+      { student_id: 'A001', day_complete: false },
+      { student_id: 'A002', day_complete: true  },
+    ],
+  ]));
+  const res = mockRes();
+  await handler(mockReq({ method: 'GET', query: {} }), res);
+  assert.equal(res.statusCode, 200);
+  const byId = Object.fromEntries(res.body.students.map(s => [s.student_id, s]));
+  // A001: daily, session_day_count=4 → Day 4
+  assert.equal(byId.A001.effective_day, 4,
+    `A001 daily UPE=4 should report Day 4, got ${byId.A001.effective_day}`);
+  // A002: self-paced, session_day_count=7, last day_complete=true → Day 8 (active-empty next day)
+  assert.equal(byId.A002.effective_day, 8,
+    `A002 self-paced UPE=7 + lastComplete=true should report Day 8, got ${byId.A002.effective_day}`);
+  // A003: no UPE row → fallback to stored current_day=1
+  assert.equal(byId.A003.effective_day, 1,
+    `A003 brand-new (no UPE) should fall back to stored current_day=1, got ${byId.A003.effective_day}`);
+});
+
+test('students.js GET list: effective_day compute failure (UPE/sessions throw) → falls back to current_day', async () => {
+  _setCoachSessionReader(COACH_OK);
+  // Simulate UPE query throwing — the catch block must absorb it and fall back.
+  let callIdx = 0;
+  const sql = (strings, ...values) => {
+    callIdx++;
+    if (callIdx === 1) return Promise.resolve([{ student_id: 'A001', current_day: 7, pace: 'daily' }]);
+    if (callIdx === 2) return Promise.resolve([]);   // sessions stats empty
+    if (callIdx === 3) return Promise.reject(new Error('UPE table missing'));   // UPE query fails
+    return Promise.resolve([]);
+  };
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({ method: 'GET', query: {} }), res);
+  assert.equal(res.statusCode, 200, 'handler must not 500 on UPE failure');
+  assert.equal(res.body.students[0].effective_day, 7,
+    'on UPE failure, effective_day falls back to stored s.current_day');
 });
 
 test('students.js POST create student authorized → 200 with new studentId', async () => {

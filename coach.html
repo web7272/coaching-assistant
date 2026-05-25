@@ -54,23 +54,11 @@
       <div id="coach-day-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
       <div id="coach-day-note" class="coach-pre" style="min-height:80px;">點上方某一天看當日筆記。</div>
 
-      <!-- Vivi 5/25 C3 — 完整對話 (教練專用) 拉出來、跟「展開某天筆記」平行的獨立區塊
-           (不再是巢狀子層). PR-4c-green Patrick 5/24: 鐵律 #2 上鎖、lazy-fetch
-           /api/admin/transcript、collapsed by default. Student SPA never gets here. -->
+      <!-- Vivi 5/25 C3 修正 — 完整對話自己有一排天數按鈕、直接點任一天看逐字、
+           不依賴上面的「展開某天筆記」. 鐵律 #2 上鎖、lazy-fetch /api/admin/transcript. -->
       <h2 class="coach-h2" style="margin-top:28px;">完整對話（教練專用）</h2>
-      <div id="coach-transcript-wrap" style="display:none;">
-        <button type="button" id="coach-transcript-toggle" class="paper-btn"
-                style="padding:8px 14px;font-size:12px;letter-spacing:1px;"
-                aria-expanded="false" aria-controls="coach-transcript-body">
-          ▸ 展開完整對話（教練專用）
-        </button>
-        <div id="coach-transcript-body" class="coach-pre"
-             style="display:none;margin-top:10px;min-height:60px;"></div>
-      </div>
-      <p id="coach-transcript-hint" class="muted"
-         style="font-family:var(--font-serif);font-style:italic;font-size:12px;color:var(--text-faint);margin-top:8px;">
-        點上方任一天筆記、這裡才會出現該天逐字按鈕。
-      </p>
+      <div id="coach-transcript-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+      <div id="coach-transcript-body" class="coach-pre" style="min-height:80px;">點上方某一天看完整逐字對話。</div>
 
       <h2 class="coach-h2" style="margin-top:28px;">結業（若已生成）</h2>
       <div id="coach-graduation" class="coach-pre" style="min-height:60px;"></div>
