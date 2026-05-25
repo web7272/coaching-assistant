@@ -8,8 +8,11 @@
 </head>
 <body>
 <!-- PR-4c-green Auth rebuild stage 1c — magic-link callback page.
-     Reads ?token=, POSTs to /api/auth/verify-link. On success the server sets
-     the HttpOnly student_session cookie + we redirect into the SPA. -->
+     Reads ?token=, POSTs to /api/auth/verify-link. Server sets the HttpOnly
+     student_session cookie + returns {studentId, module, currentDay, preferredName, pace}.
+     1h fix (Vivi 5/24): also writes those fields into the SAME localStorage
+     key/shape student.js uses, so the SPA's boot gate doesn't bounce her back
+     to entry. -->
 <div id="app">
   <section id="view-auth" class="view" aria-label="登入中">
     <div class="entry-container" style="padding-top:96px;text-align:center;">
@@ -22,8 +25,43 @@
 
 <script>
 (async function() {
+  // ⚠️ Must match student.js's `LS_KEY` + the saveState() shape exactly —
+  // student.js's loadState does Object.assign(state, JSON.parse(...)) on this
+  // exact key, so any drift here = bounce-to-entry bug.
+  const LS_KEY = 'sy.v5.student';
+
+  /**
+   * Merge magic-link verify response into student.js's localStorage state.
+   * Preserves any existing transient fields (e.g. half-typed conversation
+   * on a returning device); resets conversation + _lastSessionId since a
+   * fresh magic-link login implies「new browser session、journey 重新進」.
+   */
+  function persistStudentSession(payload) {
+    let existing = {};
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const o = JSON.parse(raw);
+        if (o && typeof o === 'object') existing = o;
+      }
+    } catch { /* corrupted → start fresh */ }
+    const merged = Object.assign({}, existing, {
+      studentId:     payload.studentId,
+      email:         existing.email || null,        // verify-link doesn't return email; preserve
+      preferredName: payload.preferredName ?? null,
+      pace:          payload.pace          || 'daily',
+      module:        payload.module        || 'self',
+      currentDay:    payload.currentDay    || 1,
+      conversation:  [],                            // fresh login → journey 重新進、清 in-memory chat
+      _lastSessionId: null,
+    });
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(merged));
+    } catch { /* quota / private mode — server cookie still works, SPA will hydrate via /api/me */ }
+  }
+
   const params = new URLSearchParams(location.search);
-  const token = params.get('token');
+  const token  = params.get('token');
   const status = document.getElementById('auth-status');
   function fail(msg) {
     status.innerHTML = '';
@@ -31,7 +69,6 @@
     p.className = 'hint-italic';
     p.textContent = msg;
     status.appendChild(p);
-    // Offer a way back to the entry page after a moment.
     setTimeout(() => { location.href = '/#/entry'; }, 4000);
   }
 
@@ -43,9 +80,10 @@
       body: JSON.stringify({ token }),
     });
     if (!res.ok) { fail('連結失效或過期、回主頁重新登入。'); return; }
-    // ok: server set student_session cookie + returned student info.
-    // 1d will make the SPA pick studentId from cookie; for now we just go into
-    // the app and let the entry / journey load happen normally.
+    const payload = await res.json();
+    // Bridge the server session → SPA localStorage so student.js boot gate sees a logged-in state.
+    persistStudentSession(payload);
+    // server cookie is set + localStorage hydrated → safe to enter the app.
     location.href = '/#/journey';
   } catch (e) {
     fail('沒能登入，待會再試。');

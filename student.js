@@ -68,6 +68,38 @@ async function api(path, opts) {
   return res.text();
 }
 
+// ─── session hydration (PR-4c-green Auth rebuild 1h) ──────────────────
+// Cookie is the source of truth; localStorage is just a hint. If state.studentId
+// is empty (fresh tab / cleared storage / came in via magic-link but auth.html
+// localStorage write failed) but the server cookie is still valid, /api/me
+// returns the student's identity and we hydrate the SPA state from it.
+// 200 → hydrated, gate passes. 401 → genuinely logged-out → bounce to entry.
+// In-flight dedup so concurrent route() calls only fire one fetch.
+let _hydratePromise = null;
+async function hydrateFromCookie() {
+  if (_hydratePromise) return _hydratePromise;
+  _hydratePromise = (async () => {
+    try {
+      const me = await api('/api/me');
+      if (!me || typeof me !== 'object' || !me.studentId) return false;
+      state.studentId     = me.studentId;
+      state.module        = me.module        || 'self';
+      state.currentDay    = me.currentDay    || 1;
+      state.preferredName = me.preferredName ?? state.preferredName ?? null;
+      state.pace          = me.pace          || state.pace || 'daily';
+      saveState();
+      return true;
+    } catch (e) {
+      // 401 = genuinely not logged in; anything else = unexpected (treat as
+      // not logged in too — defaulting to entry beats a stuck spinner).
+      return false;
+    } finally {
+      _hydratePromise = null;
+    }
+  })();
+  return _hydratePromise;
+}
+
 // ─── view router ───────────────────────────────────────────────────
 // PR-4c-green 5/24 cleanup — 'week-report' view retired (5 phase reports 取代).
 const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report'];
@@ -105,10 +137,18 @@ function parseHash() {
 async function route() {
   const { route, params } = parseHash();
 
-  // gating: any view other than entry needs studentId
+  // PR-4c-green Auth rebuild 1h: cookie is the source of truth, localStorage
+  // is just a hint. If state.studentId is empty for a non-entry view, ask the
+  // server (/api/me) — 200 means we have a valid cookie, hydrate state + pass
+  // the gate. 401 means truly logged out → bounce to entry. This fixes the
+  // 「magic link verify 成功但 SPA 彈回 entry」 bug + makes 30-day cookie work
+  // across fresh tabs / cleared localStorage.
   if (!state.studentId && route !== 'entry') {
-    location.hash = '#/entry';
-    return;
+    const ok = await hydrateFromCookie();
+    if (!ok) {
+      location.hash = '#/entry';
+      return;
+    }
   }
 
   switch (route) {
@@ -879,11 +919,20 @@ document.addEventListener('click', (e) => {
 // ─── boot ──────────────────────────────────────────────────────────
 loadState();
 window.addEventListener('hashchange', route);
-window.addEventListener('DOMContentLoaded', () => {
-  if (!state.studentId && (!location.hash || location.hash === '#/' || location.hash === '#/entry')) {
-    location.hash = '#/entry';
-  } else if (!location.hash || location.hash === '#/') {
-    location.hash = '#/journey';
+window.addEventListener('DOMContentLoaded', async () => {
+  // PR-4c-green Auth rebuild 1h — boot is also subject to cookie-as-truth.
+  // If localStorage is empty but the student_session cookie is valid, default
+  // landing should be /#/journey (not /#/entry). route() does the actual
+  // hydrate via hydrateFromCookie when the gate fires; here we just pick the
+  // initial hash so the cookied user lands on journey instead of entry.
+  const noHash = !location.hash || location.hash === '#/';
+  if (noHash) {
+    if (state.studentId) {
+      location.hash = '#/journey';
+    } else {
+      const ok = await hydrateFromCookie();
+      location.hash = ok ? '#/journey' : '#/entry';
+    }
   }
   route();
 });
