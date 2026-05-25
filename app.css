@@ -397,9 +397,13 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   50%      { box-shadow: 0 0 40px 12px rgba(227, 179, 64, 0.58); }
 }
 
-/* ─── §4.3 TreasureBox — 5 phase boxes at bottom of Journey ─── */
+/* ─── §4.3 TreasureBox — 5 phase boxes ABOVE the 21-day grid (Vivi 5/24).
+   Was: margin 40px auto 12px (treasures sat below grid, needed top breathing).
+   Now: margin 18px auto 10px (treasures sit just under journey-title-wrap,
+   tighter so the 5 寶藏 reads as part of the「your journey」 header zone
+   rather than an island floating above the grid). */
 .treasure-title {
-  margin: 40px auto 12px;
+  margin: 18px auto 10px;
   text-align: center;
   font-family: var(--font-serif);
   font-style: italic;

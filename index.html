@@ -65,6 +65,12 @@
       <p class="journey-sub">一步一步，走進自己</p>
     </div>
 
+    <!-- Vivi 5/24: 5 寶藏移到 21 天格子上面、在標題副標之後、grid 之前 -->
+    <h3 class="treasure-title">你的寶藏</h3>
+    <div class="treasure-shelf" id="treasure-shelf">
+      <!-- 5 phase treasures (locked at P2 — phases[] endpoint lands at P4) -->
+    </div>
+
     <div class="journey-grid-wrap">
       <div class="journey-stage" id="journey-stage">
         <!-- snake-path SVG overlays the grid (z-index 0); tiles z-index 1.
@@ -78,11 +84,6 @@
           <!-- 21 day-tiles injected by student.js (snake-positioned via grid-row/col) -->
         </div>
       </div>
-    </div>
-
-    <h3 class="treasure-title">你的寶藏</h3>
-    <div class="treasure-shelf" id="treasure-shelf">
-      <!-- 5 phase treasures (locked at P2 — phases[] endpoint lands at P4) -->
     </div>
 
     <p id="journey-prompt" class="journey-prompt hidden">點開今天，從第一句開始。</p>
