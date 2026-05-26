@@ -200,6 +200,35 @@ test('🛑 students.js GET list: effective_day = computeUnlockedCurrentDay(UPE +
     `A003 brand-new (no UPE) should fall back to stored current_day=1, got ${byId.A003.effective_day}`);
 });
 
+// 🛑 5/26 Patrick — regression guard: UPE table 沒有 module 欄位 (keyed by
+// student_id only). 上一份 spec 寫 `WHERE module = 'self'` 拋「column "module"
+// does not exist」、整 try 被 catch → dayInfo={} → 全清單 fallback 到 stale
+// students.current_day=1 → 看起來「effective_day 沒接上」. 修：UPE query
+// 不能帶 module 過濾.
+test('🛑 students.js GET list: UPE query MUST NOT filter by module (no such column)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001', pace: 'daily', current_day: 1 }],
+    [],
+    [{ student_id: 'A001', session_day_count: 5 }],
+    [{ student_id: 'A001', day_complete: false }],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({ method: 'GET', query: {} }), res);
+  assert.equal(res.statusCode, 200);
+  // The 3rd SQL call is the UPE query — must NOT mention `module`
+  // (anything matching /module/i in the UPE text would re-introduce the bug).
+  const upeCall = sql.calls[2];
+  assert.ok(upeCall, 'expected at least 3 SQL calls (students / stats / UPE)');
+  assert.ok(/user_profile_evolution/i.test(upeCall.text),
+    `3rd call should be UPE query. text was: ${upeCall.text}`);
+  assert.ok(!/\bmodule\b/i.test(upeCall.text),
+    `UPE query must NOT filter by module (no such column). text was: ${upeCall.text}`);
+  // Sanity: effective_day actually 接上 (=5, daily UPE=5).
+  assert.equal(res.body.students[0].effective_day, 5);
+});
+
 test('students.js GET list: effective_day compute failure (UPE/sessions throw) → falls back to current_day', async () => {
   _setCoachSessionReader(COACH_OK);
   // Simulate UPE query throwing — the catch block must absorb it and fall back.

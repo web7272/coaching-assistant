@@ -234,9 +234,14 @@ export default async function handler(req, res) {
       // students.current_day（那欄只在註冊設 1 / 教練手動 PATCH 才動、平常不會更新）.
       let dayInfo = {};   // student_id → { sessionDayCount, lastComplete }
       try {
+        // ⚠️ user_profile_evolution 是 keyed by student_id only、無 module 欄位
+        // (見 state-manager.js getUserProfile: `WHERE student_id = ...`).
+        // 5/26 Patrick 查到的 bug — 上一份 spec 寫 `WHERE module = 'self'` 拋
+        // 「column "module" does not exist」、整個 try 被 catch、dayInfo={}、
+        // 全部 fallback 到 stale 的 students.current_day(=1) → 全清單都 Day 1.
         const upe = await sql`
           SELECT student_id, session_day_count
-          FROM user_profile_evolution WHERE module = 'self'
+          FROM user_profile_evolution
         `;
         for (const r of upe) {
           dayInfo[r.student_id] = {
