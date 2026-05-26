@@ -728,6 +728,32 @@ async function requestKickoffOpening() {
   scroll.appendChild(div);
 }
 
+// 「教練在寫今天的字」來回逐字打 loop (5/25 Vivi 米白底黑字 + 逐字感).
+// 打進去→停→刪掉→停→再打、loop. 回 stop() 在轉場結束時 clearTimeout.
+// ⚠️ 只動 closure loading 文字; 筆記本身仍維持一次貼上 (renderNote 不變).
+function startClosureTypewriter(textEl) {
+  if (!textEl) return () => {};
+  const FULL = '教練在寫今天的字';
+  let i = 0, phase = 'typing', timer = null;
+  function tick() {
+    if (phase === 'typing') {
+      i++; textEl.textContent = FULL.slice(0, i);
+      if (i >= FULL.length) { phase = 'holdFull'; timer = setTimeout(tick, 700); return; }
+      timer = setTimeout(tick, 130);
+    } else if (phase === 'holdFull') {
+      phase = 'erasing'; timer = setTimeout(tick, 80);
+    } else if (phase === 'erasing') {
+      i--; textEl.textContent = FULL.slice(0, i);
+      if (i <= 0) { phase = 'holdEmpty'; timer = setTimeout(tick, 450); return; }
+      timer = setTimeout(tick, 80);
+    } else { // holdEmpty
+      phase = 'typing'; timer = setTimeout(tick, 130);
+    }
+  }
+  tick();
+  return () => { if (timer) clearTimeout(timer); };
+}
+
 // §5.2 對話收尾轉場
 //   T+0     AI message already shown (fade-in handled by paint)
 //   T+1500  input fade out + translateY 8px
@@ -746,6 +772,9 @@ async function startClosureTransition() {
   closure.classList.remove('hidden');
   // double rAF for transition kick
   requestAnimationFrame(() => requestAnimationFrame(() => closure.classList.add('shown')));
+  // 5/25 Vivi: 來回逐字打「教練在寫今天的字」 — 打進→停→刪→再打 loop.
+  // textContent 反覆 overwrite the static HTML; stop() 在 navigate 前 clear timer.
+  const stopClosureTypewriter = startClosureTypewriter(closure.querySelector('.text'));
 
   // fire finalize-day NOW (in parallel with the 2.8s hold)
   // sessionId comes from the last /api/chat response (stashed in state._lastSessionId)
@@ -795,6 +824,7 @@ async function startClosureTransition() {
   state.currentDay = (state.currentDay || 0) + 1;   // optimistic — server is the source of truth on next /api/journey load
   saveState();
 
+  stopClosureTypewriter();           // 5/25 Vivi: 停掉逐字 loop、避免 navigate 後 timer 還在跑
   location.hash = `#/note?day=${state._pendingNote.day}`;
 }
 

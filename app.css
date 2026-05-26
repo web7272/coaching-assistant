@@ -522,15 +522,15 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 
 /* §5.3 收尾 — token sweep; ✦ now gold per §1 */
 /* 收尾 loading — Vivi 5/24:「太淡」 (paper aesthetic, no SaaS spinner).
-   5/25 follow-up: text-primary 仍被忽略 → 改 brand-green (#3E9D5C, --brand-green)
-   讓它跳出來但仍紙感. Patrick choice between brand-green / gold — picked
-   brand-green for CTA cohesion (gold reserved for ✦ status star). */
+   5/25 Vivi: 改米白底黑字 (was 薄荷底綠字 — 像 SaaS 通知、不像在等).
+   ✦ star 維持金色當唯一點綴、breathe 動畫保留. 文字 JS 來回逐字打
+   (student.js startClosureTypewriter) — 「教練在寫今天的字」打進→停→刪→再打 loop. */
 .conv-closure { border-top: 0.5px solid var(--border-line); padding: 28px 28px 36px; text-align: center;
-  background: var(--bg-mint); opacity: 0; transition: opacity 400ms ease-out; }
+  background: var(--paper-card); opacity: 0; transition: opacity 400ms ease-out; }
 .conv-closure.shown { opacity: 1; }
 .conv-closure .star { color: var(--gold-accent); margin-right: 10px; font-family: var(--font-sans); font-size: 12px; display: inline-block; }
 .conv-closure.shown .star { animation: paper-breathe 2.4s ease-in-out infinite; }
-.conv-closure .text { font-family: var(--font-serif); font-style: italic; font-size: 16px; letter-spacing: 1.5px; color: var(--brand-green); }
+.conv-closure .text { font-family: var(--font-serif); font-style: italic; font-size: 16px; letter-spacing: 1.5px; color: var(--text-primary); }
 
 .conv-input-bar.exiting { opacity: 0; transform: translateY(8px); transition: opacity 250ms ease-out, transform 250ms ease-out; }
 
