@@ -139,9 +139,10 @@ async function renderStudent(sid) {
 
   // 完整對話（教練專用）— 自己一排天數按鈕、跟筆記區脫鉤 (Vivi 5/25 C3 修正).
   // lazy-fetch /api/admin/transcript（HMAC coach_session cookie gated）、per-day 快取.
-  const transcriptPicker = document.getElementById('coach-transcript-picker');
-  const transcriptBody   = document.getElementById('coach-transcript-body');
-  const transcriptCache  = new Map();   // dayN → rendered HTML
+  const transcriptPicker  = document.getElementById('coach-transcript-picker');
+  const transcriptBody    = document.getElementById('coach-transcript-body');
+  const transcriptCopyBtn = document.getElementById('coach-transcript-copy');
+  const transcriptCache   = new Map();   // dayN → rendered HTML
   const TRANSCRIPT_PLACEHOLDER = '點上方某一天看完整逐字對話。';
   let transcriptCurrentDay = null;
 
@@ -159,7 +160,7 @@ async function renderStudent(sid) {
         <div class="coach-transcript-msg__role">${escapeText(roleLabel)}
           ${stamp ? `<span class="coach-transcript-msg__time">${escapeText(stamp)}</span>` : ''}
         </div>
-        <div class="coach-transcript-msg__body">${escapeText(m.content || '')}</div>
+        <div class="coach-transcript-msg__body">${escapeText((m.content || '').replace(/\n{3,}/g, '\n\n').trim())}</div>
       </div>`;
     }).join('');
   }
@@ -187,6 +188,23 @@ async function renderStudent(sid) {
     }
   }
 
+  // 「📋 複製對話」按鈕 (Vivi 5/25 like 最早 index 那顆) — 初始隱藏、選某天才出現.
+  // 用 onclick 覆寫避免 renderStudent 重跑時疊加 listener.
+  if (transcriptCopyBtn) {
+    transcriptCopyBtn.style.display = 'none';
+    transcriptCopyBtn.onclick = () => {
+      const text = transcriptBody.innerText || '';
+      if (!text.trim()) return;
+      navigator.clipboard.writeText(text).then(() => {
+        transcriptCopyBtn.textContent = '已複製 ✓';
+        setTimeout(() => { transcriptCopyBtn.textContent = '📋 複製對話'; }, 1500);
+      }).catch(() => {
+        transcriptCopyBtn.textContent = '複製失敗、手動選取';
+        setTimeout(() => { transcriptCopyBtn.textContent = '📋 複製對話'; }, 1800);
+      });
+    };
+  }
+
   // 建自己的天數按鈕（跟筆記 picker 同樣只列 revealed / active-filled 的天）.
   transcriptPicker.innerHTML = '';
   transcriptBody.textContent = TRANSCRIPT_PLACEHOLDER;
@@ -202,11 +220,13 @@ async function renderStudent(sid) {
         transcriptCurrentDay = null;
         setActiveTranscriptBtn(null);
         transcriptBody.textContent = TRANSCRIPT_PLACEHOLDER;
+        if (transcriptCopyBtn) transcriptCopyBtn.style.display = 'none';
         return;
       }
       transcriptCurrentDay = d.day;
       setActiveTranscriptBtn(d.day);
       await loadTranscript(d.day);
+      if (transcriptCopyBtn) transcriptCopyBtn.style.display = 'inline-block';
     });
     transcriptPicker.appendChild(tbtn);
   }

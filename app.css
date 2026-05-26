@@ -656,7 +656,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 
 /* PR-4c-green Patrick 5/24 — coach-only transcript message rows (audience=coach
    逐字 review). Subtle role label + paper card, no SaaS chat bubbles. */
-.coach-transcript-msg { margin-bottom: 14px; padding-bottom: 10px;
+.coach-transcript-msg { margin-bottom: 9px; padding-bottom: 7px;
   border-bottom: 0.5px dashed var(--border-line); }
 .coach-transcript-msg:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 .coach-transcript-msg__role { font-family: var(--font-sans); font-size: 10px;
@@ -666,7 +666,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .coach-transcript-msg__time { font-family: var(--font-sans); font-size: 10px;
   color: var(--text-faint); margin-left: 8px; letter-spacing: 0; text-transform: none; }
 .coach-transcript-msg__body { font-family: var(--font-serif); font-size: 14px;
-  line-height: 1.85; color: var(--text-primary); white-space: pre-wrap;
+  line-height: 1.55; color: var(--text-primary); white-space: pre-wrap;
   overflow-wrap: anywhere; word-break: break-word; }
 .coach-transcript-empty { font-family: var(--font-serif); font-style: italic;
   font-size: 13px; color: var(--text-faint); text-align: center; }
