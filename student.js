@@ -102,7 +102,7 @@ async function hydrateFromCookie() {
 
 // ─── view router ───────────────────────────────────────────────────
 // PR-4c-green 5/24 cleanup — 'week-report' view retired (5 phase reports 取代).
-const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report'];
+const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report', 'upgrade'];
 
 function showView(name) {
   for (const v of VIEWS) {
@@ -158,6 +158,7 @@ async function route() {
     case 'note':         showView('note');         await renderNote(parseInt(params.day) || state.currentDay); break;
     case 'phase-report': showView('phase-report'); await renderPhaseReport(parseInt(params.phase) || 1); break;
     case 'graduation':   showView('graduation');   await renderGraduation(); break;
+    case 'upgrade':      showView('upgrade');      renderUpgradeCTA(); break;
     default:             location.hash = '#/entry';
   }
 }
@@ -643,6 +644,8 @@ async function sendUserMessage(text) {
     if (r.dayComplete) await startClosureTransition();
   } catch (e) {
     typing.remove();
+    // 5/26 Patrick (漏斗 Stage 1/2) — trial 撞 Day ≥ 2 → 402 → 轉去 CTA.
+    if (e && e.status === 402) { location.hash = '#/upgrade'; return; }
     // §六: 米棕色平靜 inline message (not red banner)
     const div = document.createElement('div');
     div.className = 'hint-italic';
@@ -696,6 +699,13 @@ async function requestKickoffOpening() {
       appendMessage('assistant', aiContent);
       return;
     } catch (e) {
+      // 5/26 Patrick (漏斗 Stage 1/2) — trial 撞 Day ≥ 2 → 402 → 轉去 CTA.
+      // 必須先於 409 PRIOR_FINALIZE_PENDING 分支 (那是 self-paced 同一天).
+      if (e && e.status === 402) {
+        placeholder.remove();
+        location.hash = '#/upgrade';
+        return;
+      }
       // PR-4c-green E4 修法 1 — finalize race: wait, swap copy, retry.
       if (e && e.status === 409 && typeof e.body === 'string' && e.body.includes('PRIOR_FINALIZE_PENDING')) {
         let retryAfter = FALLBACK_BACKOFF_MS;
@@ -950,6 +960,38 @@ async function renderPhaseReport(phaseId) {
       breakthrough.appendChild(p);
     }
   }
+}
+
+// ─── 漏斗 Stage 2 — 轉換 CTA (trial 撞 Day 2 → 自動導來這頁) ───
+// 點「解鎖完整旅程」→ POST /api/checkout → 拿 Stripe hosted-checkout URL →
+// location.href 跳出去. 付款成功 Stripe 導回 #/journey?upgraded=1.
+// 鐵則：plan 升級只由驗過簽章的 webhook 寫、前端絕對不能呼叫「設我 plan_a」.
+function renderUpgradeCTA() {
+  const btn  = document.getElementById('upgrade-btn');
+  const errEl = document.getElementById('upgrade-error');
+  if (!btn) return;
+  if (errEl) errEl.classList.add('hidden');
+  // onclick 覆寫避免 route 多次進到這頁時疊加 listener.
+  btn.onclick = async () => {
+    btn.disabled = true;
+    const prevLabel = btn.textContent;
+    btn.textContent = '打開付款頁…';
+    try {
+      const r = await api('/api/checkout', { method: 'POST', body: {} });
+      if (r && r.url) {
+        location.href = r.url;
+        return;            // 跳出本站、不要 reset UI
+      }
+      throw new Error('no_checkout_url');
+    } catch (e) {
+      // 401 → 學員 session 沒了、回 entry; 其他 → inline error、可重試.
+      if (e && e.status === 401) { location.hash = '#/entry'; return; }
+      console.error('[upgrade] checkout open failed:', e?.message || e);
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+      if (errEl) errEl.classList.remove('hidden');
+    }
+  };
 }
 
 // ─── §5.6 graduation (PR-4c-green: 「{name} · 第二十一天」 header) ───

@@ -718,11 +718,16 @@ export default async function handler(req, res) {
       console.warn('getUserProfile failed:', e.message);
     }
     // PR-4c-4e — fetch pace from students table (defaults to 'daily' if not set)
+    // 5/26 Patrick (Stage 1 漏斗): 順手把 plan 一起撈、trial gate 用.
     let pace = 'daily';
+    let plan = 'trial';
     try {
-      const pr = await sql`SELECT pace FROM students WHERE student_id = ${studentId} LIMIT 1`;
-      if (pr.length > 0 && pr[0].pace) pace = pr[0].pace;
-    } catch (e) { console.warn('[chat] pace lookup failed:', e.message); }
+      const pr = await sql`SELECT pace, plan FROM students WHERE student_id = ${studentId} LIMIT 1`;
+      if (pr.length > 0) {
+        if (pr[0].pace) pace = pr[0].pace;
+        if (pr[0].plan) plan = pr[0].plan;
+      }
+    } catch (e) { console.warn('[chat] pace/plan lookup failed:', e.message); }
     const { gap_days } = detectNewSessionDay(userProfile, now);
 
     // Step 5 — load / create today's session（PR-4c-4e: pace-aware + day_complete-aware）
@@ -753,6 +758,20 @@ export default async function handler(req, res) {
         priorDay:   sess.priorDay,
         sessionDay: sess.sessionDay,
         retryAfterMs: 3000,
+      });
+    }
+    // 5/26 Patrick — Trial gate (Stage 1, flag-protected).
+    // plan='trial' 只能走 Day 1. 預設 OFF (沒設 TRIAL_GATING_ENABLED='true'
+    // → 不 gate、行為跟現在一樣) → push 不會鎖到任何現有封測者. 啟用順序由
+    // Vivi 控：先把封測者改 plan_a → 開白老鼠 trial → 才設 env=true.
+    // Day 2 的空 session row 可能已被 loadOrCreateSession 建出來、無妨；
+    // 付費後同一天會續用同一個 row.
+    if (process.env.TRIAL_GATING_ENABLED === 'true'
+        && plan === 'trial'
+        && (sess.sessionDay || 1) >= 2) {
+      return res.status(402).json({
+        error: 'TRIAL_UPGRADE_REQUIRED',
+        sessionDay: sess.sessionDay,
       });
     }
     const { sessionId, sessionStart, isNew } = sess;
