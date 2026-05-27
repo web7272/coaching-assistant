@@ -137,6 +137,85 @@ async function renderStudent(sid) {
     }
   }
 
+  // 前端學員筆記（學員實際收到的卡）— 5/26 Vivi 獨立 section, 比照 transcript
+  // picker 的做法 (自己 picker / lazy-fetch / per-day 快取 / toggle-off / 複製鈕).
+  // studentCard 由 /api/note?audience=coach 一起回 (dd43a8d).
+  // textContent 注入 (+ .coach-pre pre-wrap) — 不用 innerHTML、避開模板空白 bug.
+  const cardPicker  = document.getElementById('coach-card-picker');
+  const cardBody    = document.getElementById('coach-card-body');
+  const cardCopyBtn = document.getElementById('coach-card-copy');
+  const cardCache   = new Map();   // dayN → studentCard string
+  const CARD_PLACEHOLDER = '點上方某一天看學員那天收到的卡。';
+  let cardCurrentDay = null;
+
+  async function loadCard(day) {
+    if (cardCache.has(day)) {
+      const cached = cardCache.get(day);
+      cardBody.textContent = cached.text;
+      if (cardCopyBtn) cardCopyBtn.style.display = cached.hasCard ? 'inline-block' : 'none';
+      return;
+    }
+    cardBody.textContent = '讀取中…';
+    if (cardCopyBtn) cardCopyBtn.style.display = 'none';
+    try {
+      const n = await api(`/api/note?studentId=${encodeURIComponent(sid)}&module=self&day=${day}&audience=coach`);
+      const hasCard = !!n.studentCard;
+      const text = hasCard ? n.studentCard : `（Day ${day} 還沒有教練卡。）`;
+      cardCache.set(day, { text, hasCard });
+      cardBody.textContent = text;
+      if (cardCopyBtn) cardCopyBtn.style.display = hasCard ? 'inline-block' : 'none';
+    } catch (e) {
+      cardBody.textContent = '沒能取回教練卡：' + (e?.message || '');
+      if (cardCopyBtn) cardCopyBtn.style.display = 'none';
+    }
+  }
+
+  function setActiveCardBtn(day) {
+    for (const b of cardPicker.querySelectorAll('button')) {
+      b.classList.toggle('paper-btn--active', Number(b.dataset.day) === day);
+    }
+  }
+
+  // 複製鈕（onclick 覆寫避免 renderStudent 重跑時疊加 listener）.
+  if (cardCopyBtn) {
+    cardCopyBtn.style.display = 'none';
+    cardCopyBtn.onclick = () => {
+      const text = cardBody.innerText || '';
+      if (!text.trim()) return;
+      navigator.clipboard.writeText(text).then(() => {
+        cardCopyBtn.textContent = '已複製 ✓';
+        setTimeout(() => { cardCopyBtn.textContent = '📋 複製'; }, 1500);
+      }).catch(() => {
+        cardCopyBtn.textContent = '複製失敗、手動選取';
+        setTimeout(() => { cardCopyBtn.textContent = '📋 複製'; }, 1800);
+      });
+    };
+  }
+
+  cardPicker.innerHTML = '';
+  cardBody.textContent = CARD_PLACEHOLDER;
+  for (const d of days) {
+    if (d.state === 'future' || d.state === 'active-empty') continue;
+    const cbtn = document.createElement('button');
+    cbtn.className = 'paper-btn';
+    cbtn.style.cssText = 'padding:6px 12px;font-size:12px;letter-spacing:1px;';
+    cbtn.dataset.day = String(d.day);
+    cbtn.textContent = `D${d.day}`;
+    cbtn.addEventListener('click', async () => {
+      if (cardCurrentDay === d.day) {             // 再點同一天 = 收起
+        cardCurrentDay = null;
+        setActiveCardBtn(null);
+        cardBody.textContent = CARD_PLACEHOLDER;
+        if (cardCopyBtn) cardCopyBtn.style.display = 'none';
+        return;
+      }
+      cardCurrentDay = d.day;
+      setActiveCardBtn(d.day);
+      await loadCard(d.day);
+    });
+    cardPicker.appendChild(cbtn);
+  }
+
   // 完整對話（教練專用）— 自己一排天數按鈕、跟筆記區脫鉤 (Vivi 5/25 C3 修正).
   // lazy-fetch /api/admin/transcript（HMAC coach_session cookie gated）、per-day 快取.
   const transcriptPicker  = document.getElementById('coach-transcript-picker');
@@ -268,14 +347,10 @@ async function renderStudent(sid) {
         // damon_notes.note_text with all coach-internal sections — what coaches
         // are supposed to see). Student /api/note default path returns the
         // Vivi-warm notebook_page + sanitised — student must NEVER see fullNote.
-        // 5/26 Patrick: 多回 studentCard (= sessions.notebook_page、學員前端那張)
-        // 教練同時看「學員收到的卡」+「完整筆記」 兩塊.
+        // 5/26 Vivi: studentCard 拆到獨立 section「前端學員筆記」(coach-card-*).
+        // 這裡只顯示完整筆記、緊湊單塊樣式 (.coach-pre 即可).
         const n = await api(`/api/note?studentId=${encodeURIComponent(sid)}&module=self&day=${d.day}&audience=coach`);
-        const card = n.studentCard ? escapeText(n.studentCard) : `（Day ${d.day} 還沒有教練卡。）`;
-        const full = (n.exists && n.noteText) ? escapeText(n.noteText) : `（Day ${d.day} 還沒有筆記。）`;
-        noteEl.innerHTML =
-          `<div class="coach-note-block"><div class="coach-note-block__label">學員收到的教練卡（前端原樣）</div><div class="coach-note-block__body">${card}</div></div>`
-          + `<div class="coach-note-block"><div class="coach-note-block__label">完整筆記（教練專用）</div><div class="coach-note-block__body">${full}</div></div>`;
+        noteEl.textContent = n.exists ? n.noteText : `（Day ${d.day} 還沒有筆記。）`;
       } catch (e) {
         noteEl.textContent = '沒能取回筆記：' + e.message;
       }

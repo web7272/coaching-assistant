@@ -52,7 +52,16 @@
 
       <h2 class="coach-h2" style="margin-top:28px;">展開某天筆記</h2>
       <div id="coach-day-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
-      <div id="coach-day-note" class="coach-note-box" style="min-height:80px;">點上方某一天看當日筆記。</div>
+      <div id="coach-day-note" class="coach-pre" style="min-height:80px;">點上方某一天看當日筆記。</div>
+
+      <!-- 5/26 Vivi — 「前端學員筆記」 獨立 section、跟筆記區/transcript 區同階.
+           顯示 sessions.notebook_page (學員前端那張暖卡), lazy-fetch per-day + cache.
+           studentCard 由 /api/note?audience=coach 在 dd43a8d 起回傳. -->
+      <h2 class="coach-h2" style="margin-top:28px;">前端學員筆記（學員實際收到的卡）</h2>
+      <div id="coach-card-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+      <button type="button" id="coach-card-copy" class="paper-btn"
+              style="padding:6px 12px;font-size:12px;letter-spacing:1px;margin-bottom:10px;display:none;">📋 複製</button>
+      <div id="coach-card-body" class="coach-pre" style="min-height:80px;">點上方某一天看學員那天收到的卡。</div>
 
       <!-- Vivi 5/25 C3 修正 — 完整對話自己有一排天數按鈕、直接點任一天看逐字、
            不依賴上面的「展開某天筆記」. 鐵律 #2 上鎖、lazy-fetch /api/admin/transcript. -->
