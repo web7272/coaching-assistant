@@ -268,8 +268,14 @@ async function renderStudent(sid) {
         // damon_notes.note_text with all coach-internal sections — what coaches
         // are supposed to see). Student /api/note default path returns the
         // Vivi-warm notebook_page + sanitised — student must NEVER see fullNote.
+        // 5/26 Patrick: 多回 studentCard (= sessions.notebook_page、學員前端那張)
+        // 教練同時看「學員收到的卡」+「完整筆記」 兩塊.
         const n = await api(`/api/note?studentId=${encodeURIComponent(sid)}&module=self&day=${d.day}&audience=coach`);
-        noteEl.textContent = n.exists ? n.noteText : `（Day ${d.day} 還沒有筆記。）`;
+        const card = n.studentCard ? escapeText(n.studentCard) : `（Day ${d.day} 還沒有教練卡。）`;
+        const full = (n.exists && n.noteText) ? escapeText(n.noteText) : `（Day ${d.day} 還沒有筆記。）`;
+        noteEl.innerHTML =
+          `<div class="coach-note-block"><div class="coach-note-block__label">學員收到的教練卡（前端原樣）</div><div class="coach-note-block__body">${card}</div></div>`
+          + `<div class="coach-note-block"><div class="coach-note-block__label">完整筆記（教練專用）</div><div class="coach-note-block__body">${full}</div></div>`;
       } catch (e) {
         noteEl.textContent = '沒能取回筆記：' + e.message;
       }

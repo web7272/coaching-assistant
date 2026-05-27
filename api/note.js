@@ -30,6 +30,14 @@ import { guardStudentOr401 } from '../lib/auth/student-session.js';
 
 export const maxDuration = 10;
 
+// Test seam — inject mock sql (matches established api/* pattern).
+let _sql = null;
+export function _setSqlClient(client) { _sql = client; }
+function getSql() {
+  if (_sql) return _sql;
+  return neon(process.env.DATABASE_URL);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const module    = String(req.query?.module    || 'self').trim();
@@ -39,7 +47,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid day (1-21)' });
   }
 
-  const sql = neon(process.env.DATABASE_URL);
+  const sql = getSql();
 
   try {
     if (audience === 'coach') {
@@ -56,11 +64,26 @@ export default async function handler(req, res) {
           AND is_week_summary = FALSE
         LIMIT 1
       `;
+      // 5/26 Patrick — coach 也要看見「學員前端實際收到的那張教練卡」 (Vivi
+      // 暖版、sanitize 過). 用跟 student path 同樣的「第 day 個 session by
+      // session_date」 OFFSET 邏輯撈、保證與學員那天看到的一致.
+      // ⚠️ 方向安全：教練本來就看得到一切; 反向 (學員看 note_text) 才是漏洞,
+      //    student path 完全不動.
+      const cardRows = await sql`
+        SELECT notebook_page FROM sessions
+        WHERE student_id = ${coachStudentId} AND module = ${module}
+          AND notebook_page IS NOT NULL
+        ORDER BY session_date ASC
+        LIMIT 1 OFFSET ${day - 1}
+      `;
+      const studentCard = cardRows.length > 0 ? cardRows[0].notebook_page : null;
       if (rows.length === 0) {
-        return res.status(200).json({ day, noteText: null, exists: false, audience: 'coach' });
+        return res.status(200).json({
+          day, noteText: null, exists: false, audience: 'coach', studentCard,
+        });
       }
       return res.status(200).json({
-        day, noteText: rows[0].note_text, exists: true, audience: 'coach',
+        day, noteText: rows[0].note_text, exists: true, audience: 'coach', studentCard,
       });
     }
 

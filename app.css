@@ -663,6 +663,19 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   line-height: 1.6; color: var(--text-primary); white-space: normal;
   overflow-wrap: anywhere; word-break: break-word; box-sizing: border-box; max-width: 100%; }
 
+/* 5/26 Patrick — 筆記區同時顯示「學員收到的教練卡」+「完整筆記」 兩塊.
+   容器 white-space:normal (避開 .coach-pre 的 pre-wrap bug，模板縮排當空白渲染);
+   每塊內文 __body 自己 pre-wrap、保留 Sonnet 換行 + Vivi 段落結構. */
+.coach-note-box { background: var(--paper-card); border: 0.5px solid var(--border-line);
+  border-radius: 6px; padding: 16px 18px; font-family: var(--font-serif); font-size: 14px;
+  color: var(--text-primary); white-space: normal; box-sizing: border-box; max-width: 100%; }
+.coach-note-block + .coach-note-block { margin-top: 18px; padding-top: 14px;
+  border-top: 0.5px dashed var(--border-line); }
+.coach-note-block__label { font-size: 12px; letter-spacing: 1px; color: var(--text-secondary);
+  margin-bottom: 8px; }
+.coach-note-block__body { font-size: 14px; line-height: 1.6; color: var(--text-primary);
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+
 /* PR-4c-green Patrick 5/24 — coach-only transcript message rows (audience=coach
    逐字 review). Subtle role label + paper card, no SaaS chat bubbles. */
 .coach-transcript-msg { margin-bottom: 9px; padding-bottom: 7px;
