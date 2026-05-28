@@ -30,6 +30,8 @@ import {
   detectNewSessionDay, buildResetPatch, PHASE_PROGRESS_NEVER_RESET,
   taipeiDateString,
 } from '../lib/session/day-boundary.js';
+// 5/28 Patrick — A006 case fix: 殭屍 session row rollback decision helper.
+import { rollbackSessionIfNeeded } from '../lib/api/chat-rollback.js';
 import { contextFor } from '../lib/session/phase-context.js';
 // v5.0 (spec 09 §12)：對話 phase 天數驅動 (checkAdvance retired at runtime).
 import { phaseForDay, phaseEntryPatch } from '../lib/session/phase-advance.js';
@@ -709,9 +711,20 @@ export default async function handler(req, res) {
   const requestStart = Date.now();
   const now = new Date();
 
+  // 5/28 Patrick — A006 case fix: 殭屍 session row rollback.
+  // loadOrCreateSession 已建好 row 之後、任何外部呼叫 (Anthropic credit / timeout /
+  // Brevo / DB hiccup) 失敗 → 那條 row 留在 DB、day_complete=FALSE → journey 撈最新
+  // session 撈到它 → lastSessionComplete=false → self-paced/daily +1 不觸發 → 卡住.
+  // 修法：finally + _succeeded flag、失敗時且 isNew=true 才 DELETE (reuse 的 row
+  // 是用戶 in-progress 對話、絕不刪).
+  // sql 在 try 內初始化、需 hoist 出來讓 finally 能拿到 (DELETE 用).
+  let sql = null;
+  let _rollbackSessionId = null;
+  let _succeeded = false;
+
   try {
     // Step 3 — SQL + flags
-    const sql = neon(process.env.DATABASE_URL);
+    sql = neon(process.env.DATABASE_URL);
     const flags = await loadFeatureFlags(sql);
     const cachingEnabled = flags.PROMPT_CACHING === true;
 
@@ -780,6 +793,9 @@ export default async function handler(req, res) {
       });
     }
     const { sessionId, sessionStart, isNew } = sess;
+    // 5/28 Patrick (A006 rollback) — 只記錄這 turn 自己「新建」的 row, reuse 的 in-progress
+    // row 不能刪. 之後任何 downstream 炸 → finally DELETE 這個 id.
+    _rollbackSessionId = isNew ? sessionId : null;
     let { turnCount, sessionState } = sess;
 
     // Step 5b — v5.0 天數驅動 phase (取代壞掉的 checkAdvance、見 spec 09 §12)
@@ -965,6 +981,7 @@ export default async function handler(req, res) {
       console.error('[chat_usage_log] insert failed:', e.message);
     }
 
+    _succeeded = true;   // 5/28 Patrick (A006 rollback) — 走到這裡才算成功、finally 不會刪 row.
     return res.status(200).json({
       content,
       turnCount,
@@ -982,6 +999,21 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('Server error:', error);
     return res.status(500).json({ error: 'Server error' });
+  } finally {
+    // 5/28 Patrick (A006 case) — 殭屍 session row rollback.
+    //   _succeeded=false + isNew row + sql 存在 → DELETE 本 turn 新建的 row.
+    //   reuse 的 row 永遠不刪 (in-progress 對話絕不蒸發).
+    //   402/409 early returns (PACING_LOCKED / PRIOR_FINALIZE_PENDING /
+    //   TRIAL_UPGRADE_REQUIRED) 都在 _rollbackSessionId 被填之前 return → 不誤刪.
+    //   決策邏輯抽到 lib/api/chat-rollback.js 純函式、由 chat-rollback.test.js 鎖.
+    const outcome = await rollbackSessionIfNeeded({
+      sql, sessionId: _rollbackSessionId, isNew: !!_rollbackSessionId, succeeded: _succeeded,
+    });
+    if (outcome === 'deleted') {
+      console.warn(`[chat] rolled back newly-created session id=${_rollbackSessionId} after downstream failure (A006 fix)`);
+    } else if (outcome.startsWith('delete-failed:')) {
+      console.error(`[chat] CRITICAL: failed to rollback session id=${_rollbackSessionId}: ${outcome.slice('delete-failed:'.length)}`);
+    }
   }
 }
 
