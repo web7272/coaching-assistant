@@ -2,10 +2,13 @@
 // GET /api/conversation-today?module=self
 //
 // PR-4c-green Patrick 5/25 (Day-4 實測 C2) — 對話到一半關視窗重開續上.
-//
-// 還原當天「尚未結束」(day_complete = FALSE) 的 conversation messages，
-// 讓 student.js 在 state.conversation 為空時可以 fetch-before-kickoff、
-// 不會在已開始的 session 上再 emit 起手式（v4 鬼打牆還魂）。
+// 5/29 Patrick (A008 case fix) — 不再用 session_date 做 strict equality 過濾;
+//   原本 client 送 ?today=YYYY-MM-DD 跟 DB session_date 對不上 (client TZ 漂、
+//   或 session_date 寫入時段邊界 race) → 整段對話「不見」. iphwang214 5/27 17:04-17:14
+//   存了 17 句但 session_date='2026-05-28' (實際是 5/27), 用戶以為對話消失.
+//   修法: 改成「該學員最近一筆 day_complete=FALSE」, 跨日仍能 restore.
+//   學員若想「重新開始」 走 finalize-day 收尾 + journey 切下一天, 不該靠
+//   日期過濾把昨天未完成的對話藏起來.
 //
 // 鐵則 1d (Patrick 5/24)：學員端點 studentId 一律從 session cookie 取、
 // 完全忽略 client 傳的 ?studentId。本檔不收 studentId query 參數.
@@ -14,9 +17,9 @@
 //   { hasInProgress: true,  messages: [{role:'user'|'assistant', content:string}], sessionId, day }
 //   { hasInProgress: false, messages: [], sessionId: null, day: null }
 //
-//   day_complete = TRUE 的 session → hasInProgress: false (今天已結束、不還原)
-//   完全沒有 session → hasInProgress: false (新的一天、走 kickoff)
-//   day_complete = FALSE 但無 user/assistant message → hasInProgress: false (走 kickoff)
+//   最近一筆 day_complete = FALSE → hasInProgress: true (還原該 session messages)
+//   完全沒有 day_complete=FALSE 的 session → hasInProgress: false (走 kickoff)
+//   有 day_complete=FALSE 但無 user/assistant message → hasInProgress: false (走 kickoff)
 
 import { neon } from '@neondatabase/serverless';
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
@@ -39,26 +42,29 @@ export default async function handler(req, res) {
   if (!studentId) return;
 
   const module = String(req.query?.module || 'self').trim();
-  const today  = String(req.query?.today  || new Date().toLocaleDateString('sv')).trim();
+  // 5/29 Patrick — `today` query 不再被使用 (A008 fix, 見檔頭). 保留只為兼容
+  // 接收 (student.js 還在送、之後 cleanup 一起拿掉、別貿然在這層 reject 觸發
+  // 其他 edge case).
+  void req.query?.today;
 
   try {
     const sql = getSql();
 
-    // 找今天尚未結束 (day_complete = FALSE) 的 session.
-    // 一個學員一天最多一筆 session（schema 上有 UNIQUE on student_id+module+session_date）.
+    // 5/29 Patrick (A008 case) — 找該學員最近一筆 day_complete=FALSE session,
+    // 不再 strict equality 過濾 session_date. ORDER BY created_at DESC LIMIT 1
+    // 保證跨日仍能 restore 真正未結束的對話 (iphwang214 5/27 那段就在這裡被找回).
     const rows = await sql`
       SELECT id, day, day_complete
       FROM sessions
       WHERE student_id = ${studentId}
         AND module = ${module}
-        AND session_date = ${today}
         AND day_complete = FALSE
       ORDER BY created_at DESC
       LIMIT 1
     `;
 
     if (rows.length === 0) {
-      // 新的一天 / 今天已結束 → 沒有未完成 session 要還原.
+      // 沒有任何 day_complete=FALSE 的 session → 全新學員 / 全部都收尾過了 → 走 kickoff.
       return res.status(200).json({
         hasInProgress: false, messages: [], sessionId: null, day: null,
       });
