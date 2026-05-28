@@ -788,3 +788,35 @@ test('isPriorDayFinalized: ISO-string priorUpdatedAt → parsed correctly', () =
     now,
   }), false, 'string timestamp inside recency window');
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 5/29 Patrick (PRODUCT-TRUTH v2.3 §2.5) — depthSignal wiring grep guard.
+// pure-helper behavior fully covered in lib/api/depth-signal.test.js;
+// here we just lock that chat.js handler imports + ships it on the 200 response.
+// ═════════════════════════════════════════════════════════
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+test('🛑 chat.js: imports computeDepthSignal from lib/api/depth-signal.js', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  assert.match(src, /import \{ computeDepthSignal \} from '\.\.\/lib\/api\/depth-signal\.js'/,
+    'chat.js must import computeDepthSignal');
+});
+
+test('🛑 chat.js: response payload includes depthSignal field', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // The constant must be computed from merged state + turnCount, then included
+  // in the 200 response payload (so frontend can update dots).
+  assert.match(src, /const depthSignal = computeDepthSignal\(stateForPrompt, turnCount\)/,
+    'chat.js must compute depthSignal from merged stateForPrompt + turnCount');
+  assert.match(src, /res\.status\(200\)\.json\(\{[\s\S]*?depthSignal[\s\S]*?\}\)/,
+    'chat.js must include depthSignal in the 200 response payload');
+});

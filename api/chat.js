@@ -32,6 +32,8 @@ import {
 } from '../lib/session/day-boundary.js';
 // 5/28 Patrick — A006 case fix: 殭屍 session row rollback decision helper.
 import { rollbackSessionIfNeeded } from '../lib/api/chat-rollback.js';
+// 5/29 Patrick — PRODUCT-TRUTH v2.3 §2.5: 採集深度視覺指示 (純函式、不影響 prompt).
+import { computeDepthSignal } from '../lib/api/depth-signal.js';
 import { contextFor } from '../lib/session/phase-context.js';
 // v5.0 (spec 09 §12)：對話 phase 天數驅動 (checkAdvance retired at runtime).
 import { phaseForDay, phaseEntryPatch } from '../lib/session/phase-advance.js';
@@ -982,6 +984,10 @@ export default async function handler(req, res) {
     }
 
     _succeeded = true;   // 5/28 Patrick (A006 rollback) — 走到這裡才算成功、finally 不會刪 row.
+    // 5/29 Patrick — depthSignal (PRODUCT-TRUTH v2.3 §2.5 折衷 a):
+    // 0..5 採集深度的 snapshot, 從 merged stateForPrompt + turnCount 算.
+    // frontend 自己維持 watermark (走過不會倒退), 此處只回 snapshot.
+    const depthSignal = computeDepthSignal(stateForPrompt, turnCount);
     return res.status(200).json({
       content,
       turnCount,
@@ -994,6 +1000,7 @@ export default async function handler(req, res) {
       dayComplete,
       notesGenerating: dayComplete,
       turnsLeft: Math.max(0, HARD_LIMIT_TURNS - turnCount),
+      depthSignal,
     });
 
   } catch (error) {

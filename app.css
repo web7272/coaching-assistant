@@ -532,6 +532,16 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .conv-closure.shown .star { animation: paper-breathe 2.4s ease-in-out infinite; }
 .conv-closure .text { font-family: var(--font-serif); font-style: italic; font-size: 16px; letter-spacing: 1.5px; color: var(--text-primary); }
 
+/* 5/29 Patrick (PRODUCT-TRUTH v2.3 §2.5 折衷 a) — 採集深度 5 圓點.
+   紙感: 褪色 (.55 容器 opacity)、安靜 (無動畫、慢 transition)、無顏色喧嘩.
+   點亮 = 「✦ 走到了這層」、不是「還差幾層」. 5 顆固定、學員不看也能對話. */
+.conv-depth { display: flex; gap: 8px; justify-content: center;
+  padding: 8px 0; margin-bottom: 4px; opacity: 0.55; }
+.conv-depth__dot { width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-secondary); opacity: 0.25;
+  transition: opacity 0.8s ease; }
+.conv-depth__dot.lit { opacity: 0.85; }
+
 .conv-input-bar.exiting { opacity: 0; transform: translateY(8px); transition: opacity 250ms ease-out, transform 250ms ease-out; }
 
 .conv-waiting { display: flex; justify-content: center; align-items: center; margin: 40px 0 24px;

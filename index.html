@@ -99,6 +99,17 @@
       <!-- AI / user messages injected by student.js -->
     </div>
 
+    <!-- 5/29 Patrick (PRODUCT-TRUTH v2.3 §2.5) — 採集深度 5 圓點. 紙感、安靜、
+         無計分語言. depthSignal 0..5 由 server 回, student.js 維持單調 watermark.
+         初始隱藏 (hidden), 第一輪後若 depth>=1 才展現. -->
+    <div id="conv-depth" class="conv-depth" hidden aria-hidden="true">
+      <span class="conv-depth__dot" data-i="1"></span>
+      <span class="conv-depth__dot" data-i="2"></span>
+      <span class="conv-depth__dot" data-i="3"></span>
+      <span class="conv-depth__dot" data-i="4"></span>
+      <span class="conv-depth__dot" data-i="5"></span>
+    </div>
+
     <!-- input bar (§4.3) — replaced by closure bar (§4.4) when AI ends the day -->
     <div id="conv-input-bar" class="conv-input-bar">
       <div class="conv-input-wrap">

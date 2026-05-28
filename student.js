@@ -610,6 +610,7 @@ async function renderConversation() {
   closure.classList.remove('shown');
   state.closure = false;
   state.finalizing = false;
+  resetDepth();   // 5/29 Patrick — 新對話視圖, depth watermark 歸零 (跨日 / restore 都會經過).
   input.placeholder = '寫一句、什麼都好';   // §六: no example placeholders
 
   // P3 (PR-4c-4f) — show the chain-追問 explainer ONLY on Day 1 (same Day-1-only
@@ -695,6 +696,30 @@ async function renderConversation() {
   input.focus();
 }
 
+// 5/29 Patrick (PRODUCT-TRUTH v2.3 §2.5 折衷 a) — 採集深度視覺指示.
+// state._depthWatermark 維持單調 — server 回的 snapshot 可能因為 quality
+// regression 暫時下降, 但 UI 走過就點亮, 不倒退 (符合鐵則 2「不壓力」).
+// renderConversation 進來時清歸零 (新的一天/restore 時呼叫 resetDepth).
+function renderDepth(n) {
+  const wrap = document.getElementById('conv-depth');
+  if (!wrap) return;
+  const snapshot = Math.max(0, Math.min(5, Number(n) || 0));
+  // watermark: 走過不倒退. _depthWatermark 跨 day reset (renderConversation 進來呼).
+  state._depthWatermark = Math.max(state._depthWatermark || 0, snapshot);
+  const N = state._depthWatermark;
+  if (N === 0) { wrap.hidden = true; return; }
+  wrap.hidden = false;
+  const dots = wrap.querySelectorAll('.conv-depth__dot');
+  dots.forEach((d, i) => d.classList.toggle('lit', i < N));
+}
+function resetDepth() {
+  state._depthWatermark = 0;
+  const wrap = document.getElementById('conv-depth');
+  if (!wrap) return;
+  wrap.hidden = true;
+  wrap.querySelectorAll('.conv-depth__dot').forEach(d => d.classList.remove('lit'));
+}
+
 function appendMessage(role, content, doScroll = true) {
   const scroll = document.getElementById('conv-scroll');
   if (role === 'assistant') {
@@ -749,6 +774,8 @@ async function sendUserMessage(text) {
     const aiContent = r.content || '';
     state.conversation.push({ role: 'assistant', content: aiContent });
     appendMessage('assistant', aiContent);
+    // 5/29 Patrick (PRODUCT-TRUTH v2.3 §2.5) — 採集深度 dot 更新 (走過不倒退).
+    if (r && r.depthSignal !== undefined) renderDepth(r.depthSignal);
     if (r.dayComplete) await startClosureTransition();
   } catch (e) {
     typing.remove();
@@ -805,6 +832,8 @@ async function requestKickoffOpening() {
       saveState();
       placeholder.remove();
       appendMessage('assistant', aiContent);
+      // 5/29 Patrick (PRODUCT-TRUTH v2.3 §2.5) — kickoff response 也帶 depthSignal.
+      if (r && r.depthSignal !== undefined) renderDepth(r.depthSignal);
       return;
     } catch (e) {
       // 5/26 Patrick (漏斗 Stage 1/2) — trial 撞 Day ≥ 2 → 402 → 轉去 CTA.
