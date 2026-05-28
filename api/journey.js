@@ -18,6 +18,9 @@ import {
   computeUnlockedCurrentDay,
 } from '../lib/api/journey-state.js';
 import { computePhaseReportStates } from '../lib/api/phase-state.js';
+// 5/27 Patrick — 封測 bug 根因 ②: daily 步調補對稱解鎖. 用 detectNewSessionDay
+// 算 lastSession 距今的台北日 gap、傳給 computeUnlockedCurrentDay.
+import { detectNewSessionDay } from '../lib/session/day-boundary.js';
 // PR-4c-green Auth rebuild stage 1d — student path: sid from verified
 // student_session cookie ONLY (?studentId query 完全忽略, 鐵則).
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
@@ -65,6 +68,7 @@ export default async function handler(req, res) {
     // Fetch pace + last session's day_complete + current_phase (defensively — no row → defaults)
     let pace = 'daily';
     let lastSessionComplete = false;
+    let lastSessionAt = null;
     let currentPhase = null;
     try {
       const pr = await sql`SELECT pace FROM students WHERE student_id = ${studentId} LIMIT 1`;
@@ -72,21 +76,30 @@ export default async function handler(req, res) {
     } catch (e) { console.warn('[journey] pace lookup failed:', e.message); }
     try {
       // PR-4c-green P4 — also grab session_state.current_phase for phases[] derivation
+      // 5/27 Patrick — 順手撈 created_at, 算台北日 gapDays 給 daily 對稱解鎖.
       const lr = await sql`
-        SELECT day_complete, session_state FROM sessions
+        SELECT day_complete, session_state, created_at FROM sessions
         WHERE student_id = ${studentId} AND module = ${module}
         ORDER BY created_at DESC LIMIT 1
       `;
       if (lr.length > 0) {
         lastSessionComplete = !!lr[0].day_complete;
         currentPhase = lr[0].session_state?.current_phase || null;
+        lastSessionAt = lr[0].created_at ? new Date(lr[0].created_at) : null;
       }
     } catch (e) { console.warn('[journey] last session lookup failed:', e.message); }
+
+    // 5/27 Patrick — gapDays 用 detectNewSessionDay (台北日界, A1 改完了).
+    // 沒 lastSession → gapDays=0 (新學員、不影響 max(1, ...) 兜底).
+    const gapDays = lastSessionAt
+      ? detectNewSessionDay({ last_active_date: lastSessionAt }, new Date()).gap_days
+      : 0;
 
     const currentDay = computeUnlockedCurrentDay({
       pace,
       sessionDayCount: profile?.session_day_count || 0,
       lastSessionComplete,
+      gapDaysSinceLastSession: gapDays,
     });
 
     // PR-4c-green 5/24 cleanup — 週報 + weeks[] field retired. Spec 09 §10:

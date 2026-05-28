@@ -28,6 +28,7 @@ import { DetectorRegistry, skipIfDeviationHandled } from '../lib/detector/regist
 import { ALL_DETECTORS, E2_DETECTOR } from '../lib/detector-handlers/index.js';
 import {
   detectNewSessionDay, buildResetPatch, PHASE_PROGRESS_NEVER_RESET,
+  taipeiDateString,
 } from '../lib/session/day-boundary.js';
 import { contextFor } from '../lib/session/phase-context.js';
 // v5.0 (spec 09 §12)：對話 phase 天數驅動 (checkAdvance retired at runtime).
@@ -700,7 +701,11 @@ export default async function handler(req, res) {
   const messages = firstUserIdx >= 0 ? rawMessages.slice(firstUserIdx) : [];
   if (messages.length === 0) return res.status(400).json({ error: 'NO_USER_MESSAGE' });
 
-  const sessionDate = today || new Date().toLocaleDateString('sv');
+  // 5/27 Patrick — 台北日界 (UTC+8). toLocaleDateString('sv') 走 Vercel 本地
+  // TZ (UTC) → 台北凌晨 1 點還算 UTC 昨天 → sessionDate 跟 prior.session_date
+  // 同字串、loadOrCreateSession decideSessionAction 把它當「同一天 continue」 →
+  // Day 2 永遠不解鎖. 用 taipeiDateString 一律切到台北日界.
+  const sessionDate = today || taipeiDateString(new Date());
   const requestStart = Date.now();
   const now = new Date();
 
