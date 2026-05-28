@@ -163,6 +163,67 @@ async function route() {
   }
 }
 
+// 5/28 Patrick — 常見 email 網域 typo 偵測 (Levenshtein distance = 1).
+// 預防 A006 case (用戶打成 @gamil.com → 信永遠送不到 → 看似申請成功但 token
+// 過期). 非阻擋、只提示「你是不是要輸入 ...?」.
+const KNOWN_EMAIL_DOMAINS = [
+  'gmail.com', 'yahoo.com', 'yahoo.com.tw', 'hotmail.com', 'outlook.com',
+  'icloud.com', 'me.com', 'live.com', 'msn.com', 'pchome.com.tw',
+];
+// Damerau-Levenshtein 距離 = 1 (insert/delete/substitute + adjacent transpose).
+// A006 的 gamil↔gmail 是 adjacent swap、pure Lev 算 2、必須走 Damerau.
+// ⚠️ 跟 lib/util/email-typo.js 同步、lib/util/email-typo.test.js 鎖行為.
+function levenshtein1(a, b) {
+  if (a === b) return false;
+  const la = a.length, lb = b.length;
+  if (Math.abs(la - lb) > 1) return false;
+  // Path 1: classic Lev1.
+  {
+    let i = 0, j = 0, diffs = 0;
+    while (i < la && j < lb) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      diffs++;
+      if (diffs > 1) { diffs = 99; break; }
+      if (la > lb)      i++;
+      else if (la < lb) j++;
+      else              { i++; j++; }
+    }
+    if (diffs <= 1) {
+      if (i < la || j < lb) diffs++;
+      if (diffs === 1) return true;
+    }
+  }
+  // Path 2: adjacent-char transposition (equal-length only).
+  if (la === lb) {
+    let k = 0;
+    while (k < la && a[k] === b[k]) k++;
+    if (k < la - 1 && a[k] === b[k + 1] && a[k + 1] === b[k]) {
+      let m = k + 2;
+      while (m < la && a[m] === b[m]) m++;
+      if (m === la) return true;
+    }
+  }
+  return false;
+}
+function suggestEmailFix(email) {
+  if (typeof email !== 'string') return null;
+  const at = email.lastIndexOf('@');
+  if (at < 1) return null;
+  const local  = email.slice(0, at);
+  const domain = email.slice(at + 1).toLowerCase().trim();
+  if (!domain) return null;
+  if (KNOWN_EMAIL_DOMAINS.includes(domain)) return null;   // 已是 known domain、不提示
+  for (const d of KNOWN_EMAIL_DOMAINS) {
+    if (levenshtein1(domain, d)) return `${local}@${d}`;
+  }
+  return null;
+}
+// Expose for tests / window probing.
+if (typeof window !== 'undefined') {
+  window.__suggestEmailFix = suggestEmailFix;
+  window.__levenshtein1 = levenshtein1;
+}
+
 // ─── §4.1 entry ────────────────────────────────────────────────────
 function renderEntry() {
   const form = document.getElementById('entry-form');
@@ -193,6 +254,53 @@ function renderEntry() {
   };
   emailEl.addEventListener('input', clearInvalid);
   nameEl.addEventListener('input', clearInvalid);
+
+  // 5/28 Patrick — email typo 提示 (預防 A006 case). 動態建一個 hint 容器
+  // (不改 index.html), input event 動態檢查; 「用建議的」 換值、「我就是這個」
+  // 隱藏. 非阻擋: submit 不會因為有提示就 reject.
+  let typoHint = document.getElementById('entry-email-typo-hint');
+  if (!typoHint) {
+    typoHint = document.createElement('div');
+    typoHint.id = 'entry-email-typo-hint';
+    typoHint.className = 'hint-italic';
+    typoHint.hidden = true;
+    typoHint.style.cssText = 'margin-top:6px;font-size:12px;color:var(--text-secondary);';
+    emailEl.insertAdjacentElement('afterend', typoHint);
+  }
+  function refreshTypoHint() {
+    const suggestion = suggestEmailFix((emailEl.value || '').trim());
+    if (!suggestion) {
+      typoHint.hidden = true;
+      typoHint.textContent = '';
+      return;
+    }
+    typoHint.hidden = false;
+    typoHint.innerHTML = '';
+    const text = document.createElement('span');
+    text.textContent = `你是不是要輸入 ${suggestion}？`;
+    typoHint.appendChild(text);
+    const useBtn = document.createElement('button');
+    useBtn.type = 'button';
+    useBtn.textContent = '用建議的';
+    useBtn.className = 'paper-btn';
+    useBtn.style.cssText = 'margin-left:8px;padding:2px 8px;font-size:11px;';
+    useBtn.onclick = () => {
+      emailEl.value = suggestion;
+      typoHint.hidden = true;
+      clearInvalid();
+    };
+    const keepBtn = document.createElement('button');
+    keepBtn.type = 'button';
+    keepBtn.textContent = '我就是這個';
+    keepBtn.className = 'paper-btn';
+    keepBtn.style.cssText = 'margin-left:6px;padding:2px 8px;font-size:11px;';
+    keepBtn.onclick = () => { typoHint.hidden = true; };
+    typoHint.appendChild(useBtn);
+    typoHint.appendChild(keepBtn);
+  }
+  emailEl.addEventListener('input', refreshTypoHint);
+  emailEl.addEventListener('blur',  refreshTypoHint);
+  refreshTypoHint();   // initial (pre-fill from state.email)
 
   // PR-4c-green Auth rebuild stage 1c — magic-link flow replaces direct
   // email-as-identity. Submit no longer puts the student into the app; it
@@ -230,7 +338,7 @@ function renderEntry() {
           登入連結已寄到<br><strong style="color:var(--green-forest);">${email}</strong>
         </p>
         <p class="hint-italic" style="font-size:12px;color:var(--text-secondary);margin-top:14px;">
-          打開信箱、點一下、就進來了。<br>連結 20 分鐘內有效。
+          打開信箱、點一下、就進來了。<br>連結 60 分鐘內有效。
         </p>
       `;
       form.replaceWith(confirm);

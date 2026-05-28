@@ -63,30 +63,60 @@
   const params = new URLSearchParams(location.search);
   const token  = params.get('token');
   const status = document.getElementById('auth-status');
-  function fail(msg) {
+  // 5/28 Vivi+Patrick — 過期/失敗文案改友善 + 加「回主頁重新申請」按鈕.
+  // 自動跳延長到 10 秒(讓人讀完文案再被幫忙跳)；按鈕優先給主動性.
+  function fail(msg, sub) {
     status.innerHTML = '';
     const p = document.createElement('p');
     p.className = 'hint-italic';
+    p.style.fontSize = '15px';
+    p.style.marginBottom = '14px';
     p.textContent = msg;
     status.appendChild(p);
-    setTimeout(() => { location.href = '/#/entry'; }, 4000);
+    if (sub) {
+      const s = document.createElement('p');
+      s.className = 'hint-italic';
+      s.style.fontSize = '13px';
+      s.style.opacity = '0.7';
+      s.style.marginBottom = '24px';
+      s.textContent = sub;
+      status.appendChild(s);
+    }
+    const btn = document.createElement('a');
+    btn.href = '/#/entry';
+    btn.className = 'btn-green';
+    btn.style.display = 'inline-block';
+    btn.style.padding = '10px 22px';
+    btn.textContent = '回主頁重新申請';
+    status.appendChild(btn);
+    // 10 秒後自動跳(讀完還沒按就幫他).
+    setTimeout(() => { location.href = '/#/entry'; }, 10000);
   }
 
-  if (!token) { fail('連結缺少 token、回主頁重新登入。'); return; }
+  if (!token) {
+    fail('連結缺少 token、無法登入。',
+         '回主頁重新輸入 email、申請新連結即可。');
+    return;
+  }
   try {
     const res = await fetch('/api/auth/verify-link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     });
-    if (!res.ok) { fail('連結失效或過期、回主頁重新登入。'); return; }
+    if (!res.ok) {
+      fail('這個登入連結已失效。',
+           '可能是已經點過、或太久沒打開(連結有效 60 分鐘)。回主頁重新輸入 email、收到新信後請馬上點。');
+      return;
+    }
     const payload = await res.json();
     // Bridge the server session → SPA localStorage so student.js boot gate sees a logged-in state.
     persistStudentSession(payload);
     // server cookie is set + localStorage hydrated → safe to enter the app.
     location.href = '/#/journey';
   } catch (e) {
-    fail('沒能登入，待會再試。');
+    fail('沒能登入。',
+         '網路不穩、待會再試;或回主頁重新申請一封新信。');
   }
 })();
 </script>

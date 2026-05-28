@@ -4,7 +4,7 @@
 // POST /api/auth/request-link { email, preferredName?, pace? }
 //   - Normalize email (lowercase + trim)
 //   - Random 32-byte hex token → SHA-256 hashed → INSERT into magic_link_tokens
-//     with expires_at = now + 20min
+//     with expires_at = now + 60min  (5/28 Vivi+Patrick: 20→60, real-data fix)
 //   - sendMagicLink(email, `${APP_BASE_URL}/auth?token=${token}`)
 //   - Returns { ok: true } ALWAYS (even on DB error / invalid email shape)
 //     so an attacker probing addresses can't learn which exist as students.
@@ -24,7 +24,10 @@ import {
 
 export const maxDuration = 10;
 
-const TTL_MINUTES = 20;
+// 5/28 Vivi+Patrick — 20→60. 封測 real data: A006 收信+點之間最多 18 分鐘、
+// Vivi 自己 3 筆過期裡 2 筆是來不及點. 20 分鐘太緊. token 仍一次性、256-bit
+// 隨機、安全性影響可忽略 (window 從 20→60 不改變漏洞模型).
+const TTL_MINUTES = 60;
 
 // Test seam (injectable SQL client) — matches the established pattern.
 let _sql = null;

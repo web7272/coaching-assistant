@@ -70,6 +70,28 @@ test('🛑 handler: valid email → 200 ok:true + INSERT token + sendMagicLink c
   assert.match(sent[0].link, /^https:\/\/preview\.example\.com\/auth\?token=[a-f0-9]{64}$/);
 });
 
+// 🛑 5/28 Vivi+Patrick — TTL 20→60 分鐘. 封測 real-data: A006 收信+點之間
+// 最多 18 分鐘、3 筆過期裡 2 筆是 Vivi 自己沒點. 把 expires_at - now 鎖在
+// 60 分鐘 ± 2 秒 (allow test execution drift).
+test('🛑 TTL = 60 minutes (5/28 spec, was 20)', async () => {
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
+  _setSendMagicLinkFn(async () => {});
+  const tNow = Date.now();
+  const res = mockRes();
+  await handler(mockReq({ body: { email: 'a@b.com' } }), res);
+  assert.equal(res.statusCode, 200);
+  const expiresIso = sql.calls[0].values[4];
+  assert.ok(typeof expiresIso === 'string', 'expiresAt should be ISO string');
+  const ttlMs = new Date(expiresIso).getTime() - tNow;
+  const SIXTY_MIN = 60 * 60 * 1000;
+  assert.ok(Math.abs(ttlMs - SIXTY_MIN) < 2000,
+    `expected ~60min TTL (${SIXTY_MIN}ms ± 2s); got ${ttlMs}ms`);
+  // Defense: 必須 > 20 分鐘 + 1 秒 (證明真的從 20 改成 60、不是還是 20).
+  assert.ok(ttlMs > 20 * 60 * 1000 + 1000,
+    `regression: TTL must be > 20 min (got ${ttlMs}ms)`);
+});
+
 test('handler: preferredName + pace flow through to INSERT', async () => {
   const sql = makeMockSql([]);
   _setSqlClient(sql);
