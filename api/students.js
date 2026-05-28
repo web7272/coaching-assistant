@@ -117,12 +117,33 @@ export default async function handler(req, res) {
         ? undefined
         : (String(notesRaw).trim() || null);
 
+      // 5/27 Patrick — 教練後台「編輯資料」 加 pace / preferred_name / is_beta.
+      const pace = req.body.pace;
+      const preferredNameRaw = req.body.preferred_name;
+      const isBeta = req.body.is_beta !== undefined ? !!req.body.is_beta : undefined;
+
       // v3.0: plan 如果有送、必須是合法 enum（PATCH 是 partial update、沒送就略過）
       if (plan !== undefined && !VALID_PLANS.has(plan)) {
         return res.status(400).json({
           error: 'INVALID_PLAN',
           message: `plan 必須是 trial / plan_a / plan_b 其中之一（收到：${plan}）`,
         });
+      }
+      // pace 驗證：合法值只有 'daily' | 'self-paced'.
+      if (pace !== undefined && pace !== 'daily' && pace !== 'self-paced') {
+        return res.status(400).json({
+          error: 'INVALID_PACE',
+          message: `pace 必須是 daily / self-paced（收到：${pace}）`,
+        });
+      }
+      // preferred_name：trim、長度 0-50；空字串視為清空（→ null）.
+      let prefSan;
+      if (preferredNameRaw !== undefined) {
+        const trimmed = String(preferredNameRaw).trim();
+        if (trimmed.length > 50) {
+          return res.status(400).json({ error: 'PREFERRED_NAME_TOO_LONG' });
+        }
+        prefSan = trimmed.length === 0 ? null : trimmed;
       }
 
       // 確認學員存在
@@ -132,23 +153,29 @@ export default async function handler(req, res) {
       }
 
       // 用 COALESCE 模擬 partial update
-      // 對 notes 來說：傳 null 就是清空、undefined 就保留原值
-      // 注意：sql tagged template 不能 dynamic build，這裡一次性更新所有欄位，
+      // 對 notes / preferred_name 來說：傳 null 就是清空、undefined 就保留原值
+      // 注意：sql tagged template 不能 dynamic build、這裡一次性更新所有欄位、
       // 沒送的欄位用 COALESCE(送進來的 ?? null, 原值) 維持原樣
-      // notes 因為要支援清空，所以另外處理
+      // notes / preferred_name 因為要支援清空、所以另外處理.
       await sql`
         UPDATE students SET
           plan           = COALESCE(${plan ?? null}, plan),
           tier           = COALESCE(${tier ?? null}, tier),
           current_module = COALESCE(${cm ?? null}, current_module),
           current_week   = COALESCE(${cw ?? null}, current_week),
-          current_day    = COALESCE(${cd ?? null}, current_day)
+          current_day    = COALESCE(${cd ?? null}, current_day),
+          pace           = COALESCE(${pace ?? null}, pace),
+          is_beta        = COALESCE(${isBeta ?? null}, is_beta)
         WHERE student_id = ${studentId}
       `;
 
       // notes 單獨更新（支援清空）
       if (notes !== undefined) {
         await sql`UPDATE students SET notes = ${notes} WHERE student_id = ${studentId}`;
+      }
+      // preferred_name 單獨更新（支援清空成 null）
+      if (prefSan !== undefined) {
+        await sql`UPDATE students SET preferred_name = ${prefSan} WHERE student_id = ${studentId}`;
       }
 
       return res.status(200).json({ success: true });
@@ -169,9 +196,12 @@ export default async function handler(req, res) {
         : null;
 
       // ---------- 單一學員（向後相容） ----------
+      // 5/27 Patrick — 教練後台「編輯資料」 需要 pace / preferred_name / is_beta 回填,
+      // SELECT 一併帶回 (仍刻意不回 email / notes、v3 安全設計不動).
       if (studentId) {
         const rows = await sql`
-          SELECT student_id, current_module, current_week, current_day, plan, tier
+          SELECT student_id, current_module, current_week, current_day,
+                 plan, tier, pace, preferred_name, is_beta
           FROM students
           WHERE student_id = ${studentId}
         `;

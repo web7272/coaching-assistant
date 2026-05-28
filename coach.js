@@ -5,8 +5,12 @@
 */
 'use strict';
 
-async function api(path) {
-  const res = await fetch(path);
+async function api(path, opts) {
+  // 5/27 Patrick — 擴 opts (method/body) 給編輯資料 PATCH /api/students 用.
+  // 既有所有 GET 呼叫不傳 opts、行為跟原本一致.
+  const init = Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts || {});
+  if (init.body && typeof init.body !== 'string') init.body = JSON.stringify(init.body);
+  const res = await fetch(path, init);
   if (res.status === 401) { location.href = '/coach-login.html'; throw new Error('unauthorized'); }
   if (!res.ok) throw new Error('http_' + res.status);
   return res.json();
@@ -81,6 +85,74 @@ async function renderStudent(sid) {
     return;
   }
   document.getElementById('coach-student-meta').textContent = `current_day = ${j.currentDay} · module = ${j.module}`;
+
+  // 5/27 Patrick — 編輯資料 (稱呼 / 步調 / is_beta). Vivi 不用再下 SQL.
+  // GET /api/students?studentId=... 拿目前值、PATCH /api/students 寫變更.
+  // 兩端都 coach-gated (見 api/students.js); PATCH 用 COALESCE partial update.
+  // 失敗不擋整個詳情頁 render — 用 try/catch + 就地 inline 訊息.
+  try {
+    const sr = await api(`/api/students?studentId=${encodeURIComponent(sid)}`);
+    const stu = sr?.student || {};
+    const original = {
+      preferred_name: stu.preferred_name || '',
+      pace:           stu.pace || 'daily',
+      is_beta:        !!stu.is_beta,
+    };
+    const $name  = document.getElementById('coach-edit-name');
+    const $pace  = document.getElementById('coach-edit-pace');
+    const $beta  = document.getElementById('coach-edit-isbeta');
+    const $save  = document.getElementById('coach-edit-save');
+    const $reset = document.getElementById('coach-edit-reset');
+    const $msg   = document.getElementById('coach-edit-msg');
+
+    function fillForm(src) {
+      $name.value   = src.preferred_name;
+      $pace.value   = src.pace;
+      $beta.checked = src.is_beta;
+    }
+    fillForm(original);
+    // 初始標題：「學員 · 稱呼（A001）」如果已有 preferred_name.
+    const titleEl = document.getElementById('coach-student-title');
+    if (titleEl && original.preferred_name) {
+      titleEl.textContent = `學員 · ${original.preferred_name}（${sid}）`;
+    }
+
+    // onclick 覆寫 (renderStudent 多次進來不疊加 listener).
+    $reset.onclick = () => { fillForm(original); $msg.textContent = ''; };
+    $save.onclick  = async () => {
+      $msg.textContent = '儲存中…'; $save.disabled = true;
+      const body = { studentId: sid };
+      const newName = $name.value.trim();
+      if (newName        !== original.preferred_name) body.preferred_name = newName;
+      if ($pace.value    !== original.pace)           body.pace           = $pace.value;
+      if ($beta.checked  !== original.is_beta)        body.is_beta        = $beta.checked;
+      if (Object.keys(body).length === 1) {     // 只有 studentId → 沒改
+        $msg.textContent = '沒有變動。';
+        $save.disabled = false;
+        return;
+      }
+      try {
+        await api('/api/students', { method: 'PATCH', body });
+        $msg.textContent = '已儲存 ✓';
+        Object.assign(original, {
+          preferred_name: newName,
+          pace:           $pace.value,
+          is_beta:        $beta.checked,
+        });
+        if (titleEl) {
+          titleEl.textContent = newName ? `學員 · ${newName}（${sid}）` : `學員 · ${sid}`;
+        }
+      } catch (e) {
+        $msg.textContent = '儲存失敗：' + (e?.message || e);
+      } finally {
+        $save.disabled = false;
+      }
+    };
+  } catch (e) {
+    console.warn('[coach edit-form] init failed:', e?.message || e);
+    const $msg = document.getElementById('coach-edit-msg');
+    if ($msg) $msg.textContent = '沒能取回學員資料、編輯區暫不可用。';
+  }
 
   // PR-4c-green P5: mini grid is now 3×7 daily only (週報 retired per spec 09 §10).
   // Old 3×8 layout had a 「week I/II/III」 column on the right — gone. Phase Reports

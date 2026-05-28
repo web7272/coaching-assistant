@@ -279,6 +279,168 @@ test('students.js PATCH authorized → 200', async () => {
   assert.equal(res.body.success, true);
 });
 
+// ═════════════════════════════════════════════════════════
+// 5/27 Patrick — PATCH 擴白名單: pace / preferred_name / is_beta
+// ═════════════════════════════════════════════════════════
+
+test('🛑 PATCH pace=self-paced → 200 + UPDATE COALESCE 句帶 pace', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],   // exists
+    [],                          // UPDATE main
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', pace: 'self-paced' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  // 第 2 個 SQL call 是主 UPDATE — 必須帶 pace COALESCE.
+  const upd = sql.calls[1];
+  assert.match(upd.text, /UPDATE students SET[\s\S]*pace\s*=\s*COALESCE/i);
+  // 自己送的 pace 值要在 values 裡.
+  assert.ok(upd.values.includes('self-paced'),
+    `expected 'self-paced' in UPDATE values. saw: ${JSON.stringify(upd.values)}`);
+});
+
+test('🛑 PATCH pace=invalid → 400 INVALID_PACE + 不查 / 不 UPDATE', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', pace: 'whenever' },
+  }), res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'INVALID_PACE');
+  assert.equal(sql.calls.length, 0,
+    'invalid pace 必須在任何 SQL 之前 reject (defense in depth)');
+});
+
+test('🛑 PATCH preferred_name=「Vivi 改名」→ 200 + 單獨 UPDATE preferred_name 那條被打', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],   // exists
+    [],                          // UPDATE main
+    [],                          // UPDATE preferred_name (separate)
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', preferred_name: 'Vivi 改名' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  // 3rd SQL call = preferred_name UPDATE.
+  const upd = sql.calls[2];
+  assert.match(upd.text, /UPDATE students SET\s+preferred_name\s*=/i);
+  assert.ok(upd.values.includes('Vivi 改名'),
+    `expected 'Vivi 改名' in preferred_name UPDATE values. saw: ${JSON.stringify(upd.values)}`);
+});
+
+test('🛑 PATCH preferred_name="" (清空) → 200 + 寫 null', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [], [],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', preferred_name: '   ' },   // whitespace → trim → '' → null
+  }), res);
+  assert.equal(res.statusCode, 200);
+  const upd = sql.calls[2];
+  assert.match(upd.text, /UPDATE students SET\s+preferred_name\s*=/i);
+  assert.ok(upd.values.includes(null),
+    `expected null in preferred_name UPDATE values (清空). saw: ${JSON.stringify(upd.values)}`);
+});
+
+test('🛑 PATCH preferred_name 長度 51 → 400 PREFERRED_NAME_TOO_LONG', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', preferred_name: 'x'.repeat(51) },
+  }), res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'PREFERRED_NAME_TOO_LONG');
+  assert.equal(sql.calls.length, 0, '長度驗證必須在 SQL 之前');
+});
+
+test('🛑 PATCH is_beta=true → 200 + UPDATE COALESCE 帶 is_beta=true', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', is_beta: true },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  const upd = sql.calls[1];
+  assert.match(upd.text, /is_beta\s*=\s*COALESCE/i);
+  assert.ok(upd.values.includes(true),
+    `expected true (boolean) in is_beta UPDATE values. saw: ${JSON.stringify(upd.values)}`);
+});
+
+test('PATCH partial (只送 pace): 其他欄位 COALESCE 用 null → DB 端保留原值', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', pace: 'self-paced' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  const upd = sql.calls[1];
+  // pace 有送 → 'self-paced'; 其他 (plan/tier/current_module/current_week/current_day/is_beta) → null.
+  assert.ok(upd.values.includes('self-paced'));
+  // 至少 5 個 null (plan/tier/cm/cw/cd + is_beta) — COALESCE(null, 原值) 保留原值.
+  const nullCount = upd.values.filter(v => v === null).length;
+  assert.ok(nullCount >= 5,
+    `expected at least 5 null COALESCE arms (plan/tier/cm/cw/cd/is_beta unset). saw values: ${JSON.stringify(upd.values)}`);
+});
+
+// ═════════════════════════════════════════════════════════
+// 5/27 Patrick — GET single-student 回填欄位
+// ═════════════════════════════════════════════════════════
+
+test('🛑 GET ?studentId=A001 → 含 pace / preferred_name / is_beta (編輯表單回填)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{
+      student_id: 'A001', current_module: 'self', current_week: 1, current_day: 3,
+      plan: 'trial', tier: 0, pace: 'self-paced',
+      preferred_name: 'Vivi', is_beta: true,
+    }],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({ method: 'GET', query: { studentId: 'A001' } }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.student.pace, 'self-paced');
+  assert.equal(res.body.student.preferred_name, 'Vivi');
+  assert.equal(res.body.student.is_beta, true);
+  // 🛑 email / notes 仍刻意不回 (v3 安全設計).
+  assert.equal('email' in res.body.student, false,
+    'single-student GET response must NOT carry email (v3 安全設計)');
+  assert.equal('notes' in res.body.student, false,
+    'single-student GET response must NOT carry notes');
+});
+
 test('students.js: unknown method (coach authorized) → 405', async () => {
   _setCoachSessionReader(COACH_OK);
   _setSqlClient(makeMockSql([]));
