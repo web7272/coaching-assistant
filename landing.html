@@ -464,6 +464,44 @@ function aidx(){return Math.round(track.scrollLeft/track.clientWidth);}
 track.addEventListener('scroll',()=>{const i=aidx();dots.forEach((d,k)=>d.classList.toggle('on',k===i));});
 dots.forEach((d,k)=>d.addEventListener('click',()=>track.scrollTo({left:k*track.clientWidth,behavior:'smooth'})));
 window.heroNav=function(dir){const i=Math.min(Math.max(aidx()+dir,0),dots.length-1);track.scrollTo({left:i*track.clientWidth,behavior:'smooth'});};
+// 5/29 Vivi — Hero 自動輪播（每 5.5 秒推下一張、用戶碰則暫停、循環、a11y 友善）.
+(function autoHero(){
+  const INTERVAL_MS = 5500;       // 5.5 秒一張、夠讀完 h1
+  const RESUME_MS   = 15000;      // 用戶碰過後 15 秒再恢復
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion) return;       // 系統開了減少動態 → 完全不自動播
+
+  let timer = null;
+  let pausedUntil = 0;
+
+  function advance(){
+    if (document.hidden) return;                          // 頁面切走、不播
+    if (Date.now() < pausedUntil) return;                 // 用戶剛碰、暫停中
+    // 滾出 Hero 區外 → 停（讀者已往下讀其他段、別吵）
+    const heroRect = track.getBoundingClientRect();
+    if (heroRect.bottom < 80) return;
+    const next = (aidx() + 1) % dots.length;              // 循環回 0
+    track.scrollTo({ left: next * track.clientWidth, behavior: 'smooth' });
+  }
+
+  function start(){
+    if (timer) return;
+    timer = setInterval(advance, INTERVAL_MS);
+  }
+  function pause(){
+    pausedUntil = Date.now() + RESUME_MS;
+  }
+
+  // 用戶任何互動 → 暫停 15 秒
+  ['pointerdown','wheel','touchstart','keydown'].forEach(ev =>
+    track.addEventListener(ev, pause, { passive: true }));
+  dots.forEach(d => d.addEventListener('click', pause));
+  document.querySelectorAll('.harrow').forEach(b => b.addEventListener('click', pause));
+
+  // 切 tab 暫停（advance() 內 document.hidden 短路, 無需 clearInterval）
+  document.addEventListener('visibilitychange', () => { /* no-op, gated in advance() */ });
+  start();
+})();
 // 表單（依 Patrick API 契約）
 const form=document.getElementById('joinForm');
 const opts=document.querySelectorAll('input[name=opt]');
