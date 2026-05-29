@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>看見自己 ｜ 三週，把那個自己找回來</title>
+<!--
+  ============================================================
+  看見自己 Landing Page  v0.15  (Cathy 行銷整合, 2026-05-28)
+  v0.14 → v0.15：把「自我篩選」和「保密聲明」搬到可見的位置（FAQ 預設收合、九成的人不會展開）。
+   - founder CTA 下方加一行小字：「想直接拿到答案的，這裡不適合你。」← 決定點前最後一道自我篩選，篩掉氣質不合
+   - 最終 CTA 段「安全免責」下方加「保密聲明」（小字、加標籤）：你寫下的只屬於你、不分享/不販售/不交給第三方
+   - FAQ 加完整版「我寫的內容會被誰看到？」——主聲明在頁面可見、完整解釋在 FAQ
+  ⚠️ Mike 5/28 守門員 catch（待 Cathy 跟修 / Olivia 走規則 4 後落定）：
+   1. 「不交給任何第三方」過絕對（Brevo/Stripe/Anthropic API 都是第三方）→ Vivi 5/28 拍板「不販售、不分享給第三方」即可
+   2. FAQ 寫「永久關閉」踩 Lifestyle Business 禁字 → Vivi 拍板改「之後不再開放」或「創始期之後就會關閉」
+   3. Founder bonus 寫 1:1 但沒提 prompt → Vivi 5/28 拍板「prompt 整個從產品拿掉、Founder 加碼只剩 1:1」（與本檔現狀一致、其它公司文件待 Olivia 同步）
+   4. 對外用「創始 100」（不寫英文 Founder）→ Vivi 5/28 拍板（本檔已符合）
+  紅線：不掛假學員、不寫退費、不誇大療效、Steve Andreas 退背景、不寫 Damon。
+  Patrick 後端接點：唯一 POST /api/request-guide（相對路徑、不嵌網域/key）
+  ============================================================
+-->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;600;700&display=swap');
+:root{
+  --bg-top:#0b2025;--bg-bot:#061418;
+  --ink:#ECE7D9;--ink-soft:#9aa6a1;--ink-dim:#6f7d78;
+  --gold:#E4C485;--gold-soft:#caa869;
+  --coral:#E0876A;--coral-soft:#c9745a;
+  --card:rgba(255,255,255,.04);--card-line:rgba(228,196,133,.20);
+  --serif:'Noto Serif TC',serif;--sans:'Noto Sans TC',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--sans);color:var(--ink);line-height:1.95;letter-spacing:.03em;
+  background:linear-gradient(180deg,var(--bg-top),var(--bg-bot) 55%);-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding:0 28px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.5;letter-spacing:.04em;margin:0}
+a{color:inherit;text-decoration:none}
+.gold{color:var(--gold)}.soft{color:var(--ink-soft)}.coral{color:var(--coral)}
+.serif{font-family:var(--serif)}
+.glow{color:var(--gold);text-shadow:0 0 22px rgba(241,220,168,.55), 0 0 6px rgba(241,220,168,.35)}
+.btn{display:inline-block;cursor:pointer;border:0;font-family:var(--sans);font-size:15.5px;font-weight:500;
+  padding:15px 32px;border-radius:40px;color:#142b22;background:linear-gradient(180deg,var(--gold),var(--gold-soft));
+  box-shadow:0 6px 22px rgba(228,196,133,.18);transition:transform .15s,box-shadow .2s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(228,196,133,.28)}
+.btn.ghost{background:transparent;color:var(--gold);border:1px solid var(--card-line);box-shadow:none;font-weight:400}
+.btn[disabled]{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.brand{font-family:var(--serif);color:var(--gold);letter-spacing:.18em;font-size:14px;padding:20px 0;text-align:center}
+/* HERO 輪播 */
+.hero{position:relative;min-height:92vh;display:flex;flex-direction:column;justify-content:center;
+  overflow:hidden;padding:30px 0 50px}
+.stars{position:absolute;inset:0;z-index:0;opacity:.9}
+.htrack{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;position:relative;z-index:2}
+.htrack::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;
+  min-height:46vh;padding:0 30px;text-align:center}
+.slide h1{font-size:clamp(26px,5vw,40px);max-width:720px;color:var(--ink)}
+.slide h1 .dim{color:var(--ink-soft)}
+.hfix{position:relative;z-index:2;text-align:center;margin-top:26px;padding:0 28px}
+.hfix .sub{font-family:var(--serif);font-size:clamp(16px,2.6vw,19px);color:var(--ink-soft);margin:0 0 24px}
+.hctrl{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:26px;position:relative;z-index:2}
+.hdots{display:flex;gap:9px}
+.hdot{width:8px;height:8px;border-radius:50%;background:rgba(228,196,133,.3);border:0;cursor:pointer;padding:0}
+.hdot.on{background:var(--gold)}
+.harrow{background:transparent;border:1px solid var(--card-line);color:var(--gold);border-radius:50%;
+  width:34px;height:34px;cursor:pointer;font-size:16px;line-height:1}
+.swipehint{font-size:12px;color:var(--ink-dim);letter-spacing:.1em;margin-top:14px;text-align:center}
+/* 通用情緒區塊 */
+.scene{padding:70px 0}
+.scene.full{min-height:88vh;display:flex;flex-direction:column;justify-content:center}
+.rule{width:42px;height:1px;background:var(--gold-soft);opacity:.6;margin:0 auto 28px}
+h2.lead{font-size:clamp(21px,3.4vw,28px);text-align:center;line-height:1.6}
+/* 照鏡子 */
+.mirror{display:flex;flex-direction:column;gap:14px;margin:34px auto 0;max-width:560px}
+.mcard{background:var(--card);border:1px solid var(--card-line);border-radius:14px;padding:20px 24px;
+  font-family:var(--serif);font-size:clamp(16px,2.6vw,18px);color:var(--ink);line-height:1.7}
+.mecho{text-align:center;margin-top:34px;font-family:var(--serif);font-size:18px;color:var(--gold)}
+/* 四個未來 */
+.fhead{text-align:center}
+.fhead .big{font-family:var(--serif);font-size:clamp(22px,3.6vw,30px)}
+.future{max-width:620px;margin:0 auto;text-align:center}
+.future .idx{font-family:var(--serif);font-size:13px;letter-spacing:.3em;color:var(--gold-soft);margin-bottom:6px}
+.future .name{font-family:var(--serif);font-size:clamp(26px,5vw,38px);color:var(--gold);margin-bottom:30px}
+.future p{font-family:var(--serif);font-size:clamp(17px,2.8vw,20px);color:var(--ink);line-height:1.95;margin:0 0 22px}
+.future .q{color:var(--ink-soft)}
+/* 4 步驟（Vivi 親手寫） */
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:40px auto 0;max-width:780px}
+.step-card{background:var(--card);border:1px solid var(--card-line);border-radius:18px;padding:30px 28px;text-align:left}
+.step-card .num{font-family:var(--serif);font-size:30px;color:var(--gold-soft);letter-spacing:.06em;display:block;margin-bottom:10px;line-height:1}
+.step-card .cardtop{display:flex;align-items:center;gap:13px;margin-bottom:10px}
+.step-card .cardtop .num{margin-bottom:0}
+.step-card .unlock{font-family:var(--sans);font-size:11.5px;font-weight:500;letter-spacing:.12em;color:var(--gold-soft);
+  border:1px solid var(--card-line);border-radius:30px;padding:4px 12px;white-space:nowrap}
+.step-card .ttl{font-family:var(--serif);font-size:19px;color:var(--coral);margin:0 0 14px;font-weight:600;line-height:1.5}
+.step-card .bd{font-size:14.5px;color:var(--ink-soft);line-height:1.9;margin:0}
+@media(max-width:760px){.steps{grid-template-columns:1fr}}
+/* 信任 */
+.trust{max-width:600px;margin:0 auto;text-align:center;color:var(--ink-soft);font-size:15px;line-height:1.9}
+.trust b{color:var(--ink);font-weight:500}
+/* 彩蛋 */
+.egg{max-width:540px;margin:0 auto;text-align:center}
+.egg .hand{font-family:var(--serif);font-style:italic;font-size:clamp(18px,3vw,22px);color:var(--ink);line-height:1.9}
+.egg .note{font-size:12.5px;color:var(--ink-dim);letter-spacing:.08em;margin-top:16px}
+/* FAQ accordion */
+.faq{max-width:680px;margin:30px auto 0}
+.faq .item{padding:0;border-bottom:1px solid var(--card-line)}
+.faq .item:last-child{border-bottom:0}
+.faq .qq{font-family:var(--serif);font-size:17px;color:var(--ink);margin:0;line-height:1.6;
+  padding:22px 0;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+  transition:color .2s}
+.faq .qq:hover{color:var(--gold)}
+.faq .qq::after{content:'';width:9px;height:9px;flex-shrink:0;margin-top:7px;
+  border-right:1.5px solid var(--gold-soft);border-bottom:1.5px solid var(--gold-soft);
+  transform:rotate(45deg);transition:transform .25s}
+.faq .item.open .qq::after{transform:rotate(225deg);margin-top:11px}
+.faq .aa{font-size:15px;color:var(--ink-soft);line-height:1.85;margin:0;
+  max-height:0;overflow:hidden;opacity:0;transition:max-height .35s ease, opacity .25s, padding .25s}
+.faq .item.open .aa{max-height:500px;opacity:1;padding:0 0 22px}
+/* 最終 CTA */
+.final{text-align:center;max-width:620px;margin:0 auto}
+.final h2{font-size:clamp(22px,3.8vw,30px);line-height:1.6;margin-bottom:18px}
+.disc{font-size:12.5px;color:var(--ink-dim);margin-top:22px;line-height:1.85}
+/* 表單 */
+.form{background:var(--card);border:1px solid var(--card-line);border-radius:18px;padding:30px;max-width:560px;margin:40px auto 0}
+.opts{display:flex;flex-direction:column;gap:11px;margin:0 0 18px}
+.opt{display:flex;gap:13px;align-items:flex-start;padding:15px 16px;cursor:pointer;border:1px solid var(--card-line);border-radius:13px;transition:.2s}
+.opt:hover{border-color:var(--gold-soft)}.opt.sel{border-color:var(--gold);background:rgba(228,196,133,.07)}
+.opt input{margin-top:5px;accent-color:var(--gold)}
+.opt .t{font-size:15.5px;font-weight:500}.opt .d{font-size:13px;color:var(--ink-soft);margin-top:2px}
+.fld{display:block;font-size:14px;color:var(--ink-soft);margin:0 0 8px}
+input[type=email]{width:100%;padding:13px 15px;border-radius:11px;font-size:15px;background:rgba(0,0,0,.25);border:1px solid var(--card-line);color:var(--ink);font-family:var(--sans)}
+input[type=email]:focus{outline:none;border-color:var(--gold)}
+.quiz{margin:18px 0 4px;padding:18px;border:1px dashed var(--card-line);border-radius:13px;display:none}
+.quiz.show{display:block}
+.quiz .wip{font-size:13px;letter-spacing:.1em;color:var(--gold-soft);margin-bottom:16px}
+.quiz .wip span{display:block;color:var(--ink-soft);letter-spacing:0;font-size:13px;margin-top:4px}
+.q{margin:0 0 20px}.q .qt{font-size:14.5px;color:var(--ink);margin:0 0 9px;font-weight:500;line-height:1.6}
+.q .qo{display:block;font-size:14px;color:var(--ink-soft);padding:6px 0;cursor:pointer;line-height:1.5}
+.q .qo input{accent-color:var(--gold);margin-right:9px}
+.result{display:none;margin-top:18px;padding:16px;border-radius:11px;background:rgba(228,196,133,.1);border:1px solid var(--card-line);font-size:14.5px}
+.result.show{display:block}
+footer{padding:36px 0 56px;text-align:center;color:var(--ink-dim);font-size:13px}
+footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-size:15px;margin-bottom:8px}
+/* 創始預售公告條 */
+.announce{background:rgba(228,196,133,.09);border-bottom:1px solid var(--card-line);
+  text-align:center;padding:11px 20px;font-family:var(--sans);font-size:12.5px;letter-spacing:.08em;color:var(--gold);line-height:1.6}
+.announce b{font-weight:600}
+.announce .sep{color:var(--gold-soft);opacity:.6;margin:0 7px}
+/* 創始 100 段 */
+.founder{max-width:640px;margin:0 auto}
+.founder .kick{text-align:center;font-family:var(--sans);font-size:12.5px;letter-spacing:.22em;color:var(--gold-soft);margin-bottom:14px}
+.founder h2{text-align:center;font-size:clamp(20px,3.5vw,27px);line-height:1.55;margin-bottom:24px}
+.founder p{font-family:var(--serif);font-size:clamp(15.5px,2.5vw,17px);color:var(--ink-soft);line-height:1.9;text-align:center;margin:0 0 18px}
+.founder .one{background:rgba(228,196,133,.07);border:1px solid var(--gold-soft);border-radius:18px;padding:30px 26px;margin:30px 0;text-align:center}
+.founder .one .lbl{font-family:var(--sans);font-size:11.5px;letter-spacing:.2em;color:var(--gold-soft);margin-bottom:12px}
+.founder .one .big{font-family:var(--serif);font-size:clamp(19px,3.3vw,24px);color:var(--gold);margin:0 0 14px;line-height:1.5}
+.founder .one .d{font-family:var(--serif);font-size:15.5px;color:var(--ink);line-height:1.85;margin:0}
+.founder .open{font-family:var(--serif);font-size:clamp(18px,3vw,22px);color:var(--ink);line-height:1.7;margin-bottom:22px}
+/* 進去長怎樣 — 產品截圖（淺色截圖在深色頁上，框成一扇扇亮著的窗） */
+.peek-lead{max-width:520px;margin:24px auto 0;text-align:center}
+.peek-lead p{font-family:var(--serif);font-size:clamp(15.5px,2.5vw,17px);color:var(--ink-soft);line-height:1.95;margin:0 0 20px}
+.peek-lead p:last-child{margin-bottom:0}
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:26px;max-width:600px;margin:42px auto 0}
+.shot{margin:0}
+.shot .ph,.shot img{width:100%;display:block;border:1px solid var(--card-line);border-radius:20px;
+  background:rgba(255,255,255,.03);box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.shot .ph{aspect-ratio:.56;display:flex;align-items:center;justify-content:center}
+.shot .ph.wide{aspect-ratio:.71}
+.shot .ph span{font-family:var(--sans);font-size:12px;letter-spacing:.08em;color:var(--ink-dim);
+  border:1px dashed var(--card-line);border-radius:9px;padding:8px 13px;text-align:center}
+.shot figcaption{font-family:var(--serif);font-size:15px;color:var(--ink);text-align:center;margin-top:15px;line-height:1.6}
+.shot figcaption span{display:block;font-family:var(--sans);font-size:12.5px;color:var(--ink-soft);margin-top:5px}
+@media(max-width:600px){.shots{grid-template-columns:1fr;max-width:330px}}
+.founder .why{color:var(--ink)}
+.founder .after{font-size:14px;color:var(--ink-dim);margin:8px 0 0}
+</style>
+</head>
+<body>
+<a class="announce" href="#join" onclick="preselect(2)">
+  <b>創始預售</b><span class="sep">·</span>首批 100 名<span class="sep">·</span>含 Vivi 親自 1:1 30 分鐘
+</a>
+<div class="brand">看見自己 · SEE YOURSELF</div>
+<!-- ===== 1. HERO（可輪播、無 em dash） ===== -->
+<header class="hero">
+  <svg class="stars" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><radialGradient id="moon" cx="50%" cy="30%" r="60%"><stop offset="0" stop-color="#f1dca8" stop-opacity=".22"/><stop offset="1" stop-color="#f1dca8" stop-opacity="0"/></radialGradient></defs>
+    <ellipse cx="600" cy="180" rx="380" ry="280" fill="url(#moon)"/>
+    <circle cx="900" cy="120" r="16" fill="#f3e2b8" opacity=".9"/><circle cx="893" cy="115" r="16" fill="#0b2025"/>
+    <g fill="#f3e2b8" opacity=".6"><circle cx="180" cy="90" r="1.5"/><circle cx="320" cy="150" r="1.2"/><circle cx="500" cy="80" r="1.3"/><circle cx="760" cy="200" r="1.2"/><circle cx="1040" cy="160" r="1.4"/><circle cx="240" cy="240" r="1.1"/><circle cx="980" cy="300" r="1.2"/></g>
+  </svg>
+  <div class="htrack" id="htrack">
+    <div class="slide"><h1>你不是過得不好。<br>你只是<br><span class="dim">很久沒見到</span><span class="glow">眼裡有光</span><span class="dim">的自己了。</span></h1></div>
+    <div class="slide"><h1>你做了所有「對的事」。<br>為什麼還是覺得、<br><span class="dim">這不是你要的人生？</span></h1></div>
+    <div class="slide"><h1>上一次你做一件事，<br>不是因為「應該」、<br>不是因為別人會怎麼想，<br>純粹因為你想做。<br><span class="dim">是什麼時候？</span></h1></div>
+    <div class="slide"><h1>三週之後，<br>你會遇見一個<br><span class="dim">不需要證明自己的你。</span></h1></div>
+    <div class="slide"><h1>這不是一堂「讓你變更好」的課。<br><span class="dim">你已經夠好了。</span><br>這是一堂、讓你相信這件事的課。</h1></div>
+  </div>
+  <div class="hfix">
+    <p class="sub">三週，把那個你以為已經消失的自己，找回來。</p>
+    <a class="btn" href="#join" onclick="preselect(2)">看見自己的入口 →</a>
+  </div>
+  <div class="hctrl">
+    <button class="harrow" onclick="heroNav(-1)" aria-label="上一則">‹</button>
+    <div class="hdots" id="hdots">
+      <button class="hdot on"></button><button class="hdot"></button><button class="hdot"></button><button class="hdot"></button><button class="hdot"></button>
+    </div>
+    <button class="harrow" onclick="heroNav(1)" aria-label="下一則">›</button>
+  </div>
+  <div class="swipehint">往右滑、看見另一個版本的你 →</div>
+</header>
+<!-- ===== 2. 照鏡子 ===== -->
+<section class="scene">
+  <div class="wrap">
+    <div class="rule"></div>
+    <h2 class="lead">你有沒有說過這些話？</h2>
+    <div class="mirror">
+      <div class="mcard">「我不是沒有行動。我行動了很多次。」</div>
+      <div class="mcard">「其實日子也沒有不好，但也沒有很好。」</div>
+      <div class="mcard">「我很累，但我好像不能停。」</div>
+      <div class="mcard">「我把這些都有了。但我不知道在不滿什麼。」</div>
+      <div class="mcard">「我也知道要靠自己，但偶爾也希望有人靠——這樣不對嗎？」</div>
+    </div>
+    <p class="mecho">如果你在其中聽到自己的聲音——<br>你來對地方了。</p>
+  </div>
+</section>
+<!-- ===== 3. 四個未來（情緒高潮、一思一屏） ===== -->
+<section class="scene">
+  <div class="wrap fhead">
+    <div class="rule"></div>
+    <p class="big">想像一下——<br>三週之後的你。</p>
+  </div>
+</section>
+<section class="scene full"><div class="wrap future">
+  <div class="idx">01</div><div class="name">對齊</div>
+  <p>你有沒有過這種感覺——<br>每天都在用力，<br>但說不清楚是為了誰在活。</p>
+  <p>想像一下，從某一天開始，<br>你做的每件事，<br>都跟你真正在乎的事情走在同一條線上。</p>
+  <p>不再拉扯，不再「我應該」，<br>只有——這就是我。</p>
+  <p class="q">那個你，會長什麼樣子？</p>
+</div></section>
+<section class="scene full"><div class="wrap future">
+  <div class="idx">02</div><div class="name">排序</div>
+  <p>你說每件事都重要，<br>所以你每件事都扛——<br>然後每件事都把你壓得快喘不過氣。</p>
+  <p>如果有一天，你心裡有一張很清楚的排序：<br>知道什麼第一、什麼可以放、<br>什麼根本不該是你的——</p>
+  <p class="q">你做事的時候，<br>還會這麼累嗎？</p>
+</div></section>
+<section class="scene full"><div class="wrap future">
+  <div class="idx">03</div><div class="name">釋懷</div>
+  <p>你有沒有偷偷怪過自己——<br>「我那時候到底在想什麼？怎麼會做那種決定？」</p>
+  <p>但如果有一天你看懂了：<br>那些你覺得糟透了的選擇，<br>背後其實都有一個你當時拼命想守住的東西。</p>
+  <p>你從來不是笨，<br>你只是用你當時能想到的方式，在保護自己。</p>
+  <p class="q">那一刻你回頭看那個自己——<br>是不是會……第一次想對她/他說「辛苦了」？</p>
+</div></section>
+<section class="scene full"><div class="wrap future">
+  <div class="idx">04</div><div class="name">界線</div>
+  <p>你拒絕別人，會內疚三天。<br>你答應別人，會內耗一整個禮拜。</p>
+  <p>想像一下——<br>一個說「不」不用解釋的你。<br>一個能量不會被悄悄抽走的你。<br>一個知道自己要去哪、就直接走過去的你。</p>
+  <p class="q">那個你，<br>其實已經在那邊等你了。</p>
+  <p style="margin-top:30px"><a class="btn ghost" href="#join" onclick="preselect(2)">我想遇見她/他 →</a></p>
+</div></section>
+<!-- ===== 4. 我會帶你走過這四個步驟（Vivi 5/27 親手寫、取代原「怎麼走到那裡」） ===== -->
+<section class="scene">
+  <div class="wrap">
+    <div class="rule"></div>
+    <p class="soft" style="text-align:center;font-family:var(--serif);font-size:clamp(15px,2.5vw,17px);margin:0 0 14px">你可能會想——<br>這些聽起來很好，但要怎麼做到？</p>
+    <h2 style="text-align:center">我會帶你走過這四個步驟</h2>
+    <p class="soft" style="text-align:center;font-family:var(--serif);font-size:clamp(14px,2.3vw,16px);margin:14px auto 0;max-width:520px">上面那四個未來，不是靠更努力得來的。<br>是靠<span class="gold">看見</span>。每看見一步，就解鎖一個。</p>
+    <div class="steps">
+      <div class="step-card">
+        <div class="cardtop"><span class="num">01</span><span class="unlock">解鎖「對齊」</span></div>
+        <p class="ttl">看見你真正的價值觀</p>
+        <p class="bd">不是從清單裡挑幾個好聽的詞，而是找到那個——你一違背它，整個人就不對勁的東西。那個，才是真的你。</p>
+      </div>
+      <div class="step-card">
+        <div class="cardtop"><span class="num">02</span><span class="unlock">解鎖「排序」</span></div>
+        <p class="ttl">看見你想成為的樣子</p>
+        <p class="bd">不是設一個目標逼自己達到，而是看清楚你現在活的這個「我」——是你選的，還是一路被變成的。</p>
+      </div>
+      <div class="step-card">
+        <div class="cardtop"><span class="num">03</span><span class="unlock">解鎖「釋懷」</span></div>
+        <p class="ttl">看見阻力背後的愛</p>
+        <p class="bd">不是你懶、沒有意志力。那些卡住你的信念，其實一直在保護你不受傷——它不是敵人，只是還不知道你已經準備好了。</p>
+      </div>
+      <div class="step-card">
+        <div class="cardtop"><span class="num">04</span><span class="unlock">解鎖「界線」</span></div>
+        <p class="ttl">看見你本來就有的</p>
+        <p class="bd">不是要變成「更好的人」，也不是你缺了什麼要去補。那些你以為沒有的，早就在你走過的每一段經歷裡了。</p>
+      </div>
+    </div>
+    <p class="soft" style="text-align:center;margin-top:32px;font-size:14px">21 天、每天約 5–10 分鐘，一步一步走進去。</p>
+  </div>
+</section>
+<!-- ===== 4.7 進去長怎樣（產品截圖、4 張預留：Patrick 之後把 .ph 換成 <img src>） ===== -->
+<section class="scene" id="peek">
+  <div class="wrap">
+    <div class="rule"></div>
+    <h2 class="lead">那，進去之後長什麼樣子？</h2>
+    <div class="peek-lead">
+      <p>你問 AI 的問題，<br>其實就是你看世界的方式。</p>
+      <p>所以我們換過來——<br>由教練問你。</p>
+      <p>每天的問句，都是設計過的入口，<br>用來挖掘你可能的信念跟卡點，<br>陪你一起看見——你沒看見的自己。</p>
+      <p>走完 21 天，會有一份完整的<span class="gold">深度分析</span>。<br>是你專屬的——不是心理測驗的統一答案。</p>
+    </div>
+    <div class="shots">
+      <figure class="shot">
+        <!-- TODO Patrick：每天對話畫面（上傳 image 4：第5天、含「寫一句、什麼都好」輸入框）。把下面這行 .ph 換成 <img src="..." alt="每天的對話畫面"> -->
+        <div class="ph"><span>每天的<br>對話畫面</span></div>
+        <figcaption>每天一段對話<span>它問的問題是設計過的，不是閒聊。</span></figcaption>
+      </figure>
+      <figure class="shot">
+        <!-- TODO Patrick：當天教練筆記（上傳 image 3：Vivi·第1天、教練筆記）。換成 <img src="..." alt="當天的教練筆記"> -->
+        <div class="ph"><span>當天的<br>教練筆記</span></div>
+        <figcaption>走完，留下一張筆記<span>今天的你，被寫下來、留給你。</span></figcaption>
+      </figure>
+      <figure class="shot">
+        <!-- TODO Patrick：21 天地圖（上傳 image 2：第5天地圖 grid）。換成 <img src="..." alt="你的 21 天地圖"> -->
+        <div class="ph"><span>你的<br>21 天地圖</span></div>
+        <figcaption>一步一步的地圖<span>一天解鎖一張，走進自己。</span></figcaption>
+      </figure>
+      <figure class="shot">
+        <!-- TODO Patrick：開始/onboarding（上傳 image 1：email／步調／開始）。換成 <img src="..." alt="開始的畫面"> -->
+        <div class="ph wide"><span>開始的<br>畫面</span></div>
+        <figcaption>開始很簡單<span>留個 email、選你的步調，就開始。</span></figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+<!-- ===== 4.5 創始 100（預售核心、1:1 當主角） ===== -->
+<section class="scene full" id="founder">
+  <div class="wrap founder">
+    <div class="rule"></div>
+    <p class="kick">創始預售 · 首批 100 名</p>
+    <p class="open">《看見自己》是 NT$3,000。<br>現在是，以後也會是。</p>
+    <p>但創始這一批，前 100 個走進來的人，<br>會多一件之後不會再有的事——</p>
+    <div class="one">
+      <p class="big">和 Vivi 一對一，30 分鐘</p>
+      <p class="d">她親自陪你，<br>一起看見你現在的人生，到底卡在哪裡。</p>
+    </div>
+    <p>之後《看見自己》會變成一個服務很多人的產品。<br>但創始的這 100 個人，<br>是 <span class="gold">Vivi 親手帶進來的</span>。</p>
+    <p style="margin-top:30px"><a class="btn" href="#join" onclick="preselect(2)">加入創始 100 →</a></p>
+    <p class="after" style="margin-top:14px">想直接拿到答案的，這裡不適合你。</p>
+  </div>
+</section>
+<!-- ===== 5. 信任（Vivi 領銜） ===== -->
+<section class="scene">
+  <div class="wrap trust">
+    <div class="rule"></div>
+    <p>《看見自己》由 <b>Vivi</b> 親手設計。<br>她是一位 Life Coach、NLP Practitioner 與 Yoga Instructor，<br>多年來陪很多人走過：明明很努力，卻越來越不像自己的時刻。</p>
+    <p>她發現，很多亞洲人成長過程裡學會的，<br>不是「怎麼成為自己」，<br>而是「怎麼成為別人期待的樣子」。</p>
+    <p>所以她把 NLP 大師 Steve Andreas 的自我概念模型，<br>重新轉化成一套更適合亞洲文化的 21 天——</p>
+    <p>不需要很會表達自己，也不用先變得很有自信。<br>你只需要願意，重新開始<span class="gold">看見自己</span>。</p>
+  </div>
+</section>
+<!-- ===== 6. 學員彩蛋（佔位、等封測真實學員） ===== -->
+<section class="scene">
+  <div class="wrap egg">
+    <p class="hand">「我本來以為我來這裡，是要學一個方法。<br>後來我才知道，我來這裡，<br>是要把自己領回家。」</p>
+    <p class="note">（佔位：這裡會放第一批學員真實的話 · 等封測回饋再填、不掛假署名）</p>
+  </div>
+</section>
+<!-- ===== 7. FAQ（accordion、10 題） ===== -->
+<section class="scene" id="faq">
+  <div class="wrap">
+    <div class="rule"></div>
+    <h2 class="lead">幾個你可能想問的</h2>
+    <div class="faq">
+      <div class="item"><p class="qq">看見自己是什麼？</p>
+        <p class="aa">一套 21 天的純 App 自我概念教練。每天約 5–10 分鐘的文字對話——它不是陪你聊天的 AI。它問你的每一個問題、都來自一套設計過的系統性教練學，陪你問到你自己想不到的地方。</p></div>
+      <div class="item"><p class="qq">要花多少時間？</p>
+        <p class="aa">每天約 5–10 分鐘、共 21 天。每天結束會收到一張當天的教練筆記；第 21 天結業、會拿到一份「結業大禮包」——一份完整的自我深度剖析，加上你接下來可以怎麼走的方向。</p></div>
+      <div class="item"><p class="qq">要看影片、或上課嗎？</p>
+        <p class="aa">不用。第一階段是純 App、沒有影片、沒有直播——就是每天一段對話。</p></div>
+      <div class="item"><p class="qq">我要先想好要處理什麼主題嗎？</p>
+        <p class="aa">不用。21 天你想問什麼都可以——這套方法的底層是自我概念，從哪裡進來都通。把當下卡住你的事帶來就好。</p></div>
+      <div class="item"><p class="qq">它會直接給我建議嗎？</p>
+        <p class="aa">不會。它不替你下結論、也不直接給答案——它用提問、陪你自己看見。</p></div>
+      <div class="item"><p class="qq">什麼是「創始預售」？</p>
+        <p class="aa">前 100 位加入的人，除了完整 21 天課程，還能獲得之後不再開放的名額：與 Vivi 一對一 30 分鐘。<br><br>這 100 個名額，是 Vivi 親自保留的時間，不是行銷噱頭。<br><br>免費 Day 1 開放，你隨時可以先進來體驗。我們限量的，從來不是課程，而是「創始 100」這個身份。<br><br>創始期結束後，課程價格依然是 NT$3,000，但 1:1 機會與創始身份之後不再開放。</p></div>
+      <div class="item"><p class="qq">這不適合誰？</p>
+        <p class="aa">想直接拿到答案的人。《看見自己》不會替你下結論——它陪你自己慢慢答出來。如果你要的是「直接告訴我我是誰」、不想花時間面對自己，這個產品幫不了你。</p></div>
+      <div class="item"><p class="qq">可以先免費試嗎？</p>
+        <p class="aa">可以。免費體驗一天。走完第一天、你有 24 小時可以決定要不要付 NT$3,000 解鎖後面 Day 2–21。</p></div>
+      <div class="item"><p class="qq">多少錢？有不同方案嗎？</p>
+        <p class="aa">NT$3,000、單一價、含完整 21 天。沒有不同方案。</p></div>
+      <div class="item"><p class="qq">可以退費嗎？</p>
+        <p class="aa">不提供退費。我們用「免費體驗 1 天」做風險反轉——先免費走完 Day 1、確定這是你要的、再決定要不要付。</p></div>
+      <div class="item"><p class="qq">我寫的內容會被誰看到？</p>
+        <p class="aa">只有你。你在《看見自己》裡寫下的每一句話，都只屬於你——不分享、不販售、不會交給任何第三方。它存在那裡，只是為了讓教練記得你昨天說的話、陪你走完 21 天，最後整理成你專屬的深度分析。</p></div>
+      <div class="item"><p class="qq">教練跟心理諮商有什麼不同？</p>
+        <p class="aa">簡單講：諮商從「過去／問題／修復」出發，教練從「未來／方向／前進」出發。看見自己是教練——陪你看見自己的地圖、定方向、往前走。</p></div>
+      <div class="item"><p class="qq">這會取代心理諮商或治療嗎？</p>
+        <p class="aa">不會、也不打算取代。如果你正在經歷較嚴重的困擾、請優先尋求專業心理諮商或醫療協助。</p></div>
+    </div>
+  </div>
+</section>
+<!-- ===== 8. 最終 CTA ===== -->
+<section class="scene" id="ready">
+  <div class="wrap final">
+    <div class="rule"></div>
+    <h2>你想成為的那個自己，<br>其實一直都在。<br>她/他只是在等你<span class="glow">看見</span>。</h2>
+    <p class="soft" style="font-family:var(--serif);font-size:15px;margin:0 0 6px">創始預售 · 首批 100 名 · 含 Vivi 30 分鐘 1:1</p>
+    <a class="btn" href="#join" onclick="preselect(2)" style="margin-top:14px">加入創始 100 →</a>
+    <p class="disc">這不適合所有人。<br>如果你正在經歷創傷或人生重大變故、<br>請優先尋求專業心理諮商或醫療協助。</p>
+    <p class="disc" style="margin-top:14px"><b style="color:var(--ink-soft);font-weight:500;letter-spacing:.04em">保密聲明</b><br>你在這裡寫下的每一句話，只屬於你。<br>不分享、不販售，也不會交給任何第三方。</p>
+  </div>
+</section>
+<!-- ===== 轉換：3 選項 + 3 題 + email ===== -->
+<section class="scene" id="join">
+  <div class="wrap">
+    <h2 class="lead">加入創始 100</h2>
+    <p class="soft" style="text-align:center;margin:8px 0 6px">留下 email 就可以開始。先免費走 Day 1，喜歡再鎖你的創始席位。</p>
+    <form class="form" id="joinForm" novalidate>
+      <div class="opts" id="opts">
+        <label class="opt"><input type="radio" name="opt" value="2">
+          <span><span class="t">開始免費 Day 1 · 鎖定創始席位</span><span class="d">免費走完真實的 Day 1。喜歡就用 NT$3,000 解鎖 21 天——首批 100 名，含 Vivi 30 分鐘 1:1。</span></span></label>
+        <label class="opt"><input type="radio" name="opt" value="1">
+          <span><span class="t">先拿《價值觀挖掘指南》</span><span class="d">2 頁練習寄到你的信箱。</span></span></label>
+        <label class="opt"><input type="radio" name="opt" value="3">
+          <span><span class="t">兩者都要</span><span class="d">先拿指南，也開始免費體驗。</span></span></label>
+      </div>
+      <div class="quiz" id="quiz">
+        <div class="wip">在開始之前 · 3 個問題<span>幫教練更快認識你。</span></div>
+        <div class="q">
+          <p class="qt">1. 哪一個最能描述你目前的階段？</p>
+          <label class="qo"><input type="radio" name="q1" data-qkey="現況" value="剛入職場的探索者">剛入職場的探索者</label>
+          <label class="qo"><input type="radio" name="q1" data-qkey="現況" value="追求突破的職場專業人士／小主管">追求突破的職場專業人士／小主管</label>
+          <label class="qo"><input type="radio" name="q1" data-qkey="現況" value="帶領團隊的創業者／高階經理人">帶領團隊的創業者／高階經理人</label>
+          <label class="qo"><input type="radio" name="q1" data-qkey="現況" value="正在尋求人生轉向的自由職業者">正在尋求人生轉向的自由職業者</label>
+        </div>
+        <div class="q">
+          <p class="qt">2. 為了得到人生答案，你過去主要透過什麼方式？</p>
+          <label class="qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="看 YouTube／社群或問 AI">主要觀看 YouTube 影片、社群貼文或問 AI</label>
+          <label class="qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="閱讀書籍或下載 PDF 指南">閱讀相關書籍或下載 PDF 指南</label>
+          <label class="qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="線上課程或實體工作坊">參加過線上課程或實體工作坊</label>
+          <label class="qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="預約過 1 對 1 諮商／教練／顧問">預約過 1 對 1 諮商師、教練或顧問</label>
+        </div>
+        <div class="q">
+          <p class="qt">3. 你覺得過去這些嘗試的「效果」如何？</p>
+          <label class="qo"><input type="radio" name="q3" data-qkey="成效評估" value="有短暫啟發，但很快回到原點">有短暫啟發，但行為很快就回到原點。</label>
+          <label class="qo"><input type="radio" name="q3" data-qkey="成效評估" value="學到理論，不知怎麼用在自己身上">學到很多理論，但不知道怎麼應用在自己身上。</label>
+          <label class="qo"><input type="radio" name="q3" data-qkey="成效評估" value="被標籤化，找不到自己的地圖">覺得被標籤化了，找不到真正屬於自己的地圖。</label>
+          <label class="qo"><input type="radio" name="q3" data-qkey="成效評估" value="還沒找到觸動底層身份的方法">還沒找到能觸動底層身份的方法。</label>
+        </div>
+      </div>
+      <label class="fld" for="email">你的 email</label>
+      <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email">
+      <div style="margin-top:20px;text-align:center"><button class="btn" id="submitBtn" type="submit" disabled>送出</button></div>
+      <div class="result" id="result"></div>
+      <!-- PATRICK：唯一 endpoint POST /api/request-guide（相對路徑、不嵌網域/key）
+           body{ email, option:1|2|3, answers?:{現況,過去嘗試,成效評估} }；option 2/3 才送 answers。
+           回傳永遠 200、不靠它判斷成功。magic link/PDF/Stripe 都在後端、前端不碰。見 動態規格 §2。 -->
+    </form>
+  </div>
+</section>
+<footer>
+  <div class="fb">看見自己 · 發現世界</div>
+  —— 看見自己團隊　See Yourself
+</footer>
+<script>
+// Hero 輪播
+const track=document.getElementById('htrack');
+const dots=[...document.querySelectorAll('.hdot')];
+function aidx(){return Math.round(track.scrollLeft/track.clientWidth);}
+track.addEventListener('scroll',()=>{const i=aidx();dots.forEach((d,k)=>d.classList.toggle('on',k===i));});
+dots.forEach((d,k)=>d.addEventListener('click',()=>track.scrollTo({left:k*track.clientWidth,behavior:'smooth'})));
+window.heroNav=function(dir){const i=Math.min(Math.max(aidx()+dir,0),dots.length-1);track.scrollTo({left:i*track.clientWidth,behavior:'smooth'});};
+// 表單（依 Patrick API 契約）
+const form=document.getElementById('joinForm');
+const opts=document.querySelectorAll('input[name=opt]');
+const quiz=document.getElementById('quiz');
+const email=document.getElementById('email');
+const btn=document.getElementById('submitBtn');
+const result=document.getElementById('result');
+function chosen(){return [...opts].find(o=>o.checked)?.value||null;}
+function validEmail(v){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());}
+function needsQuiz(v){return v==='2'||v==='3';}
+function collectAnswers(){const a={};quiz.querySelectorAll('[data-qkey]').forEach(el=>{const k=el.dataset.qkey;if(el.type==='radio'){if(el.checked)a[k]=el.value;}else if(el.value.trim())a[k]=el.value.trim();});return a;}
+function quizComplete(){return ['q1','q2','q3'].every(n=>quiz.querySelector('input[name='+n+']:checked'));}
+function refresh(){
+  const v=chosen();
+  document.querySelectorAll('.opt').forEach(l=>l.classList.toggle('sel',l.querySelector('input').checked));
+  quiz.classList.toggle('show',needsQuiz(v));
+  let ok=!!(v&&validEmail(email.value));
+  if(needsQuiz(v))ok=ok&&quizComplete();
+  btn.disabled=!ok;
+}
+opts.forEach(o=>o.addEventListener('change',refresh));
+email.addEventListener('input',refresh);
+quiz.addEventListener('change',refresh);
+window.preselect=function(n){const r=document.querySelector('input[name=opt][value="'+n+'"]');if(r){r.checked=true;refresh();}};
+const MSG={'1':'指南已寄到你的信箱，去收信點開連結。','2':'去收信、點信裡的連結，就能開始你的 Day 1。','3':'去收信、點信裡的連結，就能開始你的 Day 1（指南也一起寄了）。'};
+form.addEventListener('submit',async e=>{
+  e.preventDefault();const v=chosen();
+  if(!v||!validEmail(email.value))return;
+  const payload={email:email.value.trim(),option:Number(v)};
+  if(needsQuiz(v))payload.answers=collectAnswers();
+  const label=btn.textContent;btn.disabled=true;btn.textContent='送出中…';
+  try{
+    await fetch('/api/request-guide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    result.textContent=MSG[v]+'　信沒看到？找一下垃圾信／促銷匣。';result.classList.add('show');
+    document.getElementById('opts').style.opacity='.5';
+  }catch(err){result.textContent='網路好像斷了、再試一次。';result.classList.add('show');btn.disabled=false;btn.textContent=label;}
+});
+// FAQ accordion
+document.querySelectorAll('.faq .qq').forEach(q=>{
+  q.addEventListener('click',()=>q.parentElement.classList.toggle('open'));
+});
+</script>
+</body>
+</html>
