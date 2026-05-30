@@ -694,6 +694,71 @@ async function renderConversation() {
 
   syncSendBtn();
   input.focus();
+  // 5/29 Vivi — 紙感 check-in 計時開始 (renderConversation 跑完). 每次重進對話頁
+  // 都重置, 跨 session 不持久 (重整 → 起始句、是期望行為).
+  startTimeCheckIn();
+}
+
+// 5/29 Vivi (PRODUCT-TRUTH v2.3 §2.5 鬆綁) — 輸入框下方紙感 check-in.
+// 依「會話開頁後 wall-clock 經過時間」遞增換句, 純前端 / 不打斷對話 / 不違反
+// 無計分鐵律. pickLine 純函式邏輯跟 lib/util/time-check-in.js 同步、由
+// lib/util/time-check-in.test.js 鎖 boundary 行為.
+// ⚠️ 鐵則 1-6 見 lib/util/time-check-in.js header — 修改文案/閥值前先讀.
+const CHECK_IN_LINES_DEFAULT = [
+  { atMs: 0,                 text: '慢慢來，我等你' },
+  { atMs: 10 * 60 * 1000,    text: '✦ 已經陪自己 10 分鐘了 — 想停下來、跟我直說就好' },
+  { atMs: 20 * 60 * 1000,    text: '✦ 走了 20 分鐘 — 任何時候說「先到這裡」我都會收下' },
+  { atMs: 40 * 60 * 1000,    text: '✦ 40 分鐘了、明天再回來消化也是一種完整 — 告訴我就好' },
+];
+function pickCheckInLine(elapsedMs, lines) {
+  const arr = Array.isArray(lines) ? lines : null;
+  if (!arr || arr.length === 0) return null;
+  let current = arr[0];
+  const e = Number.isFinite(elapsedMs) ? elapsedMs : 0;
+  for (const l of arr) {
+    if (!l || typeof l.atMs !== 'number') continue;
+    if (e >= l.atMs) current = l;
+  }
+  return current;
+}
+// debug: ?ckdebug=1 (在 location.search 或 hash 後的 query 都接受) → 把分鐘壓成秒.
+function isCheckInDebug() {
+  try {
+    if (new URLSearchParams(location.search).get('ckdebug') === '1') return true;
+    const h = location.hash || '';
+    const qIdx = h.indexOf('?');
+    if (qIdx >= 0
+        && new URLSearchParams(h.slice(qIdx + 1)).get('ckdebug') === '1') return true;
+  } catch { /* SSR / weird env — silently no-debug */ }
+  return false;
+}
+function startTimeCheckIn() {
+  const hint = document.getElementById('conv-time-hint');
+  if (!hint) return;
+  // 先清掉前一輪 renderConversation 留下的 interval (路由重進、重新計時).
+  if (state._timeCheckInTimer) {
+    clearInterval(state._timeCheckInTimer);
+    state._timeCheckInTimer = null;
+  }
+  const debug = isCheckInDebug();
+  const unit  = debug ? 1000 : 60 * 1000;
+  const lines = CHECK_IN_LINES_DEFAULT.map(l => ({
+    atMs: (l.atMs / (60 * 1000)) * unit,
+    text: l.text,
+  }));
+  const sessionStart = Date.now();
+  // 起始句保留原文 (鐵則 5「紙感」、不立刻換字).
+  hint.textContent = lines[0].text;
+  function tick() {
+    if (document.hidden) return;        // 切走 tab 不算 (回來看 wall-clock 對應的, 不補播).
+    const elapsed = Date.now() - sessionStart;
+    const line = pickCheckInLine(elapsed, lines);
+    if (line && hint.textContent !== line.text) {
+      hint.textContent = line.text;
+    }
+  }
+  state._timeCheckInTimer = setInterval(tick, 15 * 1000);   // 每 15s 檢查就夠.
+  tick();   // 立即跑一次 (debug 模式下 0-10s 內仍正確顯示起始句).
 }
 
 // 5/29 Patrick (PRODUCT-TRUTH v2.3 §2.5 折衷 a) — 採集深度視覺指示.
