@@ -198,3 +198,39 @@ test('handler: non-POST → 405', async () => {
   await handler(mockReq({ method: 'GET', body: { token: VALID_TOKEN } }), res);
   assert.equal(res.statusCode, 405);
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 5/29 Patrick (Vivi access gate) — verify-link blocks blocked students
+//    even when the magic-link itself is valid (token issued before block / race).
+// ═════════════════════════════════════════════════════════
+
+test('🛑 verify-link: token valid + student is_blocked=true → 403 beta_access_ended, no cookie', async () => {
+  process.env.SESSION_SECRET = SECRET;
+  _setSqlClient(makeMockSql([
+    [{ email: 'blocked@example.com', preferred_name: null, pace: null }],  // token claim succeeds
+    [{ student_id: 'A001', current_module: 'self', current_day: 5,
+       preferred_name: 'Blocked Vivi', pace: 'daily', is_blocked: true }],  // student is blocked
+  ]));
+  const res = mockRes();
+  await handler(mockReq({ body: { token: VALID_TOKEN } }), res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.error, 'beta_access_ended');
+  assert.match(res.body.message, /封測權限已結束/);
+  // No cookie set — blocked students don't get an authenticated session.
+  assert.equal(res.headers['Set-Cookie'], undefined,
+    'blocked verify-link must NOT set student_session cookie');
+});
+
+test('🛑 verify-link: existing student is_blocked=false → 200 + cookie set (normal path unaffected)', async () => {
+  process.env.SESSION_SECRET = SECRET;
+  _setSqlClient(makeMockSql([
+    [{ email: 'ok@example.com', preferred_name: null, pace: null }],
+    [{ student_id: 'A002', current_module: 'self', current_day: 3,
+       preferred_name: 'Vivi', pace: 'daily', is_blocked: false }],
+  ]));
+  const res = mockRes();
+  await handler(mockReq({ body: { token: VALID_TOKEN } }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.studentId, 'A002');
+  assert.match(res.headers['Set-Cookie'][0], /^student_session=/);
+});

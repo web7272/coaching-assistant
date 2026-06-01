@@ -89,11 +89,33 @@ export default async function handler(req, res) {
   }
 
   try {
+    const sql = getSql();
+
+    // 5/29 Patrick (Vivi access gate) — silently 不寄信給已 block 的學員.
+    // 仍回 ok:true (跟未註冊 case 同一回應、不洩漏帳號狀態). Log 一筆給 Patrick
+    // 內部追蹤. 沒有 students row → 一律當未註冊 (寄信去新 email 沒問題).
+    try {
+      const sr = await sql`
+        SELECT student_id, is_blocked FROM students
+         WHERE LOWER(TRIM(email)) = ${email} LIMIT 1
+      `;
+      if (sr.length > 0 && sr[0].is_blocked === true) {
+        console.info('[request-link][blocked]', JSON.stringify({
+          event: 'request_link_blocked',
+          student_id: sr[0].student_id,
+          email,
+        }));
+        return res.status(200).json({ ok: true });
+      }
+    } catch (lookupErr) {
+      // Lookup 失敗 → 不擋寄信流程 (寧可寄出去也不誤鎖); log 但繼續.
+      console.warn('[request-link] is_blocked lookup failed (fail-open):', lookupErr?.message || lookupErr);
+    }
+
     const token = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const expiresAt = new Date(Date.now() + TTL_MINUTES * 60 * 1000).toISOString();
 
-    const sql = getSql();
     await sql`
       INSERT INTO magic_link_tokens (token_hash, email, preferred_name, pace, expires_at)
       VALUES (${tokenHash}, ${email}, ${preferredName}, ${pace}, ${expiresAt})

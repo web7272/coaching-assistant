@@ -74,8 +74,12 @@ test('🛑 lifecycle: request mints token, verify claims it once (happy path)', 
 
   await requestHandler(mockReq({ body: { email: 'vivi@example.com', preferredName: 'Vivi', pace: 'self-paced' } }), mockRes());
 
-  // Server stored sha256(token), the URL has the raw token
-  const storedHash = requestSql.calls[0].values[0];
+  // Server stored sha256(token), the URL has the raw token.
+  // 5/29 Patrick (access gate) — request-link 多了一個 is_blocked SELECT 在 INSERT
+  // 之前, find INSERT by text-match instead of index.
+  const insertCall = requestSql.calls.find(c => /INSERT INTO magic_link_tokens/i.test(c.text));
+  assert.ok(insertCall, 'INSERT INTO magic_link_tokens must have happened');
+  const storedHash = insertCall.values[0];
   const rawToken   = issuedLink.match(/token=([a-f0-9]{64})/)[1];
   assert.equal(createHash('sha256').update(rawToken).digest('hex'), storedHash);
 

@@ -20,6 +20,10 @@ import {
   signSession, setSessionCookie, plusDays, nowSec,
 } from '../../lib/auth/session.js';
 import { nextStudentId } from '../../lib/auth/student-helpers.js';
+// 5/29 Patrick (Vivi access gate) — 即使 magic link 自己 valid, blocked 學員
+// 不發 cookie. 防 race: token 已發出後 Vivi block, token 在 60min TTL 內仍可
+// claim 但不該登進來.
+import { isBlocked, BLOCKED_RESPONSE } from '../../lib/api/access-gate.js';
 
 export const maxDuration = 10;
 
@@ -71,12 +75,21 @@ export default async function handler(req, res) {
     const { email, preferred_name: linkName, pace: linkPace } = claimed[0];
 
     // find-or-create by email
+    // 5/29 Patrick — SELECT 加 is_blocked 給下面 access gate 用.
     const found = await sql`
-      SELECT student_id, current_module, current_day, preferred_name, pace
+      SELECT student_id, current_module, current_day, preferred_name, pace, is_blocked
         FROM students
        WHERE LOWER(TRIM(email)) = ${email}
        LIMIT 1
     `;
+    // 既有學員若 is_blocked=TRUE → 不發 cookie. token 已 claim 沒關係 (一次性、
+    // 已被 used_at 標掉、後續 replay 仍 401). 文案統一 BLOCKED_RESPONSE.
+    if (found.length > 0 && isBlocked(found[0])) {
+      console.info('[verify-link][blocked]', JSON.stringify({
+        event: 'verify_link_blocked', student_id: found[0].student_id, email,
+      }));
+      return res.status(403).json(BLOCKED_RESPONSE);
+    }
 
     let studentId, currentModule, currentDay, finalPreferredName, finalPace;
     if (found.length > 0) {

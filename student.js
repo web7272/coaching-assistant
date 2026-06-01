@@ -58,6 +58,12 @@ async function api(path, opts) {
   if (!res.ok) {
     let body = '';
     try { body = await res.text(); } catch {}
+    // 5/29 Patrick (Vivi access gate) — 任何 403 beta_access_ended 全域導去
+    // /#/blocked. 各 caller 仍可看 err.status === 403 自己再處理, 但 hash 已先
+    // 被推到 blocked, 不會回到原本的 loading 卡死.
+    if (res.status === 403 && typeof body === 'string' && body.includes('beta_access_ended')) {
+      try { if (location.hash !== '#/blocked') location.hash = '#/blocked'; } catch { /* SSR safety */ }
+    }
     const err = new Error('http_' + res.status);
     err.status = res.status;
     err.body = body;
@@ -90,6 +96,12 @@ async function hydrateFromCookie() {
       saveState();
       return true;
     } catch (e) {
+      // 5/29 Patrick — 403 + beta_access_ended → 回 'blocked' sentinel,
+      // route() 接到後跳 /#/blocked (不誤導去 /entry 重新 magic-link).
+      if (e && e.status === 403 && typeof e.body === 'string'
+          && e.body.includes('beta_access_ended')) {
+        return 'blocked';
+      }
       // 401 = genuinely not logged in; anything else = unexpected (treat as
       // not logged in too — defaulting to entry beats a stuck spinner).
       return false;
@@ -102,7 +114,7 @@ async function hydrateFromCookie() {
 
 // ─── view router ───────────────────────────────────────────────────
 // PR-4c-green 5/24 cleanup — 'week-report' view retired (5 phase reports 取代).
-const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report', 'upgrade'];
+const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report', 'upgrade', 'blocked'];
 
 function showView(name) {
   for (const v of VIEWS) {
@@ -143,8 +155,14 @@ async function route() {
   // the gate. 401 means truly logged out → bounce to entry. This fixes the
   // 「magic link verify 成功但 SPA 彈回 entry」 bug + makes 30-day cookie work
   // across fresh tabs / cleared localStorage.
-  if (!state.studentId && route !== 'entry') {
+  // 5/29 Patrick — /blocked 是純靜態 view, 沒有 studentId 也能 render (避免無限重導).
+  if (!state.studentId && route !== 'entry' && route !== 'blocked') {
     const ok = await hydrateFromCookie();
+    if (ok === 'blocked') {
+      // /api/me 回 403 beta_access_ended → 直接跳 blocked, 不誤導去 entry.
+      location.hash = '#/blocked';
+      return;
+    }
     if (!ok) {
       location.hash = '#/entry';
       return;
@@ -159,6 +177,7 @@ async function route() {
     case 'phase-report': showView('phase-report'); await renderPhaseReport(parseInt(params.phase) || 1); break;
     case 'graduation':   showView('graduation');   await renderGraduation(); break;
     case 'upgrade':      showView('upgrade');      renderUpgradeCTA(); break;
+    case 'blocked':      showView('blocked');      /* purely static, view-blocked HTML carries copy */ break;
     default:             location.hash = '#/entry';
   }
 }

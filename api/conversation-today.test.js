@@ -11,19 +11,37 @@ import { _setStudentSessionReader } from '../lib/auth/student-session.js';
 // ── mock SQL — tag-template fn that returns canned rows based on query order ──
 
 function makeMockSql(plan) {
-  // plan: { sessionRows: [...], messageRows: [...] }
+  // plan: { sessionRows, messageRows, studentRows?, day21Rows? }
+  // 5/29 Patrick — text-match dispatch (order-independent, future-proof against
+  // new access-gate / lazy-block queries inserted before the original 2-call path).
+  // Default studentRows=[] → unblocked / not-beta → gate falls through cleanly.
   const calls = [];
-  let queryIdx = 0;
   const fn = (strings, ...values) => {
     const text = strings.reduce(
       (acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''),
       '',
     );
     calls.push({ text, values });
-    // First query → sessions, Second query → messages (only fires if sessions returned a row)
-    const idx = queryIdx++;
-    if (idx === 0) return Promise.resolve(plan.sessionRows || []);
-    if (idx === 1) return Promise.resolve(plan.messageRows || []);
+    // is_blocked / is_beta access-gate SELECT
+    if (/SELECT is_blocked, is_beta, created_at\s+FROM students/i.test(text)) {
+      return Promise.resolve(plan.studentRows || []);
+    }
+    // 30-day window Day 21 completion lookup (only fires if is_beta=TRUE)
+    if (/FROM sessions[\s\S]*day\s*=\s*21/i.test(text)) {
+      return Promise.resolve(plan.day21Rows || []);
+    }
+    // UPDATE students SET is_blocked=TRUE (lazy block path)
+    if (/UPDATE students SET is_blocked\s*=\s*TRUE/i.test(text)) {
+      return Promise.resolve([]);
+    }
+    // sessions in-progress query (the A008 path: WHERE day_complete=FALSE, no session_date filter)
+    if (/FROM sessions[\s\S]*day_complete\s*=\s*FALSE/i.test(text)) {
+      return Promise.resolve(plan.sessionRows || []);
+    }
+    // messages query (role IN user/assistant)
+    if (/FROM messages[\s\S]*role\s+IN/i.test(text)) {
+      return Promise.resolve(plan.messageRows || []);
+    }
     return Promise.resolve([]);
   };
   fn.calls = calls;
@@ -145,10 +163,13 @@ test('🛑 day_complete=TRUE 的 session 不應該被選 (SQL WHERE filter)', as
   const res = mockRes();
   await handler(mockReq({ query: { module: 'self' } }), res);
   assert.equal(res.statusCode, 200);
-  const firstQuery = sql.calls[0].text;
-  assert.match(firstQuery, /day_complete\s*=\s*FALSE/i,
+  // 5/29 Patrick — find sessions in-progress query by text-match (access-gate
+  // SELECT students 也跑、不能再用 index 0).
+  const sessionsQuery = sql.calls.find(c =>
+    /FROM sessions/i.test(c.text) && /day_complete\s*=\s*FALSE/i.test(c.text)).text;
+  assert.match(sessionsQuery, /day_complete\s*=\s*FALSE/i,
     'query must filter on day_complete = FALSE (今天已結束的不還原)');
-  assert.match(firstQuery, /role\s*=|FROM sessions/i, 'must query sessions table');
+  assert.match(sessionsQuery, /FROM sessions/i, 'must query sessions table');
 });
 
 // 🛑 5/29 Patrick (A008 case) — sessions query 不再用 session_date strict equality 過濾.
@@ -162,9 +183,10 @@ test('🛑 sessions query 不再帶 session_date filter (A008 regression guard)'
   const res = mockRes();
   await handler(mockReq({ query: { module: 'self', today: '2026-05-29' } }), res);
   assert.equal(res.statusCode, 200);
-  const firstQuery = sql.calls[0].text;
-  assert.equal(/session_date\s*=/i.test(firstQuery), false,
-    `query 必須 NOT 帶 session_date = … (A008 fix). 看到的 query:\n${firstQuery}`);
+  const sessionsQuery = sql.calls.find(c =>
+    /FROM sessions/i.test(c.text) && /day_complete\s*=\s*FALSE/i.test(c.text)).text;
+  assert.equal(/session_date\s*=/i.test(sessionsQuery), false,
+    `query 必須 NOT 帶 session_date = … (A008 fix). 看到的 query:\n${sessionsQuery}`);
 });
 
 test('🛑 A008 case: session_date 跟 client today 對不上仍能 restore (real-data 個案)', async () => {
@@ -222,7 +244,8 @@ test('🛑 messages query 只回 user/assistant role (system / damon_note rows �
   const res = mockRes();
   await handler(mockReq({ query: { module: 'self' } }), res);
   assert.equal(res.statusCode, 200);
-  const msgsQuery = sql.calls[1].text;
+  // 5/29 Patrick — messages query 找法用 text-match (前面 access-gate SELECTs 不確定數量).
+  const msgsQuery = sql.calls.find(c => /FROM messages/i.test(c.text)).text;
   assert.match(msgsQuery, /role\s+IN\s*\(/i, 'messages query must filter role');
   assert.match(msgsQuery, /'user'/);
   assert.match(msgsQuery, /'assistant'/);
@@ -242,4 +265,130 @@ test('response messages strip db-internal fields (id, session_id, created_at)', 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(Object.keys(res.body.messages[0]).sort(), ['content', 'role'],
     'message objects must only carry {role, content} — no db ids / timestamps');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 5/29 Patrick (Vivi access gate) — is_blocked + 30 天 window lazy expiry
+// ═════════════════════════════════════════════════════════
+
+test('🛑 conversation-today: is_blocked=true → 403 beta_access_ended, no sessions query', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  const sql = makeMockSql({
+    studentRows: [{ is_blocked: true, is_beta: false, created_at: '2026-05-01' }],
+    sessionRows: [{ id: 1, day: 1, day_complete: false }],
+    messageRows: [{ role: 'user', content: 'x' }],
+  });
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({ query: { module: 'self' } }), res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.error, 'beta_access_ended');
+  // Sessions / messages 不該被查 (gate 在 sessions query 之前).
+  assert.equal(sql.calls.some(c => /day_complete\s*=\s*FALSE/i.test(c.text)), false,
+    'blocked 學員的 sessions in-progress query 不該執行 (避免無意義的 DB 查詢)');
+});
+
+test('🛑 conversation-today: is_beta=true + created_at > 30 天前 + 未完 Day 21 → lazy block + 403', async () => {
+  const now = Date.now();
+  const created31d = new Date(now - 31 * 24 * 60 * 60 * 1000).toISOString();
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A005'));
+  const sql = makeMockSql({
+    studentRows: [{ is_blocked: false, is_beta: true, created_at: created31d }],
+    day21Rows: [],   // 未完成 Day 21
+  });
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({ query: { module: 'self' } }), res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.error, 'beta_access_ended');
+  // Lazy block: UPDATE students SET is_blocked=TRUE 被打.
+  assert.equal(
+    sql.calls.some(c => /UPDATE students SET is_blocked\s*=\s*TRUE/i.test(c.text)),
+    true,
+    'beta-window 過期應該 lazy 設 is_blocked=TRUE',
+  );
+});
+
+test('🛑 conversation-today: is_beta=true + 已完成 Day 21 → 不 lazy block (走完不該關 access)', async () => {
+  const now = Date.now();
+  const created60d = new Date(now - 60 * 24 * 60 * 60 * 1000).toISOString();
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A005'));
+  const sql = makeMockSql({
+    studentRows: [{ is_blocked: false, is_beta: true, created_at: created60d }],
+    day21Rows: [{ exists: 1 }],   // 已完成 Day 21
+    sessionRows: [],
+  });
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({ query: { module: 'self' } }), res);
+  assert.equal(res.statusCode, 200,
+    '走完 Day 21 的封測者即使已過 30 天也不該被自動關 access');
+  assert.equal(
+    sql.calls.some(c => /UPDATE students SET is_blocked\s*=\s*TRUE/i.test(c.text)),
+    false,
+    'Day 21 完成者絕對不該被 lazy block',
+  );
+});
+
+test('🛑 conversation-today: is_beta=true + 29 天前 (window 內) → 不 block, 正常 restore 流程', async () => {
+  const now = Date.now();
+  const created29d = new Date(now - 29 * 24 * 60 * 60 * 1000).toISOString();
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A005'));
+  const sql = makeMockSql({
+    studentRows: [{ is_blocked: false, is_beta: true, created_at: created29d }],
+    sessionRows: [{ id: 7, day: 3, day_complete: false }],
+    messageRows: [{ role: 'user', content: 'hi' }],
+  });
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({ query: { module: 'self' } }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.hasInProgress, true);
+  assert.equal(
+    sql.calls.some(c => /UPDATE students SET is_blocked\s*=\s*TRUE/i.test(c.text)),
+    false,
+    'window 內 (29d) 不該觸發 lazy block',
+  );
+});
+
+test('🛑 conversation-today: is_beta=false + 90 天前 → 不 block (一般學員 window 不適用)', async () => {
+  const now = Date.now();
+  const created90d = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A005'));
+  const sql = makeMockSql({
+    studentRows: [{ is_blocked: false, is_beta: false, created_at: created90d }],
+    sessionRows: [],
+  });
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({ query: { module: 'self' } }), res);
+  assert.equal(res.statusCode, 200,
+    '一般學員 (非 is_beta) 即使過 90 天也絕不該被 window 機制鎖');
+  assert.equal(
+    sql.calls.some(c => /UPDATE students SET is_blocked\s*=\s*TRUE/i.test(c.text)),
+    false,
+    'is_beta=false 學員不適用 30 天 window',
+  );
+});
+
+test('conversation-today: access-gate SQL 失敗 → fail-open (寧可放行 restore 也不誤鎖)', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  // students SELECT 失敗, 但其他 query 正常 — gate try/catch 應 fail-open 繼續流程.
+  let calls = 0;
+  _setSqlClient((strings, ...values) => {
+    calls++;
+    const text = strings.reduce(
+      (acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''),
+      '',
+    );
+    if (/SELECT is_blocked, is_beta, created_at\s+FROM students/i.test(text)) {
+      return Promise.reject(new Error('students lookup down'));
+    }
+    if (/day_complete\s*=\s*FALSE/i.test(text)) return Promise.resolve([]);   // no in-progress
+    return Promise.resolve([]);
+  });
+  const res = mockRes();
+  await handler(mockReq({ query: { module: 'self' } }), res);
+  assert.equal(res.statusCode, 200,
+    'access-gate SQL 失敗時 fail-open, 不誤鎖 (寧可放行 restore)');
 });

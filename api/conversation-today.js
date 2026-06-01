@@ -23,6 +23,8 @@
 
 import { neon } from '@neondatabase/serverless';
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
+// 5/29 Patrick (Vivi access gate) — is_blocked 入口檢查 + 30 天 window lazy expiry.
+import { isBlocked, shouldExpireBetaWindow, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
 
 // Test seam — inject a mock tag-template sql client.
 let _sql = null;
@@ -49,6 +51,42 @@ export default async function handler(req, res) {
 
   try {
     const sql = getSql();
+
+    // 5/29 Patrick — access gate: blocked 或 beta-window 過期 → 403.
+    // 撈一次 students 取 is_blocked / is_beta / created_at 給 gate 用.
+    try {
+      const sr = await sql`
+        SELECT is_blocked, is_beta, created_at FROM students
+         WHERE student_id = ${studentId} LIMIT 1
+      `;
+      if (sr.length > 0) {
+        const studentRow = sr[0];
+        if (isBlocked(studentRow)) {
+          return res.status(403).json(BLOCKED_RESPONSE);
+        }
+        if (studentRow.is_beta === true) {
+          const d21 = await sql`
+            SELECT 1 FROM sessions
+             WHERE student_id = ${studentId}
+               AND day = 21
+               AND day_complete = TRUE
+             LIMIT 1
+          `;
+          if (shouldExpireBetaWindow({
+            student: studentRow, hasDay21Complete: d21.length > 0, now: Date.now(),
+          })) {
+            await sql`UPDATE students SET is_blocked = TRUE WHERE student_id = ${studentId}`;
+            console.info('[conversation-today][beta-window-expired]', JSON.stringify({
+              event: 'beta_window_auto_block', student_id: studentId,
+            }));
+            return res.status(403).json(BLOCKED_RESPONSE);
+          }
+        }
+      }
+    } catch (gateErr) {
+      // Gate 自己 SQL 失敗 → fail-open (寧可放行 restore 也不誤鎖).
+      console.warn('[conversation-today] access gate failed (fail-open):', gateErr?.message || gateErr);
+    }
 
     // 5/29 Patrick (A008 case) — 找該學員最近一筆 day_complete=FALSE session,
     // 不再 strict equality 過濾 session_date. ORDER BY created_at DESC LIMIT 1

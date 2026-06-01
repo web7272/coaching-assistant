@@ -148,3 +148,35 @@ test('/api/me: non-GET → 405', async () => {
   await handler(mockReq({ method: 'POST' }), res);
   assert.equal(res.statusCode, 405);
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 5/29 Patrick (Vivi access gate) — is_blocked → 403 beta_access_ended
+// ═════════════════════════════════════════════════════════
+
+test('🛑 /api/me: is_blocked=true → 403 beta_access_ended', async () => {
+  _setStudentSessionReader(SESSION_FOR('A001'));
+  _setSqlClient(makeMockSql([
+    { student_id: 'A001', current_module: 'self', current_day: 5,
+      preferred_name: 'Vivi', pace: 'daily', is_blocked: true },
+  ]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.error, 'beta_access_ended');
+  assert.match(res.body.message, /封測權限已結束/);
+});
+
+test('🛑 /api/me: is_blocked=false → 200 (normal flow, blocked field never leaks to response)', async () => {
+  _setStudentSessionReader(SESSION_FOR('A001'));
+  _setSqlClient(makeMockSql([
+    { student_id: 'A001', current_module: 'self', current_day: 5,
+      preferred_name: 'Vivi', pace: 'daily', is_blocked: false },
+  ]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.studentId, 'A001');
+  // Response shape stays minimal — is_blocked is never echoed back to client.
+  assert.equal('is_blocked' in res.body, false,
+    'response must not echo is_blocked (避免洩漏 access 狀態給 attacker probing)');
+});

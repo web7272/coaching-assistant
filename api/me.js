@@ -15,6 +15,8 @@
 
 import { neon } from '@neondatabase/serverless';
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
+// 5/29 Patrick (Vivi access gate) — blocked student → 403 (前端用此 signal 跳 /#/blocked).
+import { isBlocked, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
 
 export const maxDuration = 5;
 
@@ -35,8 +37,9 @@ export default async function handler(req, res) {
 
   try {
     const sql = getSql();
+    // 5/29 Patrick — SELECT 加 is_blocked, 給 access gate 用 (回 200 之前判).
     const rows = await sql`
-      SELECT student_id, current_module, current_day, preferred_name, pace
+      SELECT student_id, current_module, current_day, preferred_name, pace, is_blocked
         FROM students
        WHERE student_id = ${sid}
        LIMIT 1
@@ -47,6 +50,11 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const s = rows[0];
+    // 5/29 Patrick — blocked → 403 BLOCKED_RESPONSE (SPA boot 看到這個 status
+    // 跳 /#/blocked, 不誤把學員導去 /entry 重新 magic-link).
+    if (isBlocked(s)) {
+      return res.status(403).json(BLOCKED_RESPONSE);
+    }
     return res.status(200).json({
       studentId:     s.student_id,
       module:        s.current_module || 'self',

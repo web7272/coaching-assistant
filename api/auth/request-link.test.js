@@ -23,6 +23,12 @@ function makeMockSql(rows = []) {
   fn.calls = calls;
   return fn;
 }
+// 5/29 Patrick (access gate) — find the magic-link INSERT among the new is_blocked
+// SELECT + INSERT 2-call sequence. Existing tests assert INSERT shape; use this
+// helper so order-of-queries can move without churning every test.
+function findInsertCall(sql) {
+  return sql.calls.find(c => /INSERT INTO magic_link_tokens/i.test(c.text));
+}
 
 function mockReq({ method = 'POST', body = {} } = {}) {
   return { method, body, headers: {} };
@@ -46,7 +52,7 @@ beforeEach(() => {
 // ── valid request → always 200 + DB insert + link sent ──
 
 test('🛑 handler: valid email → 200 ok:true + INSERT token + sendMagicLink called', async () => {
-  const sql = makeMockSql([]);
+  const sql = makeMockSql([]);   // 1st call: students is_blocked lookup (empty) → not blocked, proceeds.
   _setSqlClient(sql);
   const sent = [];
   _setSendMagicLinkFn(async (email, link) => { sent.push({ email, link }); });
@@ -56,9 +62,11 @@ test('🛑 handler: valid email → 200 ok:true + INSERT token + sendMagicLink c
 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.body, { ok: true });
-  assert.equal(sql.calls.length, 1);
-  assert.match(sql.calls[0].text, /INSERT INTO magic_link_tokens/i);
-  const vals = sql.calls[0].values;
+  // 5/29 Patrick (access gate) — query 順序 now: ① SELECT students.is_blocked ② INSERT magic_link_tokens.
+  // Find INSERT by text-match (順序未來再變 test 仍綠).
+  const insertCall = sql.calls.find(c => /INSERT INTO magic_link_tokens/i.test(c.text));
+  assert.ok(insertCall, 'INSERT INTO magic_link_tokens must have happened');
+  const vals = insertCall.values;
   // [tokenHash, email, preferredName, pace, expiresAt]
   assert.equal(vals[1], 'vivi@example.com', 'email normalized (lowercased + trimmed)');
   assert.equal(vals[2], null, 'no preferredName provided → null');
@@ -81,7 +89,7 @@ test('🛑 TTL = 60 minutes (5/28 spec, was 20)', async () => {
   const res = mockRes();
   await handler(mockReq({ body: { email: 'a@b.com' } }), res);
   assert.equal(res.statusCode, 200);
-  const expiresIso = sql.calls[0].values[4];
+  const expiresIso = findInsertCall(sql).values[4];
   assert.ok(typeof expiresIso === 'string', 'expiresAt should be ISO string');
   const ttlMs = new Date(expiresIso).getTime() - tNow;
   const SIXTY_MIN = 60 * 60 * 1000;
@@ -101,7 +109,7 @@ test('handler: preferredName + pace flow through to INSERT', async () => {
     body: { email: 'a@b.com', preferredName: '小薇', pace: 'self-paced' },
   }), res);
   assert.equal(res.statusCode, 200);
-  const vals = sql.calls[0].values;
+  const vals = findInsertCall(sql).values;
   assert.equal(vals[2], '小薇');
   assert.equal(vals[3], 'self-paced');
 });
@@ -147,7 +155,10 @@ test('🛑 handler: tokens are random per request (no replay across requests)', 
   _setSendMagicLinkFn(async () => {});
   await handler(mockReq({ body: { email: 'a@b.com' } }), mockRes());
   await handler(mockReq({ body: { email: 'a@b.com' } }), mockRes());
-  assert.notEqual(sql.calls[0].values[0], sql.calls[1].values[0],
+  // After the access-gate SELECT precedes the INSERT, find the 2 INSERT calls.
+  const inserts = sql.calls.filter(c => /INSERT INTO magic_link_tokens/i.test(c.text));
+  assert.equal(inserts.length, 2, 'two INSERTs (one per request)');
+  assert.notEqual(inserts[0].values[0], inserts[1].values[0],
     'each request must mint a fresh token_hash');
 });
 
@@ -158,7 +169,7 @@ test('🛑 handler: token_hash stored, not raw token (DB dump can\'t replay)', a
   let capturedLink = null;
   _setSendMagicLinkFn(async (_email, link) => { capturedLink = link; });
   await handler(mockReq({ body: { email: 'a@b.com' } }), mockRes());
-  const storedHash = sql.calls[0].values[0];
+  const storedHash = findInsertCall(sql).values[0];
   const rawToken = capturedLink.match(/token=([a-f0-9]{64})/)[1];
   assert.notEqual(storedHash, rawToken, 'DB hash must not equal the URL token');
   // verify the relationship: sha256(rawToken) === storedHash
@@ -231,4 +242,55 @@ test('handler: non-POST → 405', async () => {
   const res = mockRes();
   await handler(mockReq({ method: 'GET', body: { email: 'a@b.com' } }), res);
   assert.equal(res.statusCode, 405);
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 5/29 Patrick (Vivi access gate) — silently 不寄信給 blocked 學員
+// ═════════════════════════════════════════════════════════
+
+test('🛑 request-link: is_blocked=true → 200 ok:true but NO INSERT + NO sendMagicLink (silent skip)', async () => {
+  // 1st query (students SELECT) returns blocked row.
+  let queryIdx = 0;
+  const calls = [];
+  _setSqlClient((strings, ...values) => {
+    const text = strings.reduce(
+      (acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''),
+      '',
+    );
+    calls.push({ text, values });
+    if (queryIdx++ === 0) {
+      // students lookup → blocked
+      return Promise.resolve([{ student_id: 'A001', is_blocked: true }]);
+    }
+    return Promise.resolve([]);
+  });
+  const sent = [];
+  _setSendMagicLinkFn(async (email, link) => { sent.push({ email, link }); });
+
+  const res = mockRes();
+  await handler(mockReq({ body: { email: 'blocked@example.com' } }), res);
+
+  // 仍回 200 ok:true (跟未註冊 case 同一回應, 不洩漏帳號狀態).
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { ok: true });
+  // 但沒 INSERT magic_link_tokens, 也沒寄信.
+  assert.equal(sent.length, 0, 'blocked 學員不能寄 magic link');
+  assert.equal(calls.some(c => /INSERT INTO magic_link_tokens/i.test(c.text)), false,
+    'blocked 學員不能新增 token row');
+});
+
+test('🛑 request-link: is_blocked lookup fails → fail-open (寧可寄出去也不誤鎖)', async () => {
+  // 1st call (students SELECT) throws; subsequent calls (INSERT) succeed.
+  let queryIdx = 0;
+  _setSqlClient((strings, ...values) => {
+    if (queryIdx++ === 0) return Promise.reject(new Error('students lookup down'));
+    return Promise.resolve([]);
+  });
+  const sent = [];
+  _setSendMagicLinkFn(async (email, link) => { sent.push({ email, link }); });
+  const res = mockRes();
+  await handler(mockReq({ body: { email: 'a@b.com' } }), res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { ok: true });
+  assert.equal(sent.length, 1, 'lookup 失敗時 fail-open 仍寄信');
 });

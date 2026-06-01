@@ -34,6 +34,8 @@ import {
 import { rollbackSessionIfNeeded } from '../lib/api/chat-rollback.js';
 // 5/29 Patrick — PRODUCT-TRUTH v2.3 §2.5: 採集深度視覺指示 (純函式、不影響 prompt).
 import { computeDepthSignal } from '../lib/api/depth-signal.js';
+// 5/29 Patrick (Vivi access gate) — is_blocked 入口檢查 + 30 天 window lazy expiry.
+import { isBlocked, shouldExpireBetaWindow, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
 import { contextFor } from '../lib/session/phase-context.js';
 // v5.0 (spec 09 §12)：對話 phase 天數驅動 (checkAdvance retired at runtime).
 import { phaseForDay, phaseEntryPatch } from '../lib/session/phase-advance.js';
@@ -739,15 +741,53 @@ export default async function handler(req, res) {
     }
     // PR-4c-4e — fetch pace from students table (defaults to 'daily' if not set)
     // 5/26 Patrick (Stage 1 漏斗): 順手把 plan 一起撈、trial gate 用.
+    // 5/29 Patrick (access gate): 也撈 is_blocked / is_beta / created_at 給入口
+    // 守門 + 30 天 window lazy check.
     let pace = 'daily';
     let plan = 'trial';
+    let studentRow = null;
     try {
-      const pr = await sql`SELECT pace, plan FROM students WHERE student_id = ${studentId} LIMIT 1`;
+      const pr = await sql`
+        SELECT pace, plan, is_blocked, is_beta, created_at
+          FROM students WHERE student_id = ${studentId} LIMIT 1
+      `;
       if (pr.length > 0) {
+        studentRow = pr[0];
         if (pr[0].pace) pace = pr[0].pace;
         if (pr[0].plan) plan = pr[0].plan;
       }
-    } catch (e) { console.warn('[chat] pace/plan lookup failed:', e.message); }
+    } catch (e) { console.warn('[chat] pace/plan/access lookup failed:', e.message); }
+
+    // 5/29 Patrick — access gate. 已 blocked → 403. is_beta 過 30 天且未完成 Day 21
+    // → lazy 設 is_blocked=TRUE + 403. 設在 loadOrCreateSession 之前、避免燒
+    // 任何 LLM token 給已關 access 的學員.
+    if (studentRow && isBlocked(studentRow)) {
+      return res.status(403).json(BLOCKED_RESPONSE);
+    }
+    if (studentRow && studentRow.is_beta === true) {
+      try {
+        // Day 21 完成 = sessions WHERE day=21 AND day_complete=TRUE 至少 1 筆.
+        const d21 = await sql`
+          SELECT 1 FROM sessions
+           WHERE student_id = ${studentId}
+             AND day = 21
+             AND day_complete = TRUE
+           LIMIT 1
+        `;
+        const hasDay21Complete = d21.length > 0;
+        if (shouldExpireBetaWindow({ student: studentRow, hasDay21Complete, now: Date.now() })) {
+          await sql`UPDATE students SET is_blocked = TRUE WHERE student_id = ${studentId}`;
+          console.info('[chat][beta-window-expired]', JSON.stringify({
+            event: 'beta_window_auto_block', student_id: studentId,
+            created_at: studentRow.created_at,
+          }));
+          return res.status(403).json(BLOCKED_RESPONSE);
+        }
+      } catch (e) {
+        // Window check 失敗 → fail-open (寧可放行 trial run 也不誤鎖).
+        console.warn('[chat] beta-window check failed (fail-open):', e?.message || e);
+      }
+    }
     const { gap_days } = detectNewSessionDay(userProfile, now);
 
     // Step 5 — load / create today's session（PR-4c-4e: pace-aware + day_complete-aware）
