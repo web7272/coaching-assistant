@@ -314,3 +314,80 @@ test('empty DB → 200 + count=0', async () => {
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.body, { ok: true, count: 0, students: [] });
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 5/30 Patrick — dual-auth: cookie OR ADMIN_API_TOKEN Bearer (Daniel Cowork).
+// ═════════════════════════════════════════════════════════
+
+const FAKE_TOKEN = 'a'.repeat(64);
+
+test('🛑 cookie ok → 200 (既有 browser 教練後台路徑不變)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.ok, true);
+});
+
+test('🛑 Bearer ok → 200 + students[]', async () => {
+  _setCoachSessionReader(NO_COACH);
+  process.env.ADMIN_API_TOKEN = FAKE_TOKEN;
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  const req = mockReq();
+  req.headers.authorization = `Bearer ${FAKE_TOKEN}`;
+  await handler(req, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.ok, true);
+  assert.ok(Array.isArray(res.body.students));
+  delete process.env.ADMIN_API_TOKEN;
+});
+
+test('🛑 no auth → 401', async () => {
+  _setCoachSessionReader(NO_COACH);
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 401);
+});
+
+test('🛑 wrong Bearer → 401 (timing-safe rejects)', async () => {
+  _setCoachSessionReader(NO_COACH);
+  process.env.ADMIN_API_TOKEN = FAKE_TOKEN;
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  const req = mockReq();
+  req.headers.authorization = `Bearer ${'b'.repeat(64)}`;
+  await handler(req, res);
+  assert.equal(res.statusCode, 401);
+  delete process.env.ADMIN_API_TOKEN;
+});
+
+test('🛑 cookie + bearer 同時帶 → cookie 早 return (via=cookie 不誤觸發 bearer log)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  process.env.ADMIN_API_TOKEN = FAKE_TOKEN;
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  const req = mockReq();
+  req.headers.authorization = `Bearer ${FAKE_TOKEN}`;
+  await handler(req, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.ok, true);
+  delete process.env.ADMIN_API_TOKEN;
+});
+
+test('🛑 POST / PATCH / DELETE 即使帶有效 Bearer 仍 405 (寫入動作不開 service token)', async () => {
+  _setCoachSessionReader(NO_COACH);
+  process.env.ADMIN_API_TOKEN = FAKE_TOKEN;
+  _setSqlClient(makeMockSql([]));
+  for (const method of ['POST', 'PATCH', 'DELETE', 'PUT']) {
+    const res = mockRes();
+    const req = mockReq({ method });
+    req.headers.authorization = `Bearer ${FAKE_TOKEN}`;
+    await handler(req, res);
+    assert.equal(res.statusCode, 405,
+      `${method} with valid Bearer must still 405 (only GET opens dual-auth)`);
+  }
+  delete process.env.ADMIN_API_TOKEN;
+});

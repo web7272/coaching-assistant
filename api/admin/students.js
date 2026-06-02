@@ -12,7 +12,10 @@
 //   只回 metadata + derived status. SELECT 不含敏感欄位 (test grep guard).
 
 import { neon } from '@neondatabase/serverless';
-import { guardCoachOr401 } from '../../lib/auth/coach-session.js';
+// 5/30 Patrick — dual-auth: 教練 cookie OR ADMIN_API_TOKEN Bearer (Daniel Cowork).
+// guardAdminOr401 cookie 路徑優先 early-return, 失敗 fallback Bearer + timing-safe compare.
+// 範圍只開「唯讀 GET admin endpoint」 — 其他 admin endpoint 仍 cookie-only.
+import { guardAdminOr401 } from '../../lib/api/admin-auth.js';
 import {
   shapeStudentRow, applyStatusFilter, parseBoolQuery, STATUS_FILTERS,
 } from '../../lib/api/admin-students.js';
@@ -29,7 +32,17 @@ function getSql() {
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  if (!(await guardCoachOr401(req, res))) return;
+  const auth = await guardAdminOr401(req, res);
+  if (!auth) return;
+  // 5/30 Patrick — log Bearer auth 成功事件給追蹤頻率 (不 log token 本身).
+  // cookie 路徑不 log 避免噪音 (browser 一頁 fetch 多次).
+  if (auth.via === 'bearer') {
+    console.info('[admin/students][bearer-auth]', JSON.stringify({
+      event: 'admin_bearer_auth',
+      endpoint: '/api/admin/students',
+      ts: new Date().toISOString(),
+    }));
+  }
 
   // 5/29 Patrick — query 參數全部 client-side string、用 helper normalize.
   const emailFilter      = typeof req.query?.email === 'string' ? req.query.email.trim().toLowerCase() : '';
