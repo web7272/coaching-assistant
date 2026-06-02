@@ -1,46 +1,72 @@
-/* app.css — v2.1-green design system (PR-4c-green / P0)
+/* app.css — v2.1-green → v2.2-peach (5/30 brand migration, Vivi sign-off)
    Source of truth: docs/v5-spec/engineering/09-green-ui-spec.md
    §1 colours, §2 fonts, §3 響應式 (mobile-first centred 440-480 col),
    §4 components (DayTile / 連線 / Treasure / buttons), §5 page layouts.
-   ⚠️ Supersedes all earlier UI (v1 霧綠 / 金棕 / 水彩).
 
-   P0 scope: tokens + body + buttons (.btn-green/.btn-gold/.btn-paper) +
-             paper-card / input / pace-radio primitives. Existing class names
-             kept so HTML stays untouched at this checkpoint — sections
-             (entry / journey / conv / paper-pages / coach) render via the
-             new tokens automatically.
-             P1 adds logo hero; P2 rebuilds the journey grid (DayTile + snake
-             path + treasures); P3 polishes conversation/note/graduation copy;
-             P4 adds Phase Report page + weeks→phases endpoint; P5 puts /coach
-             in green. */
+   5/30 Patrick — 整套色票從「綠色療癒系」遷移到「粉色 / 赤陶 (terracotta)
+   積極型教練系」(對齊 Landing v1.7 + PRODUCT-TRUTH v2.6). 從 A003 sandbox
+   Vivi 進 App 看到綠色跟 Landing 撞色開始. 修法:
+     · 新 canonical token 完全照 Landing v1.7 的 :root (下方第一段).
+     · 舊 token 名 (--brand-green / --green-walked / --bg-mint / --gold-accent
+       等) 全部 alias 到新 token、保留向後相容、HTML / JS / 既有元件 0 改動.
+       現有 var(--brand-green) 自動繼承新赤陶色, 不用 grep-replace 全 repo.
+     · Body background 從 solid mint → linear-gradient (peach cream → peach).
+   鐵則沒破: 紙感 (.paper-card 仍 solid cream 不動)、無計分 UI 自動繼承新色票、
+   諮商保密 + API 不動. 之後若要清理 deprecated 別名、另開 cleanup commit. */
 
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400&family=Noto+Sans+TC:wght@300;400&display=swap');
 
 /* ════════════════════════════════════════════════════════════════
-   §1 colour tokens (green-mint palette)
+   §1 colour tokens — 5/30 Vivi 拍板的新粉色 / 赤陶 brand 系統
+   (1:1 對齊 Landing v1.7 的 :root, 用戶從 Landing 點進 App 不撞色)
    ════════════════════════════════════════════════════════════════ */
 :root {
-  /* Backdrop + tiles */
-  --bg-mint:        #D7EBD1;        /* 主背景（學員頁、桌面置中欄左右也是它） */
-  --green-walked:   #5DA873;        /* 走過的日子格子填色 + focus border */
-  --green-forest:   #2C5238;        /* 深森林綠：標題、深色強調 */
-  --peach-today:    #F4C9A0;        /* 今天格子（暖色對比、empty + filled 共用） */
-  --gold-accent:    #E3B340;        /* ✓ / ✦ / 寶藏 / active 金光 */
-  --tile-future:    #EAF4E6;        /* 未到的格子 + 微邊框 */
-  --neutral-step:   #B9A88C;        /* 腳印 / locked 寶藏 / 中性 icon（非綠） */
-  --paper-card:     #FBF6EC;        /* 卡片：筆記 / 報告 */
-  --brand-green:    #3E9D5C;        /* 主按鈕（logo 精確綠、Vivi 上線前微調） */
+  /* ── New canonical tokens (Landing v1.7 spec, source of truth) ── */
+  --bg-top:     #f7ebe5;            /* peach cream — body gradient 起點 */
+  --bg-bot:     #ead4ca;            /* peach — body gradient 終點 */
 
-  /* Text scale (only 3 levels per spec §1 — collapsed v1 quaternary/tertiary) */
-  --text-primary:   #2C3A2C;
-  --text-secondary: #6E8A6E;
-  --text-faint:     #A7BCA4;
+  --ink:        #2d2422;            /* warm dark brown — 主文字 */
+  --ink-soft:   #6b5c57;            /* warm gray — 次文字 */
+  --ink-dim:    #9c8c87;            /* lighter warm gray — 淡文字 */
 
-  /* Derived */
-  --bubble-user:    #C8E4C2;        /* 使用者泡泡淺底（spec §5.3 hint） */
-  --border-line:    #BFD7BA;        /* 微分隔線（綠調 hairline） */
+  --gold:       #c66b4f;            /* terracotta — primary accent (按鈕 / 強調) */
+  --gold-soft:  #a8553c;            /* deeper terracotta — hover / deep title */
 
-  /* Typography */
+  --coral:      #d6826a;            /* coral — secondary accent (focus / walked tile) */
+  --coral-soft: #b96544;            /* deeper coral */
+
+  --card:       rgba(255,255,255,.55);    /* glassy white card (Landing style) */
+  --card-line:  rgba(198,107,79,.20);     /* terracotta hairline */
+
+  /* ── Back-compat aliases (舊 token 名指向新值, HTML / JS 0 改動) ── */
+  /* 主按鈕色 — 綠 → 赤陶 */
+  --brand-green:    var(--gold);
+  /* 走過格子 + focus border — 綠 → 珊瑚 (warm 強調) */
+  --green-walked:   var(--coral);
+  /* 深色標題強調 — 森林綠 → 深赤陶 */
+  --green-forest:   var(--gold-soft);
+  /* 主背景 — solid mint → solid peach cream (gradient 在 body, 此 token 用 fallback) */
+  --bg-mint:        var(--bg-top);
+  /* 今天格子 — 暖桃 → 直接用赤陶 (在 peach bg 上要 pop) */
+  --peach-today:    var(--gold);
+  /* ✦ / ✓ 金光 marker — 真金 → 赤陶 (對齊 Landing 的 .glow / 不留兩種 accent) */
+  --gold-accent:    var(--gold);
+  /* 未到的格子 — 淺薄荷 → 淡奶油 */
+  --tile-future:    #f4e8e0;
+  /* 腳印 / locked / 中性 icon — 本來就是暖棕、保留 */
+  --neutral-step:   #B9A88C;
+  /* 卡片 (筆記 / 報告) — 保持 solid 米白 (紙感鐵則, 不換成 glass) */
+  --paper-card:     #FBF6EC;
+  /* 用戶泡泡 — 淺薄荷 → 淺珊瑚 */
+  --bubble-user:    #f2ddd2;
+  /* 微分隔線 — 綠 hairline → 赤陶 hairline */
+  --border-line:    var(--card-line);
+  /* 文字三階 — 全換暖色文字 */
+  --text-primary:   var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-faint:     var(--ink-dim);
+
+  /* ── Typography (不動) ── */
   --font-serif: 'Noto Serif TC', 'Songti SC', 'Songti TC', serif;
   --font-sans:  'Noto Sans TC', 'PingFang TC', sans-serif;
 }
@@ -51,7 +77,9 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
-  background: var(--bg-mint);                  /* §3: mint fills the screen */
+  /* 5/30 Patrick — peach gradient (Landing v1.7 同款). 之前 solid mint. */
+  background: linear-gradient(180deg, var(--bg-top), var(--bg-bot) 55%);
+  background-attachment: fixed;                /* 避免長頁滾動時 gradient 跟著 scroll、保持紙感 */
   color: var(--text-primary);
   font-family: var(--font-serif);
   font-size: 17px;
@@ -101,7 +129,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 
 .btn-gold {
   background: var(--gold-accent);
-  color: #3A2E10;
+  color: #2d1f1a;    /* 5/30 — text on terracotta button (was #3A2E10 on real gold) */
   font-family: var(--font-serif);
   font-size: 15px;
   letter-spacing: 4px;
@@ -122,7 +150,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   transition: background-color 200ms ease-out, border-color 200ms ease-out;
 }
 .btn-paper:hover,
-.paper-btn:hover { background: #F4ECDA; }
+.paper-btn:hover { background: #f4e0d3; }    /* 5/30 — warm peach hover (was light cream #F4ECDA) */
 /* Vivi 5/24: coach day-note picker active-day visual mark. Tiny ring so the
    coach knows which day is currently shown + clicking the same day again
    toggles the note collapsed. */
@@ -331,10 +359,10 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 }
 
 /* Footprint (future only — sits over the tan overlay as a quiet「鎖」 hint).
-   PR-4c-green Patrick 5/24: 淺綠 (--bg-mint #D7EBD1) over warm tan = quiet
-   retreat, lets「今天」那格 pop. 不用品牌綠 (--brand-green) — 那是 CTA / 走過
-   的路才該亮。If preview shows it disappearing on tan → escalate to
-   --green-walked (#5DA873), still NOT saturated brand-green. */
+   PR-4c-green Patrick 5/24: 淺背景 (--bg-mint, 5/30 後 aliased to --bg-top peach
+   cream) over warm tan = quiet retreat, lets「今天」 那格 pop. 不用品牌色
+   (--brand-green, 5/30 後 aliased to terracotta) — 那是 CTA / 走過的路才該亮。
+   5/30: 顏色名稱保留歷史名 (-mint / -green-walked 等)、值已遷移到粉色/赤陶系. */
 .day-tile__footprint {
   width: 28px;
   height: 28px;
