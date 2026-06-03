@@ -330,15 +330,18 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
    reserved for the「走過的路」signal on completed tiles. */
 .day-tile--future        { background: var(--tile-future); cursor: default; }
 .day-tile--future .day-tile__scene {
-  /* sepia + reduced saturation + brightened: an aged-paper photo rather than
-     a flat grayscale dim. brightness lifted from 0.55 → 0.78 per Patrick. */
-  filter: sepia(0.55) saturate(0.5) brightness(0.78) contrast(0.95);
+  /* 6/2 Vivi sandbox 觀察 — 粉版圖加 sepia 變黃褐, 整體太暗看不清插畫.
+     拿掉 sepia (圖本身已 warm), 亮度 0.78→0.92, 飽和 0.5→0.65, 對比 0.95→0.97.
+     仍能看出「沒到」 但插畫不再悶死. */
+  filter: saturate(0.65) brightness(0.92) contrast(0.97);
 }
 .day-tile--future::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(185, 168, 140, 0.28);   /* #B9A88C tan @ 28% — warm 未翻開感 */
+  /* 6/2 Vivi — tan 28% → white 12%. 粉本身已 warm, 再加 tan 染色會混濁;
+     白霧只負責「未翻開」 薄薄一層, 不染色. */
+  background: rgba(255, 255, 255, 0.12);
   border-radius: inherit;
   pointer-events: none;
   z-index: 2;

@@ -83,9 +83,11 @@
         <!-- snake-path SVG overlays the grid (z-index 0); tiles z-index 1.
              Path lives outside #journey-grid so renderJourney's innerHTML='' doesn't wipe it. -->
         <svg class="journey-path" aria-hidden="true">
+          <!-- 6/2 Vivi sandbox 觀察 — 拿掉 stroke-dasharray="1 12" 虛點點, 改實線.
+               stroke 仍 var(--brand-green), 經 46a4681 alias 後解析為 terracotta. -->
           <path id="journey-path-line"
                 stroke="var(--brand-green)" stroke-width="4"
-                stroke-dasharray="1 12" stroke-linecap="round" fill="none" />
+                stroke-linecap="round" fill="none" />
         </svg>
         <div class="journey-grid" id="journey-grid" role="list">
           <!-- 21 day-tiles injected by student.js (snake-positioned via grid-row/col) -->
