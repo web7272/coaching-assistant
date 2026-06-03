@@ -172,6 +172,20 @@ async function route() {
     }
   }
 
+  // 6/2 Patrick — entry setup gate (修 377e58e 帶出的 regression):
+  //   已認證 user 但 preferredName / pace 未填 → 強制 redirect /#/entry 精簡頁
+  //   完成 setup. 06dec38 原邏輯靠 entry 自己判, 但 377e58e 二輪重寫後
+  //   renderEntry 在「已認證 + preferredName 有」 case 直接 jump /journey,
+  //   Landing → magic-link 的新 user 永遠沒被問稱謂/頻率.
+  //   pure 邏輯抽到 lib/util/entry-gate.js, lib/util/entry-gate.test.js 鎖行為.
+  if (state.studentId
+      && (!state.preferredName || !state.pace)
+      && route !== 'entry'
+      && route !== 'blocked') {
+    location.hash = '#/entry';
+    return;
+  }
+
   switch (route) {
     case 'entry':        showView('entry');        renderEntry(); break;
     case 'journey':      showView('journey');      await renderJourney(); break;
