@@ -259,7 +259,12 @@ if (typeof window !== 'undefined') {
 //   · 「登入連結已寄到」 確認頁 (entry 不再觸發 magic-link).
 // suggestEmailFix() 純函式 + window.__suggestEmailFix 保留 (其他用途 / 測試).
 // /api/auth/request-link endpoint 本身不動 (Landing 仍會呼叫).
-const LANDING_URL = 'https://seeyourself.now/';
+// 6/2 Vivi: 暫用同源 landing.html、待 apex domain setup 後改回 https://seeyourself.now/.
+// 起因: seeyourself.now apex 未設 SSL → 瀏覽器 ERR_SSL_VERSION_OR_CIPHER_MISMATCH
+// (比 404 更糟、用戶看到安全警告 interstitial). 改同源 redirect、無 SSL/DNS
+// 依賴, 立刻在 sandbox 可用. Landing 內容已在 repo 的 landing.html (Mike v0.15
+// 之後升級到 v1.7/8, 同 commit).
+const LANDING_URL = '/landing.html';
 function renderEntry() {
   // ① 未認證 → hard redirect 到 Landing.
   if (!state.studentId) {
