@@ -473,7 +473,6 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
     <g fill="#c66b4f" opacity=".55">
       <path d="M180 100 L184 110 L194 114 L184 118 L180 128 L176 118 L166 114 L176 110 Z"/>
       <path d="M340 60 L343 67 L350 70 L343 73 L340 80 L337 73 L330 70 L337 67 Z"/>
-      <path d="M520 220 L524 230 L534 234 L524 238 L520 248 L516 238 L506 234 L516 230 Z"/>
       <path d="M860 90 L863 97 L870 100 L863 103 L860 110 L857 103 L850 100 L857 97 Z"/>
       <path d="M1020 200 L1024 210 L1034 214 L1024 218 L1020 228 L1016 218 L1006 214 L1016 210 Z"/>
       <path d="M260 260 L263 267 L270 270 L263 273 L260 280 L257 273 L250 270 L257 267 Z"/>
@@ -481,7 +480,6 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
     </g>
     <g fill="#d6826a" opacity=".4">
       <circle cx="420" cy="120" r="2"/>
-      <circle cx="720" cy="280" r="2"/>
       <circle cx="120" cy="320" r="1.6"/>
       <circle cx="1100" cy="100" r="1.8"/>
     </g>
@@ -490,7 +488,6 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
   <div class="hcore">
     <p class="brandmark">看見自己 · SEE YOURSELF</p>
     <h1 class="htag">你每天都在做決定。<br>但你真的知道——<br>自己是<span class="glow">根據什麼</span>在做決定的嗎？</h1>
-    <p class="hlead">不是另一堂自我成長課，<br>而是被<span class="glow">好問題</span>陪伴的一段旅程。</p>
 
     <p class="cta-label">從這裡開始</p>
     <div class="cta-pair">
@@ -554,6 +551,8 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
       </div>
 
     </div>
+
+    <p class="hlead">不是另一堂自我成長課，<br>而是被<span class="glow">好問題</span>陪伴的一段旅程。</p>
   </div>
 </header>
 
@@ -838,8 +837,10 @@ window.ctaSubmit=async function(e,optionNum){
 
   try{
     await fetch('/api/request-guide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    msg.textContent=MSG[optionNum]+' 信沒看到？找一下垃圾信／促銷匣。';
+    msg.innerHTML=MSG[optionNum]+'<br>沒看到信? 找一下垃圾信／促銷匣。';
     msg.className='cta-mini ok';
+    // 6/2 Vivi: 按鈕從「送出中…」改成「已寄出 ✓」、避免看起來像卡住
+    submit.textContent='已寄出 ✓';
     // 凍住 form：所有輸入 disabled
     form.querySelectorAll('input,button').forEach(el=>{el.disabled=true;});
   }catch(err){
