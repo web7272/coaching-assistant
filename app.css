@@ -122,7 +122,10 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 }
 .btn-green:hover,
 .entry-btn:hover,
-.conv-send-btn:hover { background: #348651; }   /* shade darker, calm hover */
+.conv-send-btn:hover { background: var(--gold-soft); }   /* 6/02 — shade darker
+   (was #348651 darker forest green, 46a4681 brand transition 漏這個).
+   --gold-soft = #a8553c deeper terracotta, 跟 --gold (--brand-green alias) 同
+   warm 系一階深. */
 .btn-green:disabled,
 .entry-btn:disabled,
 .conv-send-btn:disabled { opacity: 0.45; cursor: default; background: var(--brand-green); }
