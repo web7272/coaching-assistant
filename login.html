@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>再寄一次登入連結 ｜ 看見自己</title>
+  <!--
+    Patrick 6/3 — Login 簡頁 (回頭流 funnel 分流):
+      Landing = 獲客流 (新訪客, 收 lead + 3 題問卷, POST /api/request-guide).
+      Login   = 回頭流 (已認識品牌, 只要重新要 magic link, POST /api/auth/request-link).
+    用 case: magic link 60 分鐘過期、user 想再要一個、不該逼回 Landing 重填問卷.
+    Daniel 客服量降低.
+    視覺對齊 Landing v1.9.2 brand (peach/terracotta/coral 系).
+  -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;600;700&display=swap');
+    :root{
+      --bg-top:#f7ebe5;--bg-bot:#ead4ca;
+      --ink:#2d2422;--ink-soft:#6b5c57;--ink-dim:#9c8c87;
+      --gold:#c66b4f;--gold-soft:#a8553c;
+      --coral:#d6826a;
+      --card:rgba(255,255,255,.55);--card-line:rgba(198,107,79,.20);
+      --serif:'Noto Serif TC',serif;--sans:'Noto Sans TC',system-ui,sans-serif;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;font-family:var(--sans);color:var(--ink);line-height:1.95;letter-spacing:.03em;
+      background:linear-gradient(180deg,var(--bg-top),var(--bg-bot) 55%);
+      min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:40px 28px}
+    .login-wrap{max-width:420px;width:100%;text-align:center}
+    .login-logo{display:block;max-width:140px;width:100%;height:auto;margin:0 auto 28px}
+    h1{font-family:var(--serif);font-size:clamp(22px,4vw,28px);font-weight:600;color:var(--ink);
+      margin:0 0 12px;letter-spacing:.04em;line-height:1.5}
+    .sub{font-family:var(--serif);font-style:italic;font-size:14px;color:var(--ink-soft);margin:0 0 36px}
+    .login-form input[type=email]{width:100%;padding:14px 16px;border-radius:11px;font-size:15px;
+      background:var(--card);border:1px solid var(--card-line);color:var(--ink);font-family:var(--sans);outline:none;
+      transition:border-color .2s}
+    .login-form input[type=email]:focus{border-color:var(--gold)}
+    .login-btn{width:100%;margin-top:14px;background:linear-gradient(180deg,var(--gold),var(--gold-soft));
+      color:#FFF;border:0;border-radius:30px;padding:14px;font-size:14.5px;font-weight:600;cursor:pointer;
+      letter-spacing:.06em;font-family:var(--serif);transition:opacity .2s}
+    .login-btn:hover{opacity:.92}
+    .login-btn:disabled{opacity:.5;cursor:not-allowed}
+    .login-msg{margin-top:18px;font-size:13px;color:var(--ink-soft);line-height:1.7;min-height:20px}
+    .login-msg.ok{color:var(--gold-soft)}
+    .login-msg.err{color:#a33}
+    .login-foot{margin-top:48px;font-family:var(--serif);font-size:13px;color:var(--ink-dim)}
+    .login-foot a{color:var(--gold);text-decoration:none}
+    .login-foot a:hover{text-decoration:underline}
+    .typo-hint{margin-top:6px;font-size:12px;color:var(--ink-soft);font-style:italic;text-align:left}
+    .typo-btn{margin-left:8px;padding:2px 8px;font-size:11px;background:transparent;
+      border:1px solid var(--card-line);border-radius:14px;color:var(--gold);cursor:pointer;font-family:var(--sans)}
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <img class="login-logo" src="/assets/logo.png" alt="看見自己">
+    <h1>再寄一次登入連結</h1>
+    <p class="sub">輸入你的 email、我們寄個新的給你。</p>
+
+    <form class="login-form" id="login-form" novalidate>
+      <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email" required>
+      <div class="typo-hint" id="login-typo-hint" hidden></div>
+      <button type="submit" class="login-btn" id="login-btn">寄出</button>
+      <p class="login-msg" id="login-msg"></p>
+    </form>
+
+    <p class="login-foot">
+      還沒體驗過? <a href="/landing.html">從這裡開始 →</a>
+    </p>
+  </div>
+
+  <script>
+    // 沿用 Landing 的 typo hint 邏輯(common typos: gmail/yahoo/icloud/outlook 等)
+    function suggestEmailFix(value) {
+      const v = (value || '').toLowerCase().trim();
+      if (!v.includes('@')) return null;
+      const [, domain] = v.split('@');
+      if (!domain) return null;
+      const typos = {
+        'gmial.com':'gmail.com','gmal.com':'gmail.com','gmai.com':'gmail.com',
+        'gnail.com':'gmail.com','gemail.com':'gmail.com',
+        'yaho.com':'yahoo.com','yahoocom':'yahoo.com',
+        'icoud.com':'icloud.com','icould.com':'icloud.com',
+        'hotnail.com':'hotmail.com','hotmial.com':'hotmail.com',
+        'outloo.com':'outlook.com',
+      };
+      const fix = typos[domain];
+      if (fix) return v.replace(domain, fix);
+      return null;
+    }
+    function validEmail(v){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((v||'').trim());}
+
+    const form = document.getElementById('login-form');
+    const emailEl = document.getElementById('login-email');
+    const btn = document.getElementById('login-btn');
+    const msg = document.getElementById('login-msg');
+    const typoHint = document.getElementById('login-typo-hint');
+
+    function refreshTypoHint() {
+      const suggestion = suggestEmailFix(emailEl.value);
+      if (!suggestion) {
+        typoHint.hidden = true;
+        typoHint.innerHTML = '';
+        return;
+      }
+      typoHint.hidden = false;
+      typoHint.innerHTML = `你是不是要輸入 <b>${suggestion}</b>?
+        <button type="button" class="typo-btn" onclick="document.getElementById('login-email').value='${suggestion}';document.getElementById('login-typo-hint').hidden=true;">用建議的</button>`;
+    }
+    emailEl.addEventListener('input', refreshTypoHint);
+    emailEl.addEventListener('blur', refreshTypoHint);
+
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      msg.textContent = ''; msg.className = 'login-msg';
+      const email = (emailEl.value || '').trim().toLowerCase();
+      if (!validEmail(email)) {
+        msg.textContent = '這個 email 看起來不太對、再看一下。';
+        msg.className = 'login-msg err';
+        return;
+      }
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = '送出中…';
+      try {
+        await fetch('/api/auth/request-link', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ email })
+        });
+        msg.innerHTML = `信寄到 <b>${email}</b>、60 分鐘內有效。<br>沒看到信? 找一下垃圾信／促銷匣。`;
+        msg.className = 'login-msg ok';
+        btn.textContent = '已寄出 ✓';
+        emailEl.disabled = true;
+      } catch (err) {
+        msg.textContent = '網路好像斷了、再試一次。';
+        msg.className = 'login-msg err';
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    };
+  </script>
+</body>
+</html>
