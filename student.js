@@ -247,70 +247,74 @@ if (typeof window !== 'undefined') {
 }
 
 // ─── §4.1 entry ────────────────────────────────────────────────────
-// 6/02 Patrick — 3-state dispatch (Landing skip-email funnel):
-//   ① 已認證 + name + pace 都齊 → 跳 journey (不停在 entry).
-//   ② 已認證 但缺 name 或 pace → 精簡 entry (隱藏 email 欄, 只收 name + pace,
-//      PATCH /api/students 寫入). 「歡迎,{email}」 顯目前認證的人.
-//   ③ 未認證 → 完整 entry (email + name + pace + 走 request-link magic-link).
-//      封測舊邀請 path 仍可用.
+// 6/02 Vivi (二輪 拍板) — Landing 是唯一入口、entry 從來不該收 email.
+//   ① 未認證 → window.location.href = LANDING_URL (hard redirect).
+//   ② 已認證 + preferredName 已齊 → 跳 /#/journey.
+//   ③ 已認證 + 缺 preferredName → 精簡 entry (顯「歡迎,{email}」 + name + pace +
+//      「繼續」, PATCH /api/students 寫入).
 //
-// pace='daily' 是 DB default (verify-link create 時 || 'daily'), 所以
-// 「state.pace truthy」 不代表用戶顯式選過. preferredName 沒 default → null,
-// 用它判斷 setup 完成度是穩的 signal.
+// 砍掉 (從 06dec38 三狀態的舊「完整 entry」 分支):
+//   · email input 在 entry 的所有 listener (typo hint / required / autocomplete).
+//   · /api/auth/request-link 在 entry 的觸發路徑.
+//   · 「登入連結已寄到」 確認頁 (entry 不再觸發 magic-link).
+// suggestEmailFix() 純函式 + window.__suggestEmailFix 保留 (其他用途 / 測試).
+// /api/auth/request-link endpoint 本身不動 (Landing 仍會呼叫).
+const LANDING_URL = 'https://seeyourself.now/';
 function renderEntry() {
-  // ① 已 setup 過 → 直接 journey.
-  if (state.studentId && state.preferredName) {
+  // ① 未認證 → hard redirect 到 Landing.
+  if (!state.studentId) {
+    try { window.location.href = LANDING_URL; } catch { /* SSR safety */ }
+    return;
+  }
+  // ② 已認證 + setup 過 → 直接 journey.
+  if (state.preferredName) {
     location.hash = '#/journey';
     return;
   }
-  // ② 已認證 但缺 preferredName → 精簡 entry.
-  if (state.studentId) {
-    renderEntrySetup();
-    return;
-  }
-  // ③ 未認證 → 完整 entry.
-  renderEntryFull();
+  // ③ 已認證 + 缺 preferredName → 精簡 entry.
+  renderEntrySetup();
 }
 
 function renderEntrySetup() {
-  // 隱藏 email 欄 + 顯歡迎 + 改按鈕文案. 共用 #entry-form, 提交走 PATCH.
+  // HTML 已不含 email input + label (6/02 二輪 view-entry 重寫).
+  // 共用 #entry-form 收 name + pace, submit → PATCH /api/students.
   const form    = document.getElementById('entry-form');
-  const emailEl = document.getElementById('entry-email');
-  const emailLb = document.getElementById('entry-email-label');
   const welcome = document.getElementById('entry-welcome');
   const nameEl  = document.getElementById('entry-name');
   const btn     = document.getElementById('entry-btn');
   const err     = document.getElementById('entry-error');
   err.classList.add('hidden');
 
-  // pre-fill name (returning visitor mid-setup).
+  // pre-fill (returning visitor mid-setup).
   if (state.preferredName) nameEl.value = state.preferredName;
-  // pace radio: pre-select daily (verify-link default). User can change.
   const paceCheck = form.querySelector(`input[name="pace"][value="${state.pace || 'daily'}"]`);
   if (paceCheck) paceCheck.checked = true;
 
-  // 顯歡迎 + 隱藏 email.
-  emailEl.classList.add('hidden');
-  emailEl.removeAttribute('required');   // 避免 form 驗證擋下沒填的 email.
-  if (emailLb) emailLb.classList.add('hidden');
+  // 「歡迎,{email}」 read-only 顯目前認證身份.
   if (welcome) {
     welcome.textContent = state.email
       ? `歡迎，${state.email}`
-      : '歡迎';                           // defensive: email 沒帶到也不爆
-    welcome.classList.remove('hidden');
+      : '歡迎';                            // defensive: email 沒帶到也不爆
   }
-  // 隱藏 email-typo hint (slim entry 不需要、防殘留).
-  const typoHint = document.getElementById('entry-email-typo-hint');
-  if (typoHint) typoHint.hidden = true;
   btn.textContent = '繼續';
+
+  // invalid 視覺 (跟舊 entry 同 .invalid class).
+  const setInvalid = (el, msg) => {
+    if (el && el.classList) el.classList.add('invalid');
+    err.textContent = msg;
+    err.classList.remove('hidden');
+  };
+  nameEl.addEventListener('input', () => {
+    nameEl.classList.remove('invalid');
+    err.classList.add('hidden');
+  });
 
   form.onsubmit = async (e) => {
     e.preventDefault();
     err.classList.add('hidden');
     const preferredName = (nameEl.value || '').trim();
     if (!preferredName) {
-      err.textContent = '幫我留個稱呼吧。';
-      err.classList.remove('hidden');
+      setInvalid(nameEl, '請告訴我們怎麼稱呼你。');
       return;
     }
     const paceChoice = (form.querySelector('input[name="pace"]:checked')?.value === 'self-paced')
@@ -333,146 +337,17 @@ function renderEntrySetup() {
       saveState();
       location.hash = '#/journey';
     } catch (e2) {
-      err.textContent = '沒能送出，我們再試一次。';
-      err.classList.remove('hidden');
       btn.disabled = false;
       btn.textContent = originalLabel;
+      setInvalid(form, '沒能送出、再試一次。');
     }
   };
 }
 
-function renderEntryFull() {
-  const form = document.getElementById('entry-form');
-  const emailEl = document.getElementById('entry-email');
-  const emailLb = document.getElementById('entry-email-label');
-  const welcome = document.getElementById('entry-welcome');
-  const nameEl = document.getElementById('entry-name');
-  const btn = document.getElementById('entry-btn');
-  const err = document.getElementById('entry-error');
-  err.classList.add('hidden');
-  // 6/02 — 確保完整 entry 模式: email 顯出來 + 歡迎隱藏 + 按鈕文案回「開始」.
-  emailEl.classList.remove('hidden');
-  emailEl.setAttribute('required', '');
-  if (emailLb) emailLb.classList.remove('hidden');
-  if (welcome) welcome.classList.add('hidden');
-  btn.textContent = '開始';
-
-  // pre-fill (returning visitor)
-  if (state.email) emailEl.value = state.email;
-  if (state.preferredName) nameEl.value = state.preferredName;
-  if (state.pace) {
-    const radio = form.querySelector(`input[name="pace"][value="${state.pace}"]`);
-    if (radio) radio.checked = true;
-  }
-
-  // helper: spec §5.1 — invalid input gets a --green-walked border (not red), explainer below
-  const setInvalid = (el, msg) => {
-    el?.classList.add('invalid');
-    err.textContent = msg;
-    err.classList.remove('hidden');
-  };
-  const clearInvalid = () => {
-    emailEl.classList.remove('invalid');
-    nameEl.classList.remove('invalid');
-    err.classList.add('hidden');
-  };
-  emailEl.addEventListener('input', clearInvalid);
-  nameEl.addEventListener('input', clearInvalid);
-
-  // 5/28 Patrick — email typo 提示 (預防 A006 case). 動態建一個 hint 容器
-  // (不改 index.html), input event 動態檢查; 「用建議的」 換值、「我就是這個」
-  // 隱藏. 非阻擋: submit 不會因為有提示就 reject.
-  let typoHint = document.getElementById('entry-email-typo-hint');
-  if (!typoHint) {
-    typoHint = document.createElement('div');
-    typoHint.id = 'entry-email-typo-hint';
-    typoHint.className = 'hint-italic';
-    typoHint.hidden = true;
-    typoHint.style.cssText = 'margin-top:6px;font-size:12px;color:var(--text-secondary);';
-    emailEl.insertAdjacentElement('afterend', typoHint);
-  }
-  function refreshTypoHint() {
-    const suggestion = suggestEmailFix((emailEl.value || '').trim());
-    if (!suggestion) {
-      typoHint.hidden = true;
-      typoHint.textContent = '';
-      return;
-    }
-    typoHint.hidden = false;
-    typoHint.innerHTML = '';
-    const text = document.createElement('span');
-    text.textContent = `你是不是要輸入 ${suggestion}？`;
-    typoHint.appendChild(text);
-    const useBtn = document.createElement('button');
-    useBtn.type = 'button';
-    useBtn.textContent = '用建議的';
-    useBtn.className = 'paper-btn';
-    useBtn.style.cssText = 'margin-left:8px;padding:2px 8px;font-size:11px;';
-    useBtn.onclick = () => {
-      emailEl.value = suggestion;
-      typoHint.hidden = true;
-      clearInvalid();
-    };
-    const keepBtn = document.createElement('button');
-    keepBtn.type = 'button';
-    keepBtn.textContent = '我就是這個';
-    keepBtn.className = 'paper-btn';
-    keepBtn.style.cssText = 'margin-left:6px;padding:2px 8px;font-size:11px;';
-    keepBtn.onclick = () => { typoHint.hidden = true; };
-    typoHint.appendChild(useBtn);
-    typoHint.appendChild(keepBtn);
-  }
-  emailEl.addEventListener('input', refreshTypoHint);
-  emailEl.addEventListener('blur',  refreshTypoHint);
-  refreshTypoHint();   // initial (pre-fill from state.email)
-
-  // PR-4c-green Auth rebuild stage 1c — magic-link flow replaces direct
-  // email-as-identity. Submit no longer puts the student into the app; it
-  // POSTs to /api/auth/request-link, the server emails a one-time link
-  // (?token=…), the student clicks it → /auth.html → /api/auth/verify-link
-  // sets the HttpOnly student_session cookie → redirects into /#/journey.
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    clearInvalid();
-    const email = (emailEl.value || '').trim().toLowerCase();
-    if (!email || !email.includes('@') || !email.includes('.')) {
-      setInvalid(emailEl, '這個 email 看起來不太對，再看一下。');
-      return;
-    }
-    const preferredName = (nameEl.value || '').trim() || null;
-    const paceChoice = (form.querySelector('input[name="pace"]:checked')?.value === 'self-paced')
-      ? 'self-paced' : 'daily';
-
-    const originalLabel = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '送出中…';
-    try {
-      // request-link always returns 200 ok:true (no email-existence leak)
-      await api('/api/auth/request-link', {
-        method: 'POST',
-        body: { email, preferredName, pace: paceChoice },
-      });
-      // Replace the form with a calm confirmation. Don't go into the app —
-      // student needs to open their inbox + click the link.
-      const container = form.closest('.entry-container') || form.parentNode;
-      const confirm = document.createElement('div');
-      confirm.style.cssText = 'text-align:center;margin-top:32px;line-height:2;';
-      confirm.innerHTML = `
-        <p class="hint-italic" style="font-size:14px;color:var(--text-primary);">
-          登入連結已寄到<br><strong style="color:var(--green-forest);">${email}</strong>
-        </p>
-        <p class="hint-italic" style="font-size:12px;color:var(--text-secondary);margin-top:14px;">
-          打開信箱、點一下、就進來了。<br>連結 60 分鐘內有效。
-        </p>
-      `;
-      form.replaceWith(confirm);
-    } catch (e2) {
-      setInvalid(emailEl, '沒能送出，我們再試一次。');
-      btn.disabled = false;
-      btn.textContent = originalLabel;
-    }
-  };
-}
+// renderEntryFull removed 6/02 二輪 — Landing 是唯一入口, entry 不再接受
+// 未認證的 email 輸入. 既有 magic-link 觸發路徑改由 Landing 表單呼叫
+// /api/auth/request-link (endpoint 本身不動). suggestEmailFix() 純函式
+// 留在 file 上方, 仍 expose via window.__suggestEmailFix 給未來其他 entry 用.
 
 // ─── §5.2 journey (v2.1-green: 3-col snake + plant tiles + snake path + treasures) ───
 async function renderJourney() {

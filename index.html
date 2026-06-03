@@ -10,22 +10,21 @@
 <body>
 <div id="app">
 
-  <!-- ─────────── §5.1 Entry — v2.1-green: logo hero + 3 fields + 開始 ─────────── -->
+  <!-- ─────────── §5.1 Entry — v2.2-peach (6/2 Vivi 拍板: Landing 是唯一入口)
+       未認證 → JS hard redirect 到 seeyourself.now Landing.
+       已認證但缺 name/pace → 顯精簡 entry (name + pace, 無 email 欄).
+       已認證且完整 → JS 自動跳 /#/journey.
+       ─────────── -->
   <section id="view-entry" class="view" aria-label="入口">
     <div class="entry-container">
-      <!-- P1 (PR-4c-green): logo hero — green telescope mark, 5/23 Vivi 已提供 -->
       <img src="/assets/logo.png" alt="看見自己" class="entry-logo">
       <h1 class="entry-title">看見自己</h1>
       <p class="entry-sub">21 天 · 一步一步，走進自己</p>
 
       <form id="entry-form" class="entry-form" novalidate>
-        <!-- 6/02 Patrick — Landing skip-email funnel: 已認證 user 從 Landing 過來,
-             showing「歡迎,{email}」 + 隱藏 email 欄、純粹收 name + pace. JS 控 hidden. -->
-        <p id="entry-welcome" class="hint-italic hidden"
-           style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;line-height:1.6;"></p>
-        <!-- email -->
-        <label id="entry-email-label" class="entry-field-label" for="entry-email">你的 email</label>
-        <input type="email" id="entry-email" class="entry-input" placeholder="email" autocomplete="email" required>
+        <!-- 「歡迎,{email}」 read-only 顯目前認證身份, JS 動態填 textContent. -->
+        <p id="entry-welcome" class="hint-italic"
+           style="font-size:13px;text-align:center;color:var(--text-secondary);margin-bottom:18px;line-height:1.6;"></p>
 
         <!-- 稱呼 -->
         <label class="entry-field-label entry-field-label--gap" for="entry-name">我可以怎麼稱呼你？</label>
@@ -52,8 +51,8 @@
           </label>
         </fieldset>
 
-        <!-- P1: CTA 開始（was 繼續）— .btn-green via the legacy .entry-btn selector group -->
-        <button type="submit" id="entry-btn" class="entry-btn">開始</button>
+        <!-- 6/02 — 「繼續」 (was 「開始」) — 學員已認證、entry 只完成 setup. -->
+        <button type="submit" id="entry-btn" class="entry-btn">繼續</button>
         <p id="entry-error" class="entry-error hidden"></p>
       </form>
     </div>
@@ -84,9 +83,10 @@
              Path lives outside #journey-grid so renderJourney's innerHTML='' doesn't wipe it. -->
         <svg class="journey-path" aria-hidden="true">
           <!-- 6/2 Vivi sandbox 觀察 — 拿掉 stroke-dasharray="1 12" 虛點點, 改實線.
-               stroke 仍 var(--brand-green), 經 46a4681 alias 後解析為 terracotta. -->
+               6/2 二輪: 線改深藍 #243f79 — 跟 day card 區隔 (Day 1/12 等夜空
+               illustration 中心色), 不再 var(--brand-green) terracotta. -->
           <path id="journey-path-line"
-                stroke="var(--brand-green)" stroke-width="4"
+                stroke="#243f79" stroke-width="4"
                 stroke-linecap="round" fill="none" />
         </svg>
         <div class="journey-grid" id="journey-grid" role="list">
