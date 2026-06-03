@@ -72,10 +72,11 @@ test('🛑 /api/me: coach session → 401 (cross-role defense)', async () => {
 
 // ── happy path ──
 
-test('🛑 /api/me: valid session → 200 with {studentId, module, currentDay, preferredName, pace}', async () => {
+test('🛑 /api/me: valid session → 200 with {studentId, email, module, currentDay, preferredName, pace}', async () => {
   _setStudentSessionReader(SESSION_FOR('A001'));
   _setSqlClient(makeMockSql([{
     student_id:     'A001',
+    email:          'vivi@example.com',
     current_module: 'self',
     current_day:    3,
     preferred_name: 'Vivi',
@@ -86,11 +87,29 @@ test('🛑 /api/me: valid session → 200 with {studentId, module, currentDay, p
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.body, {
     studentId:     'A001',
+    email:         'vivi@example.com',     // 6/02 — Landing funnel skip-email
     module:        'self',
     currentDay:    3,
     preferredName: 'Vivi',
     pace:          'self-paced',
   });
+});
+
+// 🛑 6/02 Patrick — email 是新加欄位; null email (生產資料其實不該、但 defensive) → null.
+test('🛑 /api/me: email is null in DB → response email:null (defensive, no crash)', async () => {
+  _setStudentSessionReader(SESSION_FOR('A001'));
+  _setSqlClient(makeMockSql([{
+    student_id:     'A001',
+    email:          null,
+    current_module: 'self',
+    current_day:    1,
+    preferred_name: null,
+    pace:           'daily',
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.email, null);
 });
 
 test('/api/me: minimal student row → defaults filled in (currentDay=1, pace=daily)', async () => {
@@ -106,7 +125,7 @@ test('/api/me: minimal student row → defaults filled in (currentDay=1, pace=da
   await handler(mockReq(), res);
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.body, {
-    studentId: 'A042', module: 'self', currentDay: 1,
+    studentId: 'A042', email: null, module: 'self', currentDay: 1,
     preferredName: null, pace: 'daily',
   });
 });

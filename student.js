@@ -89,6 +89,9 @@ async function hydrateFromCookie() {
       const me = await api('/api/me');
       if (!me || typeof me !== 'object' || !me.studentId) return false;
       state.studentId     = me.studentId;
+      // 6/02 Patrick — Landing skip-email funnel: email 從 /api/me 帶下來,
+      // 精簡 entry 顯「歡迎,{email}」. localStorage 可能已有, 以 /api/me 為準.
+      state.email         = me.email         ?? state.email         ?? null;
       state.module        = me.module        || 'self';
       state.currentDay    = me.currentDay    || 1;
       state.preferredName = me.preferredName ?? state.preferredName ?? null;
@@ -244,13 +247,115 @@ if (typeof window !== 'undefined') {
 }
 
 // ─── §4.1 entry ────────────────────────────────────────────────────
+// 6/02 Patrick — 3-state dispatch (Landing skip-email funnel):
+//   ① 已認證 + name + pace 都齊 → 跳 journey (不停在 entry).
+//   ② 已認證 但缺 name 或 pace → 精簡 entry (隱藏 email 欄, 只收 name + pace,
+//      PATCH /api/students 寫入). 「歡迎,{email}」 顯目前認證的人.
+//   ③ 未認證 → 完整 entry (email + name + pace + 走 request-link magic-link).
+//      封測舊邀請 path 仍可用.
+//
+// pace='daily' 是 DB default (verify-link create 時 || 'daily'), 所以
+// 「state.pace truthy」 不代表用戶顯式選過. preferredName 沒 default → null,
+// 用它判斷 setup 完成度是穩的 signal.
 function renderEntry() {
+  // ① 已 setup 過 → 直接 journey.
+  if (state.studentId && state.preferredName) {
+    location.hash = '#/journey';
+    return;
+  }
+  // ② 已認證 但缺 preferredName → 精簡 entry.
+  if (state.studentId) {
+    renderEntrySetup();
+    return;
+  }
+  // ③ 未認證 → 完整 entry.
+  renderEntryFull();
+}
+
+function renderEntrySetup() {
+  // 隱藏 email 欄 + 顯歡迎 + 改按鈕文案. 共用 #entry-form, 提交走 PATCH.
+  const form    = document.getElementById('entry-form');
+  const emailEl = document.getElementById('entry-email');
+  const emailLb = document.getElementById('entry-email-label');
+  const welcome = document.getElementById('entry-welcome');
+  const nameEl  = document.getElementById('entry-name');
+  const btn     = document.getElementById('entry-btn');
+  const err     = document.getElementById('entry-error');
+  err.classList.add('hidden');
+
+  // pre-fill name (returning visitor mid-setup).
+  if (state.preferredName) nameEl.value = state.preferredName;
+  // pace radio: pre-select daily (verify-link default). User can change.
+  const paceCheck = form.querySelector(`input[name="pace"][value="${state.pace || 'daily'}"]`);
+  if (paceCheck) paceCheck.checked = true;
+
+  // 顯歡迎 + 隱藏 email.
+  emailEl.classList.add('hidden');
+  emailEl.removeAttribute('required');   // 避免 form 驗證擋下沒填的 email.
+  if (emailLb) emailLb.classList.add('hidden');
+  if (welcome) {
+    welcome.textContent = state.email
+      ? `歡迎，${state.email}`
+      : '歡迎';                           // defensive: email 沒帶到也不爆
+    welcome.classList.remove('hidden');
+  }
+  // 隱藏 email-typo hint (slim entry 不需要、防殘留).
+  const typoHint = document.getElementById('entry-email-typo-hint');
+  if (typoHint) typoHint.hidden = true;
+  btn.textContent = '繼續';
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    err.classList.add('hidden');
+    const preferredName = (nameEl.value || '').trim();
+    if (!preferredName) {
+      err.textContent = '幫我留個稱呼吧。';
+      err.classList.remove('hidden');
+      return;
+    }
+    const paceChoice = (form.querySelector('input[name="pace"]:checked')?.value === 'self-paced')
+      ? 'self-paced' : 'daily';
+
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '送出中…';
+    try {
+      await api('/api/students', {
+        method: 'PATCH',
+        body: {
+          studentId: state.studentId,
+          preferred_name: preferredName,
+          pace: paceChoice,
+        },
+      });
+      state.preferredName = preferredName;
+      state.pace          = paceChoice;
+      saveState();
+      location.hash = '#/journey';
+    } catch (e2) {
+      err.textContent = '沒能送出，我們再試一次。';
+      err.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  };
+}
+
+function renderEntryFull() {
   const form = document.getElementById('entry-form');
   const emailEl = document.getElementById('entry-email');
+  const emailLb = document.getElementById('entry-email-label');
+  const welcome = document.getElementById('entry-welcome');
   const nameEl = document.getElementById('entry-name');
   const btn = document.getElementById('entry-btn');
   const err = document.getElementById('entry-error');
   err.classList.add('hidden');
+  // 6/02 — 確保完整 entry 模式: email 顯出來 + 歡迎隱藏 + 按鈕文案回「開始」.
+  emailEl.classList.remove('hidden');
+  emailEl.setAttribute('required', '');
+  if (emailLb) emailLb.classList.remove('hidden');
+  if (welcome) welcome.classList.add('hidden');
+  btn.textContent = '開始';
 
   // pre-fill (returning visitor)
   if (state.email) emailEl.value = state.email;

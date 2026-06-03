@@ -19,8 +19,12 @@
       <p class="entry-sub">21 天 · 一步一步，走進自己</p>
 
       <form id="entry-form" class="entry-form" novalidate>
+        <!-- 6/02 Patrick — Landing skip-email funnel: 已認證 user 從 Landing 過來,
+             showing「歡迎,{email}」 + 隱藏 email 欄、純粹收 name + pace. JS 控 hidden. -->
+        <p id="entry-welcome" class="hint-italic hidden"
+           style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;line-height:1.6;"></p>
         <!-- email -->
-        <label class="entry-field-label" for="entry-email">你的 email</label>
+        <label id="entry-email-label" class="entry-field-label" for="entry-email">你的 email</label>
         <input type="email" id="entry-email" class="entry-input" placeholder="email" autocomplete="email" required>
 
         <!-- 稱呼 -->

@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 
 import handler, { _setSqlClient } from './students.js';
 import { _setCoachSessionReader } from '../lib/auth/coach-session.js';
+// 6/02 — also need to reset student session reader, since PATCH dual-auth checks it.
+import { _setStudentSessionReader } from '../lib/auth/student-session.js';
 
 // ── mock SQL + req/res helpers ──
 
@@ -52,6 +54,7 @@ const NO_SESSION = async () => null;
 beforeEach(() => {
   _setSqlClient(null);
   _setCoachSessionReader(null);
+  _setStudentSessionReader(null);   // 6/02 — clear student session reader between tests (PATCH dual-auth).
   process.env.SESSION_SECRET = 'test-secret-32-bytes-of-entropy-aaaaaaaa';
 });
 
@@ -447,4 +450,91 @@ test('students.js: unknown method (coach authorized) → 405', async () => {
   const res = mockRes();
   await handler(mockReq({ method: 'DELETE' }), res);
   assert.equal(res.statusCode, 405);
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/02 Patrick — PATCH student-self path (Landing skip-email funnel).
+// 學員本人 ONLY 改自己的 preferred_name + pace; 鐵則 1d 守.
+// (_setStudentSessionReader imported at top of file alongside coach reader.)
+// ═════════════════════════════════════════════════════════
+
+const STUDENT_SESSION_FOR = (sid) => async () => ({ role: 'student', sid });
+
+test('🛑 PATCH self: student session + 自己的 studentId + preferred_name + pace → 200', async () => {
+  _setCoachSessionReader(NO_SESSION);
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(makeMockSql([
+    [{ student_id: 'A001' }],   // exists
+    [],                          // UPDATE main
+    [],                          // UPDATE preferred_name
+  ]));
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', preferred_name: 'Vivi', pace: 'self-paced' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+});
+
+test('🛑 PATCH self: 學員改別人 (studentId 跟 sid 不對) → 403 FORBIDDEN (鐵則 1d)', async () => {
+  _setCoachSessionReader(NO_SESSION);
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A999', preferred_name: 'Hacker', pace: 'daily' },
+  }), res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.error, 'FORBIDDEN');
+  assert.equal(sql.calls.length, 0, '不能 touch DB 在 cross-student PATCH');
+});
+
+test('🛑 PATCH self: 學員想送 plan / tier / is_beta → 403 FORBIDDEN_FIELD (allowlist)', async () => {
+  for (const escalation of ['plan', 'tier', 'current_module', 'current_week',
+                             'current_day', 'notes', 'is_beta']) {
+    _setCoachSessionReader(NO_SESSION);
+    _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+    _setSqlClient(makeMockSql([]));
+    const res = mockRes();
+    const body = { studentId: 'A001', preferred_name: 'Vivi' };
+    body[escalation] = (escalation === 'is_beta') ? true
+                       : (escalation === 'plan') ? 'plan_a'
+                       : (escalation === 'notes') ? 'self-promote'
+                       : 99;
+    await handler(mockReq({ method: 'PATCH', body }), res);
+    assert.equal(res.statusCode, 403,
+      `field "${escalation}" 必須擋 (學員不可自我提權), 看到: ${res.statusCode}`);
+    assert.equal(res.body.error, 'FORBIDDEN_FIELD');
+    assert.equal(res.body.field, escalation);
+  }
+});
+
+test('🛑 PATCH self: 無任何 session → 401 (既有 coach 401 行為不變)', async () => {
+  _setCoachSessionReader(NO_SESSION);
+  _setStudentSessionReader(async () => null);
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', preferred_name: 'Vivi' },
+  }), res);
+  assert.equal(res.statusCode, 401);
+});
+
+test('🛑 PATCH coach 路徑不受影響: coach session 仍可改 plan / is_beta (allowlist 只 apply 到 student-self)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));   // 兩個都有, coach 優先
+  _setSqlClient(makeMockSql([
+    [{ student_id: 'A001' }],
+    [],
+  ]));
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', plan: 'plan_a', is_beta: true },
+  }), res);
+  assert.equal(res.statusCode, 200, 'coach 仍可改 plan/is_beta (既有後台編輯功能不破)');
 });

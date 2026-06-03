@@ -14,7 +14,10 @@ import { neon } from '@neondatabase/serverless';
 // PR-4c-green Patrick 5/24 — coach-only gate; POST action=login intentionally
 // stays open (it validates student_id + email itself, the v4-compat student
 // login path). Every other method/action requires a coach OAuth session.
-import { guardCoachOr401 } from '../lib/auth/coach-session.js';
+import { guardCoachOr401, assertCoachSession } from '../lib/auth/coach-session.js';
+// 6/02 Patrick — PATCH self-auth path for entry skip-email funnel:
+//   student can PATCH ONLY their own preferred_name + pace (allowlist).
+import { getStudentIdFromSession } from '../lib/auth/student-session.js';
 // 5/25 (Vivi: 清單每個人都顯示 Day 1) — 用跟 /api/journey 詳情頁同一套天數算法
 // (students.current_day 只在註冊設 1 / PATCH 才動、平常不更新).
 import { computeUnlockedCurrentDay } from '../lib/api/journey-state.js';
@@ -98,11 +101,40 @@ export default async function handler(req, res) {
     //   notes 允許清空（傳空字串會存成 null）
     // ===========================================================
     if (req.method === 'PATCH') {
-      // PR-4c-green Patrick 5/24 — coach-only.
-      if (!(await guardCoachOr401(req, res))) return;
+      // 6/02 Patrick — dual auth:
+      //   ① coach path (既有): 教練後台編輯任何學員的所有欄位.
+      //   ② student-self path: 學員本人 ONLY 改自己的 preferred_name + pace.
+      //     用 case: Landing → magic-link → 進 App 精簡 entry 完成 setup.
+      //     鐵則 1d: studentId in body 必須等於 cookie sid.
+      //     Allowlist: 學員不可送 plan / tier / current_* / notes / is_beta,
+      //     違反 → 403 FORBIDDEN_FIELD (防 client 自我提權).
+      const coachOk = await assertCoachSession(req);
+      let isStudentSelf = false;
+      let selfSid = null;
+      if (!coachOk) {
+        selfSid = await getStudentIdFromSession(req);
+        if (!selfSid) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+        isStudentSelf = true;
+      }
       const studentId = String(req.body.studentId || '').toUpperCase().trim();
       if (!/^[A-Z]\d{3}$/.test(studentId)) {
         return res.status(400).json({ error: 'INVALID_STUDENT_ID' });
+      }
+      if (isStudentSelf) {
+        // 鐵則 1d — 學員只能改自己.
+        if (studentId !== selfSid) {
+          return res.status(403).json({ error: 'FORBIDDEN' });
+        }
+        // Allowlist — 任何「非 preferred_name / pace」 的欄位都拒絕 (防自我提權).
+        const forbidden = ['plan', 'tier', 'current_module', 'current_week',
+                            'current_day', 'notes', 'is_beta'];
+        for (const k of forbidden) {
+          if (req.body[k] !== undefined) {
+            return res.status(403).json({ error: 'FORBIDDEN_FIELD', field: k });
+          }
+        }
       }
 
       // 取出可更新欄位（undefined 表示前端沒送 → 不動）

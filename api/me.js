@@ -38,8 +38,10 @@ export default async function handler(req, res) {
   try {
     const sql = getSql();
     // 5/29 Patrick — SELECT 加 is_blocked, 給 access gate 用 (回 200 之前判).
+    // 6/02 Patrick — SELECT 加 email, 給 entry skip-email-if-authenticated 用
+    //   (Landing → magic-link → 進 App 後, 精簡 entry 顯「歡迎,{email}」).
     const rows = await sql`
-      SELECT student_id, current_module, current_day, preferred_name, pace, is_blocked
+      SELECT student_id, email, current_module, current_day, preferred_name, pace, is_blocked
         FROM students
        WHERE student_id = ${sid}
        LIMIT 1
@@ -57,6 +59,7 @@ export default async function handler(req, res) {
     }
     return res.status(200).json({
       studentId:     s.student_id,
+      email:         s.email ?? null,           // 6/02 — Landing funnel skip-email
       module:        s.current_module || 'self',
       currentDay:    s.current_day || 1,
       preferredName: s.preferred_name ?? null,
