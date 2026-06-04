@@ -14,7 +14,10 @@
      key/shape student.js uses, so the SPA's boot gate doesn't bounce her back
      to entry. -->
 <div id="app">
-  <section id="view-auth" class="view" aria-label="登入中">
+  <!-- 6/4 Patrick (Vivi troubleshooting) — app.css `.view{display:none}` 要 `.active`
+       才顯示. 這頁不是 SPA、沒 router 幫加 class → 整頁隱形:
+       loading 與過期失敗文案/按鈕全看不見、只剩 10 秒後 auto-redirect、像當機. -->
+  <section id="view-auth" class="view active" aria-label="登入中">
     <div class="entry-container" style="padding-top:96px;text-align:center;">
       <p class="conv-waiting" id="auth-status">
         <span class="star">✦</span><span class="text">正在打開你的旅程…</span>
