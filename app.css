@@ -544,7 +544,9 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 /* Conversation messages — Vivi 5/24 polish:「字間距太大、要收緊一點」
    5/25 follow-up: AI 側仍然太鬆、再收一階 (1.55 → 1.4, margin 16 → 10).
    user 側已合適、不動. Font size + family unchanged. */
-.msg-ai { font-family: var(--font-serif); font-size: 17px; line-height: 1.4; color: var(--text-primary); margin-bottom: 10px; white-space: pre-wrap; }
+/* 6/4 Vivi — 教練字太大行距太大: 17px→15.5px, 1.4→1.35. 段落空隙是 AI 文字
+   的空行 (pre-wrap 原樣呈現)、跟著字級縮. serif 仍略大於 user 15px sans. */
+.msg-ai { font-family: var(--font-serif); font-size: 15.5px; line-height: 1.35; color: var(--text-primary); margin-bottom: 10px; white-space: pre-wrap; }
 .msg-user-wrap { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .msg-user { background: var(--bubble-user); padding: 10px 14px; border-radius: 16px 16px 4px 16px; max-width: 80%;
   font-family: var(--font-sans); font-size: 15px; line-height: 1.5; color: var(--text-primary); white-space: pre-wrap; }
