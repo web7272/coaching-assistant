@@ -826,9 +826,80 @@ function appendMessage(role, content, doScroll = true) {
   }
 }
 
-async function sendUserMessage(text) {
+/**
+ * 6/3 Patrick (Vivi burst protection) — Anthropic 429 overload friendly UI.
+ *
+ * When the backend returns 503 { error: 'overload' } (Anthropic 429 全退到底
+ * after the retry helper's 3 attempts), show a calm inline hint with a
+ * 30s-countdown retry button. Click → re-fire sendUserMessage in retry mode.
+ *
+ * Paper aesthetic — no red banner, no SaaS spinner.
+ * @param {string} retryText  the user message text to re-send on click
+ */
+function showOverloadHint(retryText) {
+  const scroll = document.getElementById('conv-scroll');
+  if (!scroll) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'conv-hint conv-hint--overload';
+  wrap.setAttribute('aria-live', 'polite');
+
+  const msg = document.createElement('div');
+  msg.className = 'conv-hint--overload__msg';
+  msg.innerHTML = '<span class="star">✦</span><span class="text">教練此刻太多人在對話、30 秒後再試。</span>';
+  wrap.appendChild(msg);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'paper-btn conv-hint__retry';
+  btn.disabled = true;
+  let secs = 30;
+  btn.textContent = `重新送出 (${secs}s)`;
+  const timer = setInterval(() => {
+    secs--;
+    if (secs <= 0) {
+      clearInterval(timer);
+      btn.disabled = false;
+      btn.textContent = '重新送出 →';
+    } else {
+      btn.textContent = `重新送出 (${secs}s)`;
+    }
+  }, 1000);
+
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    clearInterval(timer);
+    wrap.remove();
+    // Re-fire in retry mode: skip the re-push + re-paint (bubble + state still
+    // in place from the first attempt, see sendUserMessage retry guard).
+    sendUserMessage(retryText, { isRetry: true });
+  });
+  wrap.appendChild(btn);
+
+  scroll.appendChild(wrap);
+  scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' });
+}
+
+/** Is this error our backend's overload signal? */
+function isOverloadError(e) {
+  if (!e || e.status !== 503) return false;
+  if (typeof e.body !== 'string') return false;
+  if (!e.body.includes('overload')) return false;
+  try {
+    const parsed = JSON.parse(e.body);
+    return parsed && parsed.error === 'overload';
+  } catch {
+    return false;
+  }
+}
+
+async function sendUserMessage(text, opts = {}) {
+  // 6/3 Patrick (Vivi burst protection) — retry path skips the re-push +
+  // re-paint. On 503 overload we pop state.conversation but keep the DOM bubble;
+  // retry re-pushes (here) so the fetch carries the user message, but doesn't
+  // re-paint (bubble's still on screen from the first attempt).
+  const isRetry = !!opts.isRetry;
   state.conversation.push({ role: 'user', content: text });
-  appendMessage('user', text);
+  if (!isRetry) appendMessage('user', text);
   // Vivi 5/24: typing indicator while Sonnet is composing (3-15s normal).
   // Without it「使用者以為卡住/壞掉」. Paper aesthetic — ✦ + 「教練在想…」,
   // no SaaS spinner. Always removed before the real reply (success), the
@@ -864,6 +935,15 @@ async function sendUserMessage(text) {
     typing.remove();
     // 5/26 Patrick (漏斗 Stage 1/2) — trial 撞 Day ≥ 2 → 402 → 轉去 CTA.
     if (e && e.status === 402) { location.hash = '#/upgrade'; return; }
+    // 6/3 Patrick (Vivi burst protection) — Anthropic 429 overload.
+    //   Backend rolled back its INSERT + questions_today bump; we roll back our
+    //   optimistic state push (bubble stays in DOM — Vivi spec 不 commit). Show
+    //   the friendly hint + 30s retry button.
+    if (isOverloadError(e)) {
+      state.conversation.pop();
+      showOverloadHint(text);
+      return;
+    }
     // §六: 米棕色平靜 inline message (not red banner)
     const div = document.createElement('div');
     div.className = 'hint-italic';

@@ -820,3 +820,97 @@ test('🛑 chat.js: response payload includes depthSignal field', () => {
   assert.match(src, /res\.status\(200\)\.json\(\{[\s\S]*?depthSignal[\s\S]*?\}\)/,
     'chat.js must include depthSignal in the 200 response payload');
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/3 Patrick (Vivi burst protection) — Anthropic retry + 503 overload wiring.
+// pure helper behavior fully covered in lib/api/anthropic-retry.test.js;
+// here we just grep-lock that chat.js wires it + ships 503 with the right shape.
+// ═════════════════════════════════════════════════════════
+
+test('🛑 chat.js: imports callAnthropicWithRetry from lib/api/anthropic-retry.js', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  assert.match(src, /import \{ callAnthropicWithRetry \} from '\.\.\/lib\/api\/anthropic-retry\.js'/,
+    'chat.js must import the retry helper');
+});
+
+test('🛑 chat.js: Step 9 Anthropic call wrapped by callAnthropicWithRetry', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // The main /api/chat handler must use the retry helper.
+  // (generateDamonNote / generateNotebookPage v4 legacy helpers still call the
+  // raw SDK — those run under finalize-day, separate error path. Out of scope.)
+  assert.match(src, /const callResult = await callAnthropicWithRetry\(getAnthropic\(\), \{/,
+    'chat.js handler Step 9 must call callAnthropicWithRetry, not raw SDK');
+  // The retry-wrapped call must come BEFORE any legacy raw .messages.create
+  // (handler comes before exported v4 helpers in the file).
+  const idxWrapped = src.indexOf('await callAnthropicWithRetry(');
+  const idxFirstRaw = src.search(/await getAnthropic\(\)\.messages\.create\(/);
+  if (idxFirstRaw >= 0) {
+    assert.ok(idxWrapped < idxFirstRaw,
+      'wrapped call (handler Step 9) must come before any legacy raw helper call');
+  }
+});
+
+test('🛑 chat.js: 503 overload path returns Vivi-spec error shape', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // 503 status + error='overload' + 友善 message (per Vivi 6/3 spec).
+  assert.match(src,
+    /res\.status\(503\)\.json\(\{[\s\S]*?error:\s*'overload'[\s\S]*?message:\s*'教練此刻太多人在對話、請 30 秒後再送一次。'[\s\S]*?\}\)/,
+    'chat.js must return 503 with { error: "overload", message: ...友善訊息 }');
+});
+
+test('🛑 chat.js: overload path rolls back the user message INSERT (no double-INSERT on retry)', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // DELETE the latest user message for this session (ORDER BY id DESC LIMIT 1
+  // subquery is the safe pattern — matches what we just inserted, even if
+  // question_number is not unique).
+  assert.match(src,
+    /DELETE FROM messages WHERE id = \(\s*SELECT id FROM messages\s+WHERE session_id = \$\{sessionId\} AND role = 'user'\s+ORDER BY id DESC LIMIT 1\s*\)/,
+    'overload cleanup must DELETE the latest user message for this session');
+  // Decrement questions_today.
+  assert.match(src,
+    /UPDATE sessions SET questions_today = questions_today - 1[\s\S]*?WHERE id = \$\{sessionId\}/,
+    'overload cleanup must decrement questions_today');
+});
+
+test('🛑 chat.js: overload path is BEFORE Step 11b (no day_complete=TRUE WRITE on overload)', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // Vivi 6/3 spec: 「不要把 chat session row 標 day_complete=TRUE 或 takeaway_seeded」.
+  // The 503 return must appear lexically before the `UPDATE sessions SET
+  // day_complete = TRUE` WRITE (lines that just READ day_complete in earlier
+  // SELECTs are fine; only the WRITE is forbidden in the overload path).
+  const idx503 = src.indexOf("res.status(503)");
+  const idxDayCompleteWrite = src.search(/UPDATE sessions SET\s+day_complete\s*=\s*TRUE/);
+  assert.ok(idx503 > 0, '503 return must exist');
+  assert.ok(idxDayCompleteWrite > 0, 'UPDATE day_complete=TRUE must exist (Step 11b)');
+  assert.ok(idx503 < idxDayCompleteWrite,
+    'overload 503 return must come before the day_complete=TRUE write — 鐵則: turn 沒送出去 → 不寫完成狀態');
+});
+
+test('🛑 chat.js: overload path does NOT set _succeeded (lets finally rollback isNew row)', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // There must be exactly one `_succeeded = true` in the file, and it must be
+  // AFTER the 503 return (so the overload path skips it → finally A006 rollback fires).
+  const matches = [...src.matchAll(/_succeeded = true/g)];
+  assert.equal(matches.length, 1, 'exactly one _succeeded=true (happy path only)');
+  const idx503 = src.indexOf("res.status(503)");
+  assert.ok(matches[0].index > idx503,
+    '_succeeded=true must come AFTER the 503 return — overload path must NOT mark success');
+});

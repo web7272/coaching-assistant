@@ -32,6 +32,10 @@ import {
 } from '../lib/session/day-boundary.js';
 // 5/28 Patrick — A006 case fix: 殭屍 session row rollback decision helper.
 import { rollbackSessionIfNeeded } from '../lib/api/chat-rollback.js';
+// 6/3 Patrick (Vivi burst protection) — Anthropic 429 / 5xx 友善 handling + retry.
+//   429 → exponential backoff retry (1s/2s/4s, cap 8s). 全部退到底 → 回 503 overload.
+//   5xx → attempt 0 retry 一次. 仍失敗 → throw.
+import { callAnthropicWithRetry } from '../lib/api/anthropic-retry.js';
 // 5/29 Patrick — PRODUCT-TRUTH v2.3 §2.5: 採集深度視覺指示 (純函式、不影響 prompt).
 import { computeDepthSignal } from '../lib/api/depth-signal.js';
 // 5/29 Patrick (Vivi access gate) — is_blocked 入口檢查 + 30 天 window lazy expiry.
@@ -935,13 +939,51 @@ export default async function handler(req, res) {
       cachingEnabled,
     });
 
-    // Step 9 — Anthropic Sonnet call
-    const response = await getAnthropic().messages.create({
+    // Step 9 — Anthropic Sonnet call (with 429 backoff + 5xx 1-retry, 6/3 burst protection).
+    //   429 全退 → callResult.ok=false reason='overload' → cleanup turn-level
+    //   INSERT + 回 503 友善訊息. 其他 4xx / 5xx-after-retry → throw → 走原本 500 path.
+    const callResult = await callAnthropicWithRetry(getAnthropic(), {
       model: MODEL,
       max_tokens: 700,
       system: systemParam,
       messages,
     });
+
+    if (!callResult.ok && callResult.reason === 'overload') {
+      // 6/3 Patrick — Anthropic 429 exhausted (Vivi burst protection spec).
+      //   ⚠️ 純粹「這輪 turn 沒送出去」: 不寫 day_complete / takeaway_seeded /
+      //      session_state — 上面 Step 11 之前就 return. user 重試還在同一輪 turn.
+      //   Cleanup: roll back Step 6's user INSERT + questions_today bump
+      //            so retry 不會 double-INSERT (frontend 也不會把 message commit
+      //            進 state.conversation, 兩邊一起回到 turn 開始前的狀態).
+      //   isNew session row: 不 set _succeeded → finally rollback 自己會 DELETE
+      //                      (跟 A006 fix 同一條路徑).
+      if (!isKickoff) {
+        try {
+          await sql`
+            DELETE FROM messages WHERE id = (
+              SELECT id FROM messages
+               WHERE session_id = ${sessionId} AND role = 'user'
+               ORDER BY id DESC LIMIT 1
+            )
+          `;
+          await sql`
+            UPDATE sessions SET questions_today = questions_today - 1, updated_at = NOW()
+             WHERE id = ${sessionId}
+          `;
+        } catch (e) {
+          // 非致命 — 重點是回 503, 讓 frontend 顯示友善訊息.
+          console.error('[chat:overload] turn rollback failed (non-fatal):', e?.message || e);
+        }
+      }
+      console.warn(`[chat:overload] Anthropic exhausted after ${callResult.attempts} attempts, returning 503`);
+      return res.status(503).json({
+        error: 'overload',
+        message: '教練此刻太多人在對話、請 30 秒後再送一次。',
+      });
+    }
+
+    const response = callResult.data;
     const content = response.content[0].text;
     const usage = response.usage || {};
     const durationMs = Date.now() - requestStart;
