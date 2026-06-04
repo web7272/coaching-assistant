@@ -289,8 +289,9 @@ test('collectDetectorOutput: skips errored / skipped results', () => {
 });
 
 test('collectDetectorOutput: empty / nullish input → empty output', () => {
-  assert.deepEqual(collectDetectorOutput([]), { injects: [], patch: {} });
-  assert.deepEqual(collectDetectorOutput(null), { injects: [], patch: {} });
+  // ⭐ §3 patch 6/4 (safety patch #23) — shape extended with user_profile_increments.
+  assert.deepEqual(collectDetectorOutput([]), { injects: [], patch: {}, user_profile_increments: {} });
+  assert.deepEqual(collectDetectorOutput(null), { injects: [], patch: {}, user_profile_increments: {} });
 });
 
 test('collectDetectorOutput: later patch wins on key collision', () => {
@@ -299,6 +300,44 @@ test('collectDetectorOutput: later patch wins on key collision', () => {
     { id: 'b', ok: true, result: { patch: { router_phase: 'elicitation' } } },
   ]);
   assert.equal(out.patch.router_phase, 'elicitation');
+});
+
+// ⭐ §3 patch 6/4 (safety patch #23) — user_profile_increments collection.
+test('🛑 collectDetectorOutput: collects + sums user_profile_increments from handlers', () => {
+  const out = collectDetectorOutput([
+    { id: 'a', ok: true, result: {
+      handled: true, inject: '[A]',
+      user_profile_increments: { passive_death_wish_count: 1 },
+    }},
+    // Two handlers in one turn (edge case) — increments should accumulate, not last-wins.
+    { id: 'b', ok: true, result: {
+      handled: true, inject: '[B]',
+      user_profile_increments: { passive_death_wish_count: 1, some_other_counter: 2 },
+    }},
+  ]);
+  assert.deepEqual(out.user_profile_increments, {
+    passive_death_wish_count: 2,
+    some_other_counter: 2,
+  }, 'same key accumulates across handlers; new keys added');
+});
+
+test('🛑 collectDetectorOutput: ignores non-numeric / non-finite increments (defensive)', () => {
+  const out = collectDetectorOutput([
+    { id: 'a', ok: true, result: { user_profile_increments: {
+      passive_death_wish_count: 1,
+      bogus_string: 'lots',
+      bogus_nan: NaN,
+      bogus_inf: Infinity,
+    }}},
+  ]);
+  assert.deepEqual(out.user_profile_increments, { passive_death_wish_count: 1 });
+});
+
+test('collectDetectorOutput: handler without user_profile_increments → empty default', () => {
+  const out = collectDetectorOutput([
+    { id: 'a', ok: true, result: { handled: true, inject: '[A]', patch: { x: 1 } } },
+  ]);
+  assert.deepEqual(out.user_profile_increments, {});
 });
 
 // ═════════════════════════════════════════════════════════

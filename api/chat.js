@@ -529,6 +529,11 @@ export function buildSystemPromptArrayV5({
 export function collectDetectorOutput(results) {
   const injects = [];
   let patch = {};
+  // ⭐ §3 patch 6/4 (safety patch #23) — Collect cross-session counter deltas
+  //   so handlers can bump user_profile_evolution counters without direct DB
+  //   access. Drained by chat.js Step 12 → incrementUserProfileCounters.
+  //   Multiple detectors in one turn can each emit; same key → sum.
+  const user_profile_increments = {};
   for (const r of results || []) {
     if (!r || !r.ok || !r.result) continue;
     const out = r.result;
@@ -536,8 +541,15 @@ export function collectDetectorOutput(results) {
     if (out.handled === true && typeof out.inject === 'string' && out.inject.length > 0) {
       injects.push(out.inject);
     }
+    if (out.user_profile_increments && typeof out.user_profile_increments === 'object') {
+      for (const [k, v] of Object.entries(out.user_profile_increments)) {
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          user_profile_increments[k] = (user_profile_increments[k] || 0) + v;
+        }
+      }
+    }
   }
-  return { injects, patch };
+  return { injects, patch, user_profile_increments };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -907,6 +919,18 @@ export default async function handler(req, res) {
 
     const conditionalInjects = [];
     let detectorPatch = {};
+    // ⭐ §3 patch 6/4 (safety patch #23) — Cross-session counter deltas drained
+    //   from detector outputs (currently passive_death_wish_count from E3).
+    //   Forwarded to incrementUserProfileCounters at Step 12.
+    const userProfileIncrements = {};
+    const mergeIncrements = (inc) => {
+      if (!inc) return;
+      for (const [k, v] of Object.entries(inc)) {
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          userProfileIncrements[k] = (userProfileIncrements[k] || 0) + v;
+        }
+      }
+    };
 
     // 7a — new_session_day lifecycle（E4 day opening；handler 自己 gate 有無資產）
     //   PR-4c-green E4 fix: gate on session-state flag, not isNew (which only
@@ -917,6 +941,7 @@ export default async function handler(req, res) {
         const out = collectDetectorOutput(r);
         conditionalInjects.push(...out.injects);
         detectorPatch = { ...detectorPatch, ...out.patch };
+        mergeIncrements(out.user_profile_increments);
       } catch (e) {
         console.error('new_session_day dispatch failed:', e.message);
       }
@@ -932,6 +957,7 @@ export default async function handler(req, res) {
       const out = collectDetectorOutput(r);
       conditionalInjects.push(...out.injects);
       detectorPatch = { ...detectorPatch, ...out.patch };
+      mergeIncrements(out.user_profile_increments);
     } catch (e) {
       console.error('user_turn dispatch failed:', e.message);
     }
@@ -1051,7 +1077,15 @@ export default async function handler(req, res) {
 
     // Step 12 — user_profile lifecycle + chat_usage_log（fail-soft）
     try {
-      await incrementUserProfileCounters(studentId, { gapDays: gap_days, isNewDay: isNew });
+      await incrementUserProfileCounters(studentId, {
+        gapDays: gap_days,
+        isNewDay: isNew,
+        // ⭐ §3 patch 6/4 (safety patch #23) — Cross-session passive death wish
+        //   counter accumulated by E3 deep-signal handler this turn (0 when no
+        //   detection). state-manager fail-opens on missing column so pre-
+        //   migration runs don't break safety detection.
+        passiveDwIncrement: userProfileIncrements.passive_death_wish_count || 0,
+      });
     } catch (e) {
       console.error('incrementUserProfileCounters failed:', e.message);
     }
