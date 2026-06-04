@@ -1245,6 +1245,15 @@ export default async function handler(req, res) {
         //   detection). state-manager fail-opens on missing column so pre-
         //   migration runs don't break safety detection.
         passiveDwIncrement: userProfileIncrements.passive_death_wish_count || 0,
+        // ⭐ v5.1 Step 5a — 5 cross-session signal counters (migration 026).
+        //   Same fail-open pattern. Engine-1 emits these per-turn via signal detectors.
+        signalIncrements: {
+          external_locus_signals:          userProfileIncrements.external_locus_signals          || 0,
+          passive_hope_signals:            userProfileIncrements.passive_hope_signals            || 0,
+          frequency_illusion_signals:      userProfileIncrements.frequency_illusion_signals      || 0,
+          conditional_worth_signals:       userProfileIncrements.conditional_worth_signals       || 0,
+          negative_generalization_signals: userProfileIncrements.negative_generalization_signals || 0,
+        },
       });
     } catch (e) {
       console.error('incrementUserProfileCounters failed:', e.message);
