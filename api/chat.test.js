@@ -103,10 +103,11 @@ test('🛑 buildCarryOverState: never carries a transient field even if prior ha
 // buildDynamicContext
 // ─────────────────────────────────────────────────────────
 
-test('buildDynamicContext: includes current_phase + phase context text', () => {
-  const txt = buildDynamicContext({ current_phase: 'phase_3b' }, {}, 0);
-  assert.match(txt, /current_phase：phase_3b/);
-  assert.match(txt, /Self-Concept/);  // from phase-context.js phase_3b
+test('buildDynamicContext: includes primary_mode + mode context text (PR-23s4b)', () => {
+  // PR-23s4b: current_phase → primary_mode; integration mode 取代 phase_3b Self-Concept.
+  const txt = buildDynamicContext({ primary_mode: 'integration' }, {}, 0);
+  assert.match(txt, /primary_mode：integration/);
+  assert.match(txt, /Self-Concept/);  // from mode-context.js integration block
 });
 
 test('buildDynamicContext: surfaces top1_value + gap_days', () => {
@@ -531,27 +532,27 @@ test('shouldDispatchDayOpening: falsy flag → still dispatch', () => {
   assert.equal(shouldDispatchDayOpening({ day_opening_done_this_session: 0 }),     true);
 });
 
-test('🛑 buildDynamicContext: phase_1 + opening + day_opening_inject_active=true → deferred variant (suppresses 起手式)', () => {
-  // The whole reason for this fix: E4 fired, set the flag, contextFor must
-  // return the "defer to inject" variant — not the cold 起手式 that competed
-  // with the inject and won on A001 Day 2.
+test('🛑 buildDynamicContext: elicitation + opening + day_opening_inject_active=true → deferred variant (suppresses 起手式) (PR-23s4b)', () => {
+  // PR-23s4b: phase_1 → primary_mode=elicitation. E4 fired, flag set,
+  // modeContextFor returns the "defer to inject" variant — not the cold 起手式
+  // that competed with the inject and won on A001 Day 2.
   const txt = buildDynamicContext(
     {
-      current_phase: 'phase_1',
+      primary_mode: 'elicitation',
       router_phase: 'opening',
       day_opening_inject_active: true,
     },
     {}, 1,
   );
   assert.match(txt, /\[SYSTEM INJECT — Day Opening Active Reference\][\s\S]*?主導開場/);
-  assert.match(txt, /不另起 phase_1 起手式/);
+  assert.match(txt, /不另起 elicitation 冷起手式/);
   assert.doesNotMatch(txt, /在你的生命裡、你想要什麼\?/,
     '冷起手式必須消失（compete with E4 inject 就是這個 bug 的根）');
 });
 
-test('buildDynamicContext: phase_1 + opening + no flag → cold 起手式 (Day 1 unchanged)', () => {
+test('buildDynamicContext: elicitation + opening + no flag → cold 起手式 (Day 1 unchanged)', () => {
   const txt = buildDynamicContext(
-    { current_phase: 'phase_1', router_phase: 'opening' },
+    { primary_mode: 'elicitation', router_phase: 'opening' },
     {}, 0,
   );
   assert.match(txt, /起手式「在你的生命裡、你想要什麼\?」/);

@@ -40,14 +40,11 @@ import { callAnthropicWithRetry } from '../lib/api/anthropic-retry.js';
 import { computeDepthSignal } from '../lib/api/depth-signal.js';
 // 5/29 Patrick (Vivi access gate) — is_blocked 入口檢查 + 30 天 window lazy expiry.
 import { isBlocked, shouldExpireBetaWindow, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
-import { contextFor } from '../lib/session/phase-context.js';
-// v5.0 (spec 09 §12)：對話 phase 天數驅動 (checkAdvance retired at runtime).
-import { phaseForDay, phaseEntryPatch } from '../lib/session/phase-advance.js';
-// ⭐ v5.1 Step 4 PR-23s4a — mode-tracker dual-write coexistence.
-//   read mode state with router_phase fallback (空窗期保護: migration 025 跑完
-//   後新 session 可能還沒寫 mode keys, 此處即時 derive + 持久化).
-//   phase-machine 仍寫 router_phase / current_phase (PR-23s4b 才廢除).
-//   transition logging + 主動 mode 切換 = task 1 (mode-transition-router) 接管.
+// ⭐ v5.1 Step 4 PR-23s4b — phase-context retired. mode-context 取代.
+import { modeContextFor } from '../lib/session/mode-context.js';
+// ⭐ v5.1 Step 4 PR-23s4b — phase-advance / phase-machine 退役 (廢除).
+//   chat.js Step 5b (phaseForDay + phaseEntryPatch 天數驅動) 已刪除.
+//   mode 流動由 detector handlers (尤其 mode-transition-router) 完全接管.
 import {
   readModeState, buildModeStatePatch, checkActiveModesLimit,
 } from '../lib/session/mode-tracker.js';
@@ -416,14 +413,23 @@ async function loadOrCreateSession(sql, {
  * @returns {string}
  */
 export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays = 0) {
-  const phase = sessionState.current_phase || 'phase_1';
+  // ⭐ v5.1 Step 4 PR-23s4b — primary_mode 取代 current_phase.
+  //   readModeState 走 fallback (legacy router_phase / null state → elicitation).
+  const modeRead = readModeState(sessionState);
+  const primaryMode = modeRead.primary_mode;
   const lines = ['━━━ 本場學員狀態（runtime、不快取）━━━'];
 
   const top1 = userProfile.top1_value || sessionState.top1_value || null;
   const anchors = Array.isArray(userProfile.anchors) ? userProfile.anchors : [];
   const ranking = Array.isArray(userProfile.values_ranking) ? userProfile.values_ranking : [];
 
-  lines.push(`current_phase：${phase}`);
+  lines.push(`primary_mode：${primaryMode}`);
+  if (Array.isArray(modeRead.active_modes) && modeRead.active_modes.length > 1) {
+    lines.push(`active_modes：${modeRead.active_modes.join(', ')}`);
+  }
+  if (Array.isArray(modeRead.paused_modes) && modeRead.paused_modes.length > 0) {
+    lines.push(`paused_modes：${modeRead.paused_modes.join(', ')}`);
+  }
   lines.push(`session_day_count：${userProfile.session_day_count ?? 0}｜gap_days：${gapDays}`);
   if (top1) lines.push(`top1_value：${top1}`);
   if (ranking.length) {
@@ -473,14 +479,14 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
     lines.push('昨天的素材：（無真實素材 — 走安全暖開場、絕對不杜撰「你昨天說…」）');
   }
 
-  // {{current_phase_context}} — PR-4c-1b：phase_1 router_phase-aware
-  // (opening 變體含起手式 / elicitation 變體用鏈式追問、避免開場重複)
-  // PR-4c-green E4 fix: when E4 day-opening inject is active, swap the cold
-  // 起手式 variant for the "defer to inject" variant — see contextFor opts.
-  const phaseCtx = contextFor(phase, sessionState.router_phase, {
+  // {{current_mode_context}} — v5.1 Step 4 PR-23s4b:
+  //   modeContextFor 取代 contextFor. elicitation mode router_phase-aware variant
+  //   (opening 含起手式 / elicitation 鏈式追問) for transitional dual-write compat.
+  //   E4 day-opening inject active 時走 deferred variant (避免冷起手式 collide).
+  const modeCtx = modeContextFor(primaryMode, sessionState.router_phase, {
     dayOpeningInjectActive: !!sessionState.day_opening_inject_active,
   });
-  if (phaseCtx) lines.push('\n' + phaseCtx);
+  if (modeCtx) lines.push('\n' + modeCtx);
 
   // Integration Retention conditional（spec 04 §5）
   if (sessionState.integration_retention_mode_active) {
@@ -875,23 +881,13 @@ export default async function handler(req, res) {
     _rollbackSessionId = isNew ? sessionId : null;
     let { turnCount, sessionState } = sess;
 
-    // Step 5b — v5.0 天數驅動 phase (取代壞掉的 checkAdvance、見 spec 09 §12)
-    // current_phase 由 sessionDay 定、每 turn 重算 (自我修復卡住的舊狀態);
-    // 跨階時用 phaseEntryPatch re-init phase-scoped 進度 + 歸零 takeaway count.
-    //
-    // ⚠️ v5.1 Step 4 PR-23s4a deprecated note: phase-machine + mode-tracker coexist
-    //    during transition. phase-machine keeps writing current_phase / router_phase
-    //    so legacy detectors stay green. mode-tracker dual-writes primary_mode /
-    //    active_modes / paused_modes (Step 5c below). Full retirement of
-    //    phase-machine + chat.js Step 5b deletion = PR-23s4b.
-    const dayPhase = phaseForDay(sess.sessionDay);
-    const isPhaseEntry = sessionState.current_phase !== dayPhase;
-    const dayPhasePatch = isPhaseEntry
-      ? phaseEntryPatch(dayPhase)
-      : { current_phase: dayPhase };
-    sessionState = { ...sessionState, ...dayPhasePatch };
+    // Step 5b 已刪除 (PR-23s4b 完成 phase-machine 退役):
+    //   原 phaseForDay / phaseEntryPatch 天數驅動 phase 推進邏輯廢除.
+    //   mode 流動完全由 detector handlers (尤其 mode-transition-router) 接管.
+    //   dayPhasePatch 不再存在 (空 object 替代 in fullPatch merge below).
+    const dayPhasePatch = {};
 
-    // ⭐ Step 5c — v5.1 mode-tracker dual-write (PR-23s4a, task 6).
+    // ⭐ Step 5c — v5.1 mode-tracker (PR-23s4b 正式接管).
     //   read mode state with router_phase fallback (migration 025 covered
     //   pre-existing sessions; new sessions created during this transitional
     //   window need read-time derive + write-back so DB rows progressively
