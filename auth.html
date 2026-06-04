@@ -71,6 +71,9 @@
   //   Landing 是獲客流 (新訪客 + 問卷), /login 是回頭流 (已認識品牌、只要新連結).
   //   過期 magic link user 不該被逼回 Landing 重填問卷.
   function fail(msg, sub) {
+    // 6/4 Patrick — #auth-status 是 .conv-waiting(flex 橫排、給 ✦+loading 字用).
+    // 錯誤訊息塞進去會被排成一橫列、字擠成直的. 清掉 class 回到 block 直排.
+    status.className = '';
     status.innerHTML = '';
     const p = document.createElement('p');
     p.className = 'hint-italic';
@@ -94,8 +97,8 @@
     btn.style.padding = '10px 22px';
     btn.textContent = '寄新連結 →';
     status.appendChild(btn);
-    // 10 秒後自動跳(讀完還沒按就幫他). 跳 /login 不跳 Landing.
-    setTimeout(() => { location.href = '/login.html'; }, 10000);
+    // 6/4 Vivi — 移除 10s auto-redirect: 頁面修好(看得見)之後、讀到一半被強制跳走
+    // 反而像故障. 按鈕就是唯一出路、使用者自己按.
   }
 
   if (!token) {
