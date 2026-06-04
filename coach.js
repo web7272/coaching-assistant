@@ -43,10 +43,13 @@ function _matchesCoachFilter(s, filter, now) {
   const day     = Number.isFinite(s.effective_day) ? s.effective_day
                 : Number.isFinite(s.current_day)   ? s.current_day
                 : 0;
+  const daysDone = Number.isFinite(s.days_completed) ? s.days_completed : 0;
   switch (filter) {
     case 'beta':     return beta;
     case 'blocked':  return blocked;
-    case 'active':   return !beta && !blocked;
+    // 6/3 Vivi — active 重定義成「進行中 = !blocked && 至少完成 Day 1 && 沒 finish」.
+    // 排除「點了 Day 1 但沒完成」(days_completed=0) 的人.
+    case 'active':   return !blocked && daysDone >= 1 && day < _COACH_FINISHED_DAY;
     case 'finished': return day >= _COACH_FINISHED_DAY;
     case 'at_risk': {
       if (blocked || day >= _COACH_FINISHED_DAY) return false;
@@ -70,7 +73,7 @@ const COACH_FILTER_LABELS = {
   all:       '全部',
   beta:      '封測者',
   blocked:   '已停用',
-  active:    '正式版',
+  active:    '進行中',
   finished:  '已完成 Day 21',
   at_risk:   '14+ 天沒動',
 };
