@@ -1157,14 +1157,22 @@ export default async function handler(req, res) {
     // 0..5 採集深度的 snapshot, 從 merged stateForPrompt + turnCount 算.
     // frontend 自己維持 watermark (走過不會倒退), 此處只回 snapshot.
     const depthSignal = computeDepthSignal(stateForPrompt, turnCount);
+    // PR-23s4b — phase concept retired; response surfaces mode + transition flag.
+    //   phase / phaseAdvanced / routerPhase kept as field names for response-shape
+    //   backward compat (no current frontend consumer; safe-to-rename if 確認).
+    const phaseAdvancedThisTurn = Array.isArray(detectorPatch?.mode_transition_log)
+      && detectorPatch.mode_transition_log.length
+         > (Array.isArray(sessionState?.mode_transition_log)
+              ? sessionState.mode_transition_log.length : 0);
     return res.status(200).json({
       content,
       turnCount,
       sessionId,
-      // v5.0 spec 09 §12 — phase is天數-driven; phaseAdvanced=true at the cross-day boundary turn.
-      phase: stateForPrompt.current_phase,
+      // PR-23s4b: phase → primary_mode (field name kept for response-shape compat).
+      phase: stateForPrompt.primary_mode || null,
       routerPhase: fullPatch.router_phase || sessionState.router_phase || null,
-      phaseAdvanced: isPhaseEntry,
+      // PR-23s4b: phaseAdvanced 改由本 turn mode transition 是否 emit log 決定.
+      phaseAdvanced: phaseAdvancedThisTurn,
       // PR-4c：session_end 寫活、frontend 依 dayComplete=true 觸發 §5.2 轉場 + POST /api/finalize-day
       dayComplete,
       notesGenerating: dayComplete,
