@@ -113,7 +113,12 @@ async function loadFeatureFlags(sql) {
   } catch (e) {
     console.error('[flags] load failed, fallback to env:', e.message);
     _flagsCache = {
-      PROMPT_CACHING: process.env.FEATURE_PROMPT_CACHING === 'true',
+      // 6/3 Patrick (Vivi burst protection spec) — default ON.
+      //   Cached prefix 5K tokens × Day-1 burst 50-200 並發 → without caching
+      //   blow Tier 2 input TPM (80K) in < 1 min. cache_read 0.1× billed +
+      //   不算 TPM 配額 → 實質容量 +5-10×. Explicit kill switch:
+      //   FEATURE_PROMPT_CACHING='false' env OR feature_flags row enabled=FALSE.
+      PROMPT_CACHING: process.env.FEATURE_PROMPT_CACHING !== 'false',
     };
     _flagsCacheTime = Date.now();
   }
@@ -734,7 +739,13 @@ export default async function handler(req, res) {
     // Step 3 — SQL + flags
     sql = neon(process.env.DATABASE_URL);
     const flags = await loadFeatureFlags(sql);
-    const cachingEnabled = flags.PROMPT_CACHING === true;
+    // 6/3 Patrick (Vivi burst protection) — caching default ON; explicit FALSE
+    // in feature_flags row turns it OFF (kill switch preserved). Missing row
+    // OR env unset → ON. cachingEnabled flips buildSystemPromptArrayV5's path
+    // to the 4-section + cache_control breakpoint array (lib/prompt-sections/
+    // cached/*: damon-core 1900t + 5-layer 600t + 4-7 router 1700t + active-
+    // ref 800t = ~5000 tokens cached). cache_read 0.1× billed + 不算 TPM 配額.
+    const cachingEnabled = flags.PROMPT_CACHING !== false;
 
     // Step 4 — user profile + pace + new_session_day 偵測
     let userProfile = null;

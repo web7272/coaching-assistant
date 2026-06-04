@@ -914,3 +914,47 @@ test('🛑 chat.js: overload path does NOT set _succeeded (lets finally rollback
   assert.ok(matches[0].index > idx503,
     '_succeeded=true must come AFTER the 503 return — overload path must NOT mark success');
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/3 Patrick (Vivi burst protection) — Prompt caching default-ON wiring.
+// Architecture: buildSystemPromptArrayV5 already wires cache_control breakpoint
+// on the last cached prefix section (lib/prompt-sections/cached/*, ~5000 tokens
+// total). cachingEnabled flag flips between merged-single-block (off) vs
+// 4-cached-sections-+-1-dynamic (on). The only thing this push changes is the
+// DEFAULT: missing feature_flags row OR unset env → ON (was OFF).
+//
+// Pure helper behavior (cache_control shape, breakpoint placement) covered
+// in the existing 'buildSystemPromptArrayV5' tests above; here we lock the
+// default flag semantic in the handler.
+// ═════════════════════════════════════════════════════════
+
+test('🛑 chat.js: cachingEnabled defaults to ON (flags.PROMPT_CACHING !== false, not === true)', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // The handler must use `!== false` (default-ON) not `=== true` (default-OFF).
+  // This is the single character flip that ships 5-10× TPM headroom for the
+  // Day 1 burst (Vivi 6/3 spec).
+  assert.match(src,
+    /const cachingEnabled = flags\.PROMPT_CACHING !== false/,
+    'chat.js handler must default cachingEnabled to ON (use !== false, NOT === true)');
+  // Belt-and-suspenders: there must NOT be a `=== true` reading of PROMPT_CACHING
+  // anywhere (would silently default-OFF).
+  assert.doesNotMatch(src,
+    /flags\.PROMPT_CACHING === true/,
+    'chat.js must NOT default-OFF (no `flags.PROMPT_CACHING === true` pattern)');
+});
+
+test('🛑 chat.js: env fallback also default-ON (FEATURE_PROMPT_CACHING !== "false")', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // When the feature_flags SQL query fails, the in-memory fallback must also
+  // default ON. Otherwise a transient Neon hiccup silently turns off caching
+  // (worst case: during the actual burst).
+  assert.match(src,
+    /PROMPT_CACHING: process\.env\.FEATURE_PROMPT_CACHING !== 'false'/,
+    'env fallback must default-ON (use !== "false", NOT === "true")');
+});
