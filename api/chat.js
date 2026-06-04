@@ -43,6 +43,14 @@ import { isBlocked, shouldExpireBetaWindow, BLOCKED_RESPONSE } from '../lib/api/
 import { contextFor } from '../lib/session/phase-context.js';
 // v5.0 (spec 09 §12)：對話 phase 天數驅動 (checkAdvance retired at runtime).
 import { phaseForDay, phaseEntryPatch } from '../lib/session/phase-advance.js';
+// ⭐ v5.1 Step 4 PR-23s4a — mode-tracker dual-write coexistence.
+//   read mode state with router_phase fallback (空窗期保護: migration 025 跑完
+//   後新 session 可能還沒寫 mode keys, 此處即時 derive + 持久化).
+//   phase-machine 仍寫 router_phase / current_phase (PR-23s4b 才廢除).
+//   transition logging + 主動 mode 切換 = task 1 (mode-transition-router) 接管.
+import {
+  readModeState, buildModeStatePatch, checkActiveModesLimit,
+} from '../lib/session/mode-tracker.js';
 import {
   updateState, getUserProfile, incrementUserProfileCounters,
 } from '../lib/state/state-manager.js';
@@ -870,12 +878,46 @@ export default async function handler(req, res) {
     // Step 5b — v5.0 天數驅動 phase (取代壞掉的 checkAdvance、見 spec 09 §12)
     // current_phase 由 sessionDay 定、每 turn 重算 (自我修復卡住的舊狀態);
     // 跨階時用 phaseEntryPatch re-init phase-scoped 進度 + 歸零 takeaway count.
+    //
+    // ⚠️ v5.1 Step 4 PR-23s4a deprecated note: phase-machine + mode-tracker coexist
+    //    during transition. phase-machine keeps writing current_phase / router_phase
+    //    so legacy detectors stay green. mode-tracker dual-writes primary_mode /
+    //    active_modes / paused_modes (Step 5c below). Full retirement of
+    //    phase-machine + chat.js Step 5b deletion = PR-23s4b.
     const dayPhase = phaseForDay(sess.sessionDay);
     const isPhaseEntry = sessionState.current_phase !== dayPhase;
     const dayPhasePatch = isPhaseEntry
       ? phaseEntryPatch(dayPhase)
       : { current_phase: dayPhase };
     sessionState = { ...sessionState, ...dayPhasePatch };
+
+    // ⭐ Step 5c — v5.1 mode-tracker dual-write (PR-23s4a, task 6).
+    //   read mode state with router_phase fallback (migration 025 covered
+    //   pre-existing sessions; new sessions created during this transitional
+    //   window need read-time derive + write-back so DB rows progressively
+    //   stop relying on the fallback path).
+    //   No mode-transition decisions here — task 1 mode-transition-router will
+    //   own that. This step just ensures the mode keys exist with sane values.
+    const modeRead = readModeState(sessionState);
+    if (modeRead.was_fallback) {
+      console.info('[mode-tracker][fallback]', JSON.stringify({
+        event: 'derived_from_router_phase',
+        primary_mode: modeRead.primary_mode,
+        router_phase: sessionState.router_phase ?? null,
+      }));
+    }
+    // active_modes limit sanity (defensive — caller should never see this
+    // unless something upstream wrote >3 modes by accident).
+    const modeLimitCheck = checkActiveModesLimit(modeRead);
+    if (!modeLimitCheck.ok) {
+      console.warn('[mode-tracker][invariant]', JSON.stringify({
+        event: 'active_modes_invariant_violation',
+        reason: modeLimitCheck.reason,
+        count: modeLimitCheck.count,
+      }));
+    }
+    const modeStatePatch = buildModeStatePatch(modeRead);
+    sessionState = { ...sessionState, ...modeStatePatch };
 
     // Step 6 — INSERT user message + bump questions_today
     // PR-4c-4c: skip both for kickoff (synthetic sentinel is not real student content)
@@ -1051,7 +1093,11 @@ export default async function handler(req, res) {
       stateForPrompt, detectorPatch, advancePatch: {},
     }) || {};
 
-    const fullPatch = { ...detectorPatch, ...dayPhasePatch, ...turnPatch, ...autoRouterPatch };
+    // ⭐ v5.1 Step 4 PR-23s4a — mode-tracker dual-write: mode keys merged into
+    // fullPatch so they persist via updateState. modeStatePatch is computed in
+    // Step 5c (read with router_phase fallback). detector handlers can later
+    // override primary_mode (e.g. signal_cascade → crisis) via their own patch.
+    const fullPatch = { ...modeStatePatch, ...detectorPatch, ...dayPhasePatch, ...turnPatch, ...autoRouterPatch };
     try {
       await updateState(sessionId, fullPatch);
     } catch (e) {
