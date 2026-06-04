@@ -22,10 +22,27 @@
   <!-- View 1: 學員清單 -->
   <section id="coach-view-list">
     <div class="coach-section">
-      <h2 class="coach-h2">學員 · 全部</h2>
+      <h2 class="coach-h2" id="coach-list-title">學員 · 全部</h2>
       <p class="muted" style="font-family:var(--font-sans);font-size:12px;margin-bottom:14px;">
         點任一行 → 看該學員的旅程 / 筆記 / 寶藏（5 phase report）/ 結業。
       </p>
+      <!-- 6/3 Patrick — filter 下拉 (純 client-side, 不 re-fetch) -->
+      <div class="coach-filter-bar"
+           style="margin-bottom:14px;font-family:var(--font-sans);font-size:12px;">
+        <label for="coach-filter" style="color:var(--text-secondary);margin-right:6px;">顯示</label>
+        <select id="coach-filter"
+                style="padding:5px 10px;font-family:var(--font-sans);font-size:12px;
+                       background:var(--paper-card);border:0.5px solid var(--border-line);
+                       border-radius:6px;color:var(--text-primary);cursor:pointer;">
+          <option value="all">全部</option>
+          <option value="beta">封測者</option>
+          <option value="blocked">已停用</option>
+          <option value="active">正式版</option>
+          <option value="finished">已完成 Day 21</option>
+          <option value="at_risk">14+ 天沒動</option>
+        </select>
+        <span id="coach-list-count" style="margin-left:10px;color:var(--text-faint);"></span>
+      </div>
       <div class="coach-list" id="coach-students-list"></div>
     </div>
   </section>

@@ -28,6 +28,100 @@ function roman(n) { return ['I', 'II', 'III', 'IV', 'V'][n - 1] || ''; }
 const PHASE_NAMES = ['找到你真正要的', '你是誰', '擴大地圖', '串連起來', '放手帶著走'];
 
 // ─── list view ─────────────────────────────────────────────────────
+// 6/3 Patrick — filter (純 client-side):
+//   payload 一次 fetch, 切換 filter 不 re-fetch — UX 即時 + 不打 DB.
+//   filter 邏輯抽到 lib/util/coach-filter.js, lib/util/coach-filter.test.js 鎖.
+//   coach.js 是 classic-script loader, 不能 import lib ESM, 內聯同份邏輯.
+const _COACH_AT_RISK_DAYS = 14;
+const _COACH_FINISHED_DAY = 21;
+const _COACH_DAY_MS = 24 * 60 * 60 * 1000;
+function _matchesCoachFilter(s, filter, now) {
+  if (!s || typeof s !== 'object') return false;
+  if (!filter || filter === 'all') return true;
+  const beta    = s.is_beta    === true;
+  const blocked = s.is_blocked === true;
+  const day     = Number.isFinite(s.effective_day) ? s.effective_day
+                : Number.isFinite(s.current_day)   ? s.current_day
+                : 0;
+  switch (filter) {
+    case 'beta':     return beta;
+    case 'blocked':  return blocked;
+    case 'active':   return !beta && !blocked;
+    case 'finished': return day >= _COACH_FINISHED_DAY;
+    case 'at_risk': {
+      if (blocked || day >= _COACH_FINISHED_DAY) return false;
+      if (!s.last_active) return false;
+      const lastMs = new Date(s.last_active).getTime();
+      if (!Number.isFinite(lastMs)) return false;
+      const nowMs = now instanceof Date ? now.getTime()
+                  : Number.isFinite(now) ? now
+                  : Date.now();
+      return (nowMs - lastMs) >= _COACH_AT_RISK_DAYS * _COACH_DAY_MS;
+    }
+    default: return true;
+  }
+}
+
+// Module-level cache: fetched students + last filter choice.
+let _coachStudentsCache = null;
+let _coachFilterChoice  = 'all';
+
+const COACH_FILTER_LABELS = {
+  all:       '全部',
+  beta:      '封測者',
+  blocked:   '已停用',
+  active:    '正式版',
+  finished:  '已完成 Day 21',
+  at_risk:   '14+ 天沒動',
+};
+
+function _renderCoachList(students, filter) {
+  const list = document.getElementById('coach-students-list');
+  const countEl = document.getElementById('coach-list-count');
+  const titleEl = document.getElementById('coach-list-title');
+  if (!list) return;
+  list.innerHTML = '';
+  const filtered = students.filter(s => _matchesCoachFilter(s, filter));
+  if (countEl) {
+    countEl.textContent = filter === 'all'
+      ? `${filtered.length} 位`
+      : `${filtered.length} / ${students.length} 位`;
+  }
+  if (titleEl) {
+    titleEl.textContent = `學員 · ${COACH_FILTER_LABELS[filter] || '全部'}`;
+  }
+  if (filtered.length === 0) {
+    list.innerHTML = `<p class="muted" style="padding:14px;">這個分類沒有學員。</p>`;
+    return;
+  }
+  for (const s of filtered) {
+    const row = document.createElement('div');
+    row.className = 'coach-list__row';
+    row.tabIndex = 0;
+    // 6/3 Patrick — 顯示 is_beta / is_blocked pills (兩個都沒勾就什麼都不顯示).
+    const pills = [];
+    if (s.is_beta === true) {
+      pills.push(`<span class="coach-pill coach-pill--beta">封測</span>`);
+    }
+    if (s.is_blocked === true) {
+      pills.push(`<span class="coach-pill coach-pill--blocked">已停用</span>`);
+    }
+    const pillsHtml = pills.length
+      ? `<div class="coach-list__tags">${pills.join('')}</div>`
+      : `<div class="coach-list__tags"></div>`;
+    row.innerHTML = `
+      <div class="coach-list__sid">${escapeText(s.student_id)}</div>
+      <div class="coach-list__email">${escapeText(s.email || '—')}</div>
+      ${pillsHtml}
+      <div class="coach-list__day">Day ${escapeText(s.effective_day ?? s.current_day ?? '—')}</div>
+      <div class="coach-list__open">看 →</div>`;
+    const open = () => { location.hash = `#/student/${encodeURIComponent(s.student_id)}`; };
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); open(); } });
+    list.appendChild(row);
+  }
+}
+
 async function renderList() {
   show('list');
   const list = document.getElementById('coach-students-list');
@@ -41,24 +135,21 @@ async function renderList() {
   // existing /api/students returns either { students: [...] } or [...] depending on shape;
   // tolerate both
   const students = Array.isArray(payload) ? payload : (payload.students || []);
+  _coachStudentsCache = students;
   if (students.length === 0) {
     list.innerHTML = `<p class="muted" style="padding:14px;">目前沒有學員。</p>`;
     return;
   }
-  for (const s of students) {
-    const row = document.createElement('div');
-    row.className = 'coach-list__row';
-    row.tabIndex = 0;
-    row.innerHTML = `
-      <div class="coach-list__sid">${escapeText(s.student_id)}</div>
-      <div class="coach-list__email">${escapeText(s.email || '—')}</div>
-      <div class="coach-list__day">Day ${escapeText(s.effective_day ?? s.current_day ?? '—')}</div>
-      <div class="coach-list__open">看 →</div>`;
-    const open = () => { location.hash = `#/student/${encodeURIComponent(s.student_id)}`; };
-    row.addEventListener('click', open);
-    row.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); open(); } });
-    list.appendChild(row);
+  // 6/3 Patrick — bind filter dropdown once. onchange 不 re-fetch, 用 cache.
+  const filterSel = document.getElementById('coach-filter');
+  if (filterSel) {
+    filterSel.value = _coachFilterChoice;
+    filterSel.onchange = () => {
+      _coachFilterChoice = filterSel.value || 'all';
+      if (_coachStudentsCache) _renderCoachList(_coachStudentsCache, _coachFilterChoice);
+    };
   }
+  _renderCoachList(students, _coachFilterChoice);
 }
 
 // ─── student detail view ───────────────────────────────────────────

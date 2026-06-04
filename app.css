@@ -673,13 +673,22 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .coach-nav { font-family: var(--font-sans); font-size: 13px; color: var(--text-secondary); }
 .coach-nav a { margin-left: 14px; }
 .coach-list { display: grid; grid-template-columns: 1fr; gap: 8px; }
-.coach-list__row { display: grid; grid-template-columns: 110px 1fr 110px 88px; gap: 12px;
+/* 6/3 Patrick — list row grid: sid (110) / email (1fr) / tags (auto, min 110) /
+   day (90) / open (88). Tags column 顯 is_beta + is_blocked pills (空格也 reserve). */
+.coach-list__row { display: grid; grid-template-columns: 110px 1fr minmax(100px,auto) 90px 88px; gap: 12px;
   background: var(--paper-card); border: 0.5px solid var(--border-line); border-radius: 6px;
   padding: 12px 16px; align-items: center; font-family: var(--font-sans); font-size: 13px; color: var(--text-primary); cursor: pointer; }
 .coach-list__sid { font-family: var(--font-sans); font-size: 13px; letter-spacing: 0.5px; }
 .coach-list__email { color: var(--text-secondary); }
+.coach-list__tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .coach-list__day { font-family: var(--font-serif); font-size: 13px; }
 .coach-list__open { font-family: var(--font-serif); font-size: 13px; color: var(--text-secondary); text-align: right; }
+/* 6/3 Patrick — is_beta / is_blocked pill 樣式 (brand peach / 灰). */
+.coach-pill { display: inline-block; padding: 2px 9px; border-radius: 12px;
+  font-family: var(--font-sans); font-size: 11px; letter-spacing: 1px;
+  line-height: 1.5; white-space: nowrap; }
+.coach-pill--beta { background: rgba(214,130,106,.16); color: var(--coral-soft, #b96544); }
+.coach-pill--blocked { background: rgba(156,140,135,.18); color: var(--ink-dim, #9c8c87); }
 .coach-section { margin-top: 32px; }
 .coach-h2 { font-family: var(--font-serif); font-size: 14px; letter-spacing: 2px; color: var(--text-secondary); margin-bottom: 10px; }
 /* P5 (PR-4c-green): 3×7 daily only — 週報 I/II/III column retired (spec 09 §10).
