@@ -254,7 +254,12 @@ session_state.deep_signal_flags:
       worth_fiction_detected: bool,  # 「我不夠好 / 不配 / 沒價值」
       trauma_marker_detected: bool,  # 具體創傷事件描述 + 情緒密度高
       parts_resistance_detected: bool,  # 5 種 resistance 訊號
-      depth_judgment_score: 0-3       # Haiku A4 judge 輸出
+      depth_judgment_score: 0-3,      # Haiku A4 judge 輸出
+      # ⭐ safety patch #23 (Vivi 6/4 sign-off) — 新 4 欄
+      passive_dw_detected: bool,            # passive DW 訊號 (per turn reset)
+      passive_dw_signal: 'strong'|'implicit', # 命中類型 (per turn reset)
+      passive_dw_variant: 'strong'|'implicit'|'repeat'|'freeze', # 變體 C-1/C-2/C-3/C-4
+      passive_dw_cross_session_count: int   # mirror of user_profile_evolution
     }
   initial_value: {all false, score 0}
   scope: session-scoped
@@ -264,6 +269,48 @@ session_state.deep_signal_flags:
   reset_on:
     - deep_signal_handoff_resolved
     - new_session_day
+
+# ⭐ safety patch #23 (Vivi 6/4 sign-off) — 新增 user_profile_evolution 欄
+user_profile_evolution.passive_death_wish_count:
+  range: int
+  initial_value: 0
+  scope: cross-session (program-scoped)
+  update_rule: |
+    E3_deep_signal_detector 命中 passive 強訊號 / 隱性 + support / 隱性後學員答 real
+    → +1 per turn. 隱性後學員答「字面 / 哲學」 → 仍 +1 (觀察) per Vivi 6/4 折衷.
+  decay_per_turn: 0
+  reset_on: []  # 永不 reset, 跨 program 累積
+  migration: migration/024_passive_death_wish_count.sql
+
+# ⭐ safety patch #23 — A6 transition state (TODO 任務3 替 Crisis Mode SI SOP)
+session_state.passive_dw_implicit_pending:
+  range: bool
+  initial_value: false
+  scope: session-scoped
+  update_rule: |
+    - false → true: C-2 隱性訊號 fired, 等學員下 turn 答 framing.
+    - true → false: 下 turn handler 走 implicit_pending classifier 後清.
+  reset_on:
+    - new_session_day
+
+session_state.si_confirm_pending:
+  range: bool
+  initial_value: false
+  scope: session-scoped
+  update_rule: |
+    - false → true: C-1 強訊號 / C-2 升級 fired, 等學員下 turn 答 SI 直問.
+    - true → false: 下 turn handler 走 si_confirm classifier 後清.
+  reset_on:
+    - new_session_day
+
+session_state.passive_dw_frozen:
+  range: bool
+  initial_value: false
+  scope: session-scoped
+  update_rule: |
+    - false → true: C-4 freeze (count >= 5) OR SI confirm = confirm/ambiguous.
+                    AI 不再給推進選項、強制 only-(b) + HITL alert Vivi.
+  reset_on: []  # 一旦 freeze, 直到 Vivi 1-on-1 後手動清
 ```
 
 ### 3.7 opening_branch_handled
@@ -560,14 +607,40 @@ session_state.elicitation_mode_active:
   
   trigger_conditions:
     強訊號(任一即觸發):
-      - regex 命中具體創傷詞:"(虐待|遺棄|背叛|被打|被罵|霸凌|性侵|猥褻|暴力|親人過世|自殺)"
+      - regex 命中具體創傷詞:"(虐待|遺棄|背叛|被打|被罵|霸凌|性侵|猥褻|暴力|親人過世|自殺|上吊)"
+        # ⭐ safety patch #23 (Vivi 6/4): +上吊
       - A4.depth_signal_judge score >= 2(self-worth fiction 深度)
       - 強烈情緒突發 regex:"(哭|崩潰|受不了|喘不過氣|無法呼吸|腦袋空白|手抖)"
+      # ⭐ safety patch #23 (Vivi 6/4 sign-off) — 新 passive DW 強訊號
+      - PASSIVE_STRONG_REGEX:"(不想活|不想活下去|不想再活|不想繼續活|想結束生命|想離開這世界|希望.{0,5}死|希望.{0,5}離世|希望.{0,5}死亡|希望.{0,8}生病.{0,8}死|希望.{0,5}快點走|不會傷害自己.{0,5}希望)"
+        # 命中 → variant C-1 (SI confirm) 或 C-3/C-4 if count >= 3/5
     
     支持訊號(配合強訊號加權):
       - 反覆觸及同一童年事件(同一時間 marker 出現 ≥ 3 次跨 turn)
       - 「身體裡很(緊 / 痛 / 沉 / 重 / 壓)」+ 無法描述具體事件
       - Parts Integration 訊號(see resistance signals 清單)觸發 ≥ 3 次無進展
+      # ⭐ safety patch #23 (Vivi 6/4 sign-off) — 新 passive 隱性 + life signal 共現
+      - PASSIVE_IMPLICIT_REGEX:"(上天.{0,5}讓我活著|上天.{0,5}留我|沒有什麼可留戀|此生.{0,5}無憾|此生.{0,5}無所眷念|此生.{0,5}已.{0,5}夠了|此生.{0,5}已活夠|每活一天.{0,5}就是多活一天|沒有人.{0,5}牽掛|無所眷念|我.{0,5}沒有.{0,5}想做的)"
+        + SURFACE_LIFE_SIGNAL_REGEX:"(活下去|還想.{0,5}做|動力|意義|有想.{0,3}的|想完成|留下|留住|想活|還活)" 同 session last_3_turns 共現
+        → variant C-2 (字面 vs 感受). 單獨命中 (無 support) 不 trigger handoff,
+          視為純哲學表述 (區分由 last_3_turns 內 SURFACE_LIFE_SIGNAL 是否共現決定).
+  
+  # ⭐ safety patch #23 — 話術變體 C (Vivi 6/4 patch 原檔, verbatim 已 ship 在
+  # lib/prompt-sections/conditional/engine-3/deep-signal-detector.js
+  # prompt_content_passive_dw_{strong,implicit,implicit_philosophical,repeat,freeze}).
+  # 行為流:
+  #   1. 強訊號 → C-1 (承認 + 直問 SI). patch si_confirm_pending=true.
+  #      下 turn handler classifyStudentSIResponse(text):
+  #        deny → SI_DENY_INJECT (標準三選一 + 1925)
+  #        confirm / ambiguous (bias safety) → SI_CONFIRM_INJECT (only-(b) + HITL + freeze)
+  #   2. 隱性 + life signal → C-2 (區分字面 vs 感受). patch passive_dw_implicit_pending=true.
+  #      下 turn handler classifyImplicitFraming(text):
+  #        philosophical (字面 / 哲學) → C-2 light 1925 path (Vivi 6/4 折衷).
+  #          不開三選一. count 不再 +1 (已 +1 from C-2 fire). dashboard 算 false positive.
+  #        real (真的不想活) → escalate to C-1 (set si_confirm_pending, count++).
+  #        ambiguous → bias safety → escalate to C-1.
+  #   3. count >= 3 → C-3 (移除三選一 (c) 選項).
+  #   4. count >= 5 → C-4 freeze (強制 only-(b) + HITL alert Vivi + AI 凍結推進).
   
   prompt_content: |
     [SYSTEM INJECT — Deep Signal Detected]
@@ -630,6 +703,35 @@ session_state.elicitation_mode_active:
         Beta 階段監控訊號:depth_signal_flags 觸發率 < 5% session 是預期、
         但若 < 1% 可能 recall 太低、需要降低 depth_judgment_score 閾值。
         Forward reference: v5_beta_failure_signals_dashboard.md
+    # ⭐ safety patch #23 (Vivi 6/4 sign-off) — H4 / H5 passive DW 失敗模式
+    - id: H4
+      mode: "Passive death wish 隱性訊號誤判(『此生無憾』可能是疲憊隱喻、不是 ideation)"
+      例: "「我覺得我這輩子也夠了、好累」(完成感而非 passive ideation)"
+      mitigation: |
+        隱性訊號設計是「+ 配合至少一個支持訊號才觸發」(PASSIVE_IMPLICIT_REGEX
+        + SURFACE_LIFE_SIGNAL_REGEX 同 session last_3_turns 共現).
+        若仍誤判:變體 C-2 先 ask 學員確認字面 vs 感受、給糾正空間.
+        學員確認「哲學 / 疲憊隱喻」(Vivi 2026-06-04 折衷裁決):
+        → 不開三選一 handoff、但輕量提 1925 一句 + passive_death_wish_count 仍 +1(觀察)
+        → 連續 3 次「哲學表述」、dashboard 標 caution(可能漏判)
+      beta_monitoring:
+        - 隱性訊號 false positive rate < 30%(學員糾正為哲學表述的比率)
+        - 若 >= 30%:regex 過敏感、Beta 校準收緊
+        - tracker: lib/dashboard/passive-death-wish-tracker.js computeFalsePositiveRate
+    - id: H5
+      mode: "Day 1 / 早期 session 漏接 passive 訊號、後續 session 才接(A006 真實 case)"
+      例: "A006-D1「上天既然讓我活著」AI 短暫 probe 後繼續挖、Day 2 才 surface 直白 SI"
+      mitigation: |
+        隱性訊號 regex (PASSIVE_IMPLICIT_REGEX) + life signal 共現設計處理此事.
+        若 Beta 仍發生:
+        - 引擎 1 sensitivity 不足、漏抓 passive 訊號上游
+        - dashboard `passive_death_wish_recall_rate` 監控
+        - 若 recall < 70%:regex 擴充、HITL alert
+      beta_monitoring:
+        - Day 1 detected rate vs Day 2+ rate(Day 1 較低 = 漏抓)
+        - target: 漏抓 = 0(理想)、Beta < 10% acceptable
+        - > 15% → regex sensitivity audit
+        - tracker: lib/dashboard/passive-death-wish-tracker.js computeDay1MissRate
 ```
 
 ---

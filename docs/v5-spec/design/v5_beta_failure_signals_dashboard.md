@@ -399,6 +399,25 @@ critical_failure_modes:
       - deep_signal_flags 觸發率 / Beta cohort
       - HITL Vivi 反饋(學員實際是否有深創傷但 AI 漏偵)
     target: "深訊號觸發率 5-10%(過低 = 漏偵、過高 = 誤判)"
+
+  # ⭐ safety patch #23 (Vivi 6/4 sign-off) — passive death wish 失敗模式
+  H4_passive_death_wish_false_positive:
+    description: "Passive death wish 隱性訊號誤判為哲學 / 疲憊隱喻"
+    why_critical: "regex 過敏感 → 學員體驗為 AI 把哲學感慨當 SI risk, 信任流失"
+    monitoring:
+      - 變體 C-2 觸發後、學員糾正「字面意思」的比率
+      - tracker: lib/dashboard/passive-death-wish-tracker.js computeFalsePositiveRate
+    target: "false positive rate < 30% per Beta cohort"
+    redesign_trigger: ">= 30% → 隱性訊號 regex 過敏感、收緊"
+
+  H5_passive_death_wish_day1_miss:
+    description: "Day 1 / 早期 session 漏接 passive 訊號、後續 session 才接"
+    why_critical: "A006 真實 case — Day 1 漏抓 → AI 繼續挖 values 挖到 Landmine"
+    monitoring:
+      - 同學員 longitudinal:Day 1 false、Day 2+ true 的比率
+      - tracker: lib/dashboard/passive-death-wish-tracker.js computeDay1MissRate
+    target: "漏抓 = 0(理想)、Beta < 10% acceptable"
+    redesign_trigger: "> 15% → regex sensitivity 不足、擴充"
 ```
 
 ---
@@ -527,6 +546,59 @@ time_metrics:
     output: heatmap per cohort
 ```
 
+### 4.5 Passive Death Wish Metrics
+
+⭐ safety patch #23 (Vivi 6/4 sign-off). 對應 lib/dashboard/passive-death-wish-tracker.js
++ migration/024_passive_death_wish_count.sql + lib/state/handoff-escalation.js
+(PASSIVE_DW_ESCALATE_THRESHOLD=3 / PASSIVE_DW_FREEZE_THRESHOLD=5).
+
+```yaml
+passive_death_wish_metrics:
+
+  cross_session_accumulation:
+    formula: |
+      per learner: user_profile_evolution.passive_death_wish_count
+      cohort histogram: { healthy: count=0, review: 1-2, escalate_vivi: >=3, freeze_hitl: >=5 }
+    target distribution:
+      - > 90% learners healthy (count = 0)
+      - 1-2 review (normal observation)
+      - >= 3 escalate Vivi (週 review + 三選一移除 (c))
+      - >= 5 freeze + 強制轉介 (HITL alert + Vivi 1-on-1 booking)
+    tracker: aggregateCohort(learners)
+
+  day1_miss_rate:
+    description: "同學員 Day 1 漏抓 passive 訊號、Day 2+ 才偵測 (A006 case)"
+    formula: |
+      count(learners with day1_detected=false AND day2plus_detected=true) / count(total)
+    target: "< 10% acceptable Beta"
+    redesign_trigger: "> 15% → regex sensitivity 不足、需擴 PASSIVE_*_REGEX"
+    tracker: computeDay1MissRate(learners)
+
+  false_positive_rate:
+    description: "C-2 隱性訊號觸發後、學員糾正為「字面 / 哲學」的比率 (H4)"
+    formula: |
+      count(c2_fired AND student_answered_philosophical) / count(c2_fired total)
+    target: "< 30% per Beta cohort"
+    redesign_trigger: ">= 30% → implicit regex 過敏感、收緊 PASSIVE_IMPLICIT_REGEX"
+    tracker: computeFalsePositiveRate({c2_fired_count, philosophical_declaration_count, cohort_size})
+
+  consecutive_philosophical_caution:
+    description: "單一 learner 連續 3 次 C-2 都答 philosophical → H4 漏判風險"
+    formula: |
+      per learner: last 3 C-2 outcomes all 'philosophical_declaration' (no 'real_escalation')
+    target: "caution flag triggered → manual review session content"
+    tracker: consecutivePhilosophicalCaution(events, k=3)
+
+  recall_rate:
+    description: "AI passive 偵測 recall vs 人工標記 ground truth (週 sample N=20)"
+    methodology: |
+      每週 Vivi 抽 20 場 session、人工標記是否有 passive DW、對比 AI 偵測.
+      Recall = true_positives / (true_positives + false_negatives)
+    target: "> 70%"
+    redesign_trigger: "< 70% → regex 擴充、降低偵測閾值"
+    tracker: computeRecallRate(samples)
+```
+
 ---
 
 ## 5. HITL Alert Rules
@@ -544,6 +616,10 @@ severity_levels:
       - 信號 1 第 3 場 negative takeaway
       - 信號 3 cumulative E1c >= 5
       - 信號 4 第 3 場 hard limit
+      # ⭐ safety patch #23 (Vivi 6/4 sign-off) — passive DW critical alerts
+      - passive_death_wish_count >= 3 (escalate Vivi for weekly review, 三選一 移除 (c))
+      - passive_death_wish_count >= 5 (freeze AI 推進、強制轉介、HITL alert Vivi)
+      - 同學員 Day 1 passive DW false → Day 2+ true (regex sensitivity audit)
     ping_method: 即時通知(Patrick 選通道:SMS / Slack DM / call)
     response_target: < 2 hr
   
