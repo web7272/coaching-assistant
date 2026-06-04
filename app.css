@@ -336,7 +336,9 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   /* 6/2 Vivi sandbox 觀察 — 粉版圖加 sepia 變黃褐, 整體太暗看不清插畫.
      拿掉 sepia (圖本身已 warm), 亮度 0.78→0.92, 飽和 0.5→0.65, 對比 0.95→0.97.
      仍能看出「沒到」 但插畫不再悶死. */
-  filter: saturate(0.65) brightness(0.92) contrast(0.97);
+  /* 6/4 Vivi — 0.65/0.92 跟 completed 全彩太接近、做過沒做過分不出來.
+     退到淺米白:「未來=還沒翻開的紙頁、走過的=上了色」. */
+  filter: saturate(0.2) brightness(1.1) contrast(0.92);
 }
 .day-tile--future::after {
   content: '';
@@ -344,7 +346,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   inset: 0;
   /* 6/2 Vivi — tan 28% → white 12%. 粉本身已 warm, 再加 tan 染色會混濁;
      白霧只負責「未翻開」 薄薄一層, 不染色. */
-  background: rgba(255, 255, 255, 0.12);
+  /* 6/4 Vivi — 12% 白霧太薄. 改米白霧(紙感 cream、非純白)、蓋出「未翻開」. */
+  background: rgba(247, 240, 232, 0.5);
   border-radius: inherit;
   pointer-events: none;
   z-index: 2;
@@ -372,8 +375,9 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .day-tile__footprint {
   width: 28px;
   height: 28px;
-  color: var(--bg-mint);
-  opacity: 0.85;
+  /* 6/4 — 卡片變米白後淺色腳印會隱形, 換暖棕 (--neutral-step). */
+  color: var(--neutral-step);
+  opacity: 0.55;
   position: relative;
   z-index: 3;
 }
@@ -392,6 +396,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   pointer-events: none;
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.45);
 }
+/* 6/4 — future 卡米白化後白字+黑影變髒, 改暖灰、拿掉影. */
+.day-tile--future .day-tile__day { color: var(--text-secondary); text-shadow: none; }
 
 /* Completed ✓ — gold disc top-right with white check */
 .day-tile__check {
