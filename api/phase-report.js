@@ -129,24 +129,27 @@ export default async function handler(req, res) {
   const sql = neon(process.env.DATABASE_URL);
 
   try {
-    // 1. Load profile + last session's current_phase
+    // 1. Load profile + last session's primary_mode (PR-23s4c task 8 — was current_phase).
+    //    Dual-read for transition window: primary_mode preferred, current_phase fallback.
     const profile = (await getUserProfile(studentId)) || {};
-    let currentPhase = null;
+    let primaryMode = null;
     try {
       const lr = await sql`
         SELECT session_state FROM sessions
         WHERE student_id = ${studentId} AND module = ${module}
         ORDER BY created_at DESC LIMIT 1
       `;
-      currentPhase = lr[0]?.session_state?.current_phase || null;
-    } catch (e) { console.warn('[phase-report] current_phase lookup failed:', e.message); }
+      const lastState = lr[0]?.session_state || {};
+      // PR-23s4c task 8: primary_mode wins; current_phase as legacy fallback.
+      primaryMode = lastState.primary_mode || lastState.current_phase || null;
+    } catch (e) { console.warn('[phase-report] primary_mode lookup failed:', e.message); }
 
     const name  = PHASE_REPORT_NAMES[phaseId - 1];
     const roman = PHASE_REPORT_ROMAN[phaseId - 1];
     const teaching = PHASE_REPORT_TEACHINGS[phaseId - 1];
 
-    // 2. Lock gate — Phase Report N must be unlocked
-    if (!isPhaseReportUnlocked(phaseId, currentPhase)) {
+    // 2. Lock gate — Phase Report N must be unlocked (PR-23s4c task 8: mode-aware).
+    if (!isPhaseReportUnlocked(phaseId, primaryMode)) {
       return res.status(200).json({
         phaseId, name, roman,
         teaching: null, breakthrough: null, generatedAt: null,

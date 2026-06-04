@@ -1080,6 +1080,48 @@ export default async function handler(req, res) {
     const closureHint = buildClosureHint({ turnCount });
     if (closureHint) conditionalInjects.push(closureHint);
 
+    // ⭐ Step 7d — PR-23s4c task 7 — primary-only inject filter (crisis override).
+    //   Per spec: 每 turn dynamic injection = primary_mode 對應 sub-prompts only;
+    //   secondary / paused modes 不 inject (state 照寫給 transition-router).
+    //   crisis as primary → 完整 inject; crisis 為 secondary (退出中) → 不 inject crisis SOP.
+    //   Mode-gated handlers already self-filter (e.g. e3IntegrationRouterHandler
+    //   returns handled=false unless primary_mode === integration). Architectural
+    //   safety net: when primary_mode=crisis, suppress mode-toolbox injects to
+    //   avoid SOP confusion (deep-signal-detector + crisis SOP inject win).
+    //   Exception (per spec): Reframe Library conditional inject is signal-
+    //   triggered + parallel with primary; PR-23s4c keeps the architecture
+    //   minimal (no Reframe-suppress carve-out needed yet, body builds Step 7).
+    const primaryModeForInject = (detectorPatch && detectorPatch.primary_mode)
+      || sessionState.primary_mode || 'elicitation';
+    if (primaryModeForInject === 'crisis') {
+      // Crisis is primary — suppress mode-toolbox injects from non-crisis modes
+      // that may have fired before primary flipped (handlers fire in priority
+      // order; deep-signal at 20 may have flipped primary to crisis, then
+      // elicitation at 30 may still inject because handler decision was made
+      // before patch applied). Defensive filter on inject text.
+      const SUPPRESS_PATTERNS = [
+        /\[SYSTEM INJECT — Elicitation Router\]/,
+        /\[SYSTEM INJECT — Top 1 Judge\]/,
+        /\[SYSTEM INJECT — Integration Router\]/,
+        /\[SYSTEM INJECT — Mode Transition Router\]/,
+        /\[SYSTEM INJECT — Cascade Mode Validator\]/,
+        /\[SYSTEM INJECT — Future Pacing Router\]/,
+      ];
+      const beforeCount = conditionalInjects.length;
+      const filtered = conditionalInjects.filter(inj =>
+        typeof inj !== 'string'
+        || !SUPPRESS_PATTERNS.some(re => re.test(inj))
+      );
+      if (filtered.length < beforeCount) {
+        console.info('[primary-only-inject][crisis-override]', JSON.stringify({
+          event: 'crisis_suppress_non_crisis_injects',
+          suppressed_count: beforeCount - filtered.length,
+        }));
+      }
+      conditionalInjects.length = 0;
+      conditionalInjects.push(...filtered);
+    }
+
     // Step 8 — build system prompt array（cached prefix + dynamic）
     const stateForPrompt = { ...sessionState, ...detectorPatch };
     const systemParam = buildSystemPromptArrayV5({
