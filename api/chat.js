@@ -585,13 +585,18 @@ export function collectDetectorOutput(results) {
  */
 export function maybeAutoTransitionRouterPhase({ stateForPrompt, detectorPatch = {}, advancePatch = {} } = {}) {
   if (!stateForPrompt || typeof stateForPrompt !== 'object') return null;
-  if (stateForPrompt.current_phase !== 'phase_1') return null;
+  // PR-23s4b — primary_mode 取代 current_phase. elicitation mode 才適用此 auto-transition
+  // (對應 v5.0 phase_1; identity_anchoring / cascade / future_pacing 沒有 opening→elicitation flip).
+  // Accept primary_mode='elicitation' OR legacy current_phase='phase_1' for dual-write compat.
+  const isElicitationMode = stateForPrompt.primary_mode === 'elicitation'
+    || stateForPrompt.current_phase === 'phase_1';
+  if (!isElicitationMode) return null;
   if (stateForPrompt.router_phase !== 'opening') return null;
-  // detector 或 phase-advance 已動過 router_phase → 尊重它、不覆寫
+  // detector 或 mode-transition 已動過 router_phase → 尊重它、不覆寫
   if (detectorPatch && detectorPatch.router_phase != null) return null;
   if (advancePatch  && advancePatch.router_phase  != null) return null;
   // PR-4c-green E4 fix — also clear day_opening_inject_active so turn 2 uses
-  // phase_1.elicitation 鏈式追問 cleanly, never the deferred variant.
+  // elicitation 鏈式追問 cleanly, never the deferred variant.
   return { router_phase: 'elicitation', day_opening_inject_active: false };
 }
 
@@ -686,6 +691,77 @@ export function detectDayComplete({ content, turnCount, hardLimit = HARD_LIMIT_T
   if (typeof turnCount === 'number' && turnCount >= hardLimit) return true;
   if (typeof content !== 'string' || content.length === 0) return false;
   return CLOSURE_MARKERS.some(m => content.includes(m));
+}
+
+/**
+ * v5.1 PR-23s4b — Extracted response payload builder (Vivi 6/4 demand: response
+ * assembly must have test coverage so a ReferenceError can't ship green).
+ *
+ * Semantics preserved across the phase-* retirement:
+ *   - `phase` field → primary_mode (was current_phase, frontend name kept for
+ *     response-shape backward compat; no current consumer reads it).
+ *   - `routerPhase` → unchanged (legacy mirror, still null in most cases).
+ *   - `phaseAdvanced` → true at "this turn crosses a session-day boundary"
+ *     (was: current_phase shifted due to phaseForDay) OR "this turn emitted a
+ *     mode transition" (mode-transition-router fired). Both are the v5.1
+ *     equivalent of v5.0's "phase just changed" semantic.
+ *
+ * Pure — no I/O. All inputs explicit; throws TypeError on null content (so an
+ * inadvertent miss surfaces as a fast failure, not a 200 with bogus shape).
+ *
+ * @param {object} args
+ * @param {string} args.content                — Anthropic response text
+ * @param {number} args.turnCount
+ * @param {number|null} args.sessionId
+ * @param {object} args.stateForPrompt         — merged session state (mode-aware)
+ * @param {object} args.fullPatch              — patch about to be persisted
+ * @param {object} args.priorSessionState      — sessionState BEFORE this turn's patches
+ * @param {object} args.detectorPatch          — handler-emitted patches this turn
+ * @param {boolean} args.isNew                 — loadOrCreateSession created the row
+ * @param {boolean} args.dayComplete
+ * @param {number} args.hardLimitTurns
+ * @param {number} args.depthSignal
+ * @returns {object} 200 response body
+ */
+export function buildChatResponsePayload({
+  content,
+  turnCount,
+  sessionId,
+  stateForPrompt = {},
+  fullPatch = {},
+  priorSessionState = {},
+  detectorPatch = {},
+  isNew = false,
+  dayComplete = false,
+  hardLimitTurns = HARD_LIMIT_TURNS,
+  depthSignal = 0,
+} = {}) {
+  if (typeof content !== 'string') {
+    throw new TypeError('buildChatResponsePayload: content must be a string');
+  }
+  // phaseAdvanced = cross-day-boundary OR mode-transition-this-turn.
+  // Cross-day boundary: isNew (loadOrCreateSession just opened today's row).
+  // Mode transition: detectorPatch.mode_transition_log grew vs priorSessionState's log.
+  const priorLogLen = Array.isArray(priorSessionState?.mode_transition_log)
+    ? priorSessionState.mode_transition_log.length : 0;
+  const newLogLen = Array.isArray(detectorPatch?.mode_transition_log)
+    ? detectorPatch.mode_transition_log.length : priorLogLen;
+  const modeChangedThisTurn = newLogLen > priorLogLen;
+  return {
+    content,
+    turnCount: typeof turnCount === 'number' ? turnCount : 0,
+    sessionId: sessionId ?? null,
+    // PR-23s4b — field name `phase` kept for response-shape compat (no
+    // frontend consumer at time of refactor); value mapped to primary_mode.
+    phase: stateForPrompt.primary_mode || null,
+    routerPhase: fullPatch.router_phase || priorSessionState.router_phase || null,
+    phaseAdvanced: !!isNew || modeChangedThisTurn,
+    // PR-4c session_end: frontend reads dayComplete=true to trigger §5.2 transition
+    dayComplete: !!dayComplete,
+    notesGenerating: !!dayComplete,
+    turnsLeft: Math.max(0, hardLimitTurns - (typeof turnCount === 'number' ? turnCount : 0)),
+    depthSignal: typeof depthSignal === 'number' && Number.isFinite(depthSignal) ? depthSignal : 0,
+  };
 }
 
 /**
@@ -1157,28 +1233,26 @@ export default async function handler(req, res) {
     // 0..5 採集深度的 snapshot, 從 merged stateForPrompt + turnCount 算.
     // frontend 自己維持 watermark (走過不會倒退), 此處只回 snapshot.
     const depthSignal = computeDepthSignal(stateForPrompt, turnCount);
-    // PR-23s4b — phase concept retired; response surfaces mode + transition flag.
-    //   phase / phaseAdvanced / routerPhase kept as field names for response-shape
-    //   backward compat (no current frontend consumer; safe-to-rename if 確認).
-    const phaseAdvancedThisTurn = Array.isArray(detectorPatch?.mode_transition_log)
-      && detectorPatch.mode_transition_log.length
-         > (Array.isArray(sessionState?.mode_transition_log)
-              ? sessionState.mode_transition_log.length : 0);
-    return res.status(200).json({
+    // PR-23s4b hotfix (Vivi 6/4): response assembly extracted into pure helper
+    // buildChatResponsePayload (testable, prevents recurring ReferenceError silent
+    // breakage). Semantics:
+    //   - phase = primary_mode (field name kept for backward compat)
+    //   - phaseAdvanced = isNew OR mode-transition-this-turn (the v5.1 equivalent
+    //     of v5.0 "phase just changed at cross-day boundary").
+    //   - routerPhase = legacy mirror (still in fullPatch / sessionState fallback).
+    return res.status(200).json(buildChatResponsePayload({
       content,
       turnCount,
       sessionId,
-      // PR-23s4b: phase → primary_mode (field name kept for response-shape compat).
-      phase: stateForPrompt.primary_mode || null,
-      routerPhase: fullPatch.router_phase || sessionState.router_phase || null,
-      // PR-23s4b: phaseAdvanced 改由本 turn mode transition 是否 emit log 決定.
-      phaseAdvanced: phaseAdvancedThisTurn,
-      // PR-4c：session_end 寫活、frontend 依 dayComplete=true 觸發 §5.2 轉場 + POST /api/finalize-day
+      stateForPrompt,
+      fullPatch,
+      priorSessionState: sessionState,
+      detectorPatch,
+      isNew,
       dayComplete,
-      notesGenerating: dayComplete,
-      turnsLeft: Math.max(0, HARD_LIMIT_TURNS - turnCount),
+      hardLimitTurns: HARD_LIMIT_TURNS,
       depthSignal,
-    });
+    }));
 
   } catch (error) {
     console.error('Server error:', error);

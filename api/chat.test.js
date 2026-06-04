@@ -22,6 +22,7 @@ import {
   decideSessionAction,
   shouldDispatchDayOpening,
   isPriorDayFinalized,
+  buildChatResponsePayload,   // PR-23s4b hotfix (Vivi 6/4)
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 
@@ -853,12 +854,14 @@ test('🛑 chat.js: response payload includes depthSignal field', () => {
     resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
     'utf8',
   );
-  // The constant must be computed from merged state + turnCount, then included
-  // in the 200 response payload (so frontend can update dots).
+  // The constant must be computed from merged state + turnCount, then passed
+  // into buildChatResponsePayload (PR-23s4b extracted the response build) which
+  // wires it into the 200 payload.
   assert.match(src, /const depthSignal = computeDepthSignal\(stateForPrompt, turnCount\)/,
     'chat.js must compute depthSignal from merged stateForPrompt + turnCount');
-  assert.match(src, /res\.status\(200\)\.json\(\{[\s\S]*?depthSignal[\s\S]*?\}\)/,
-    'chat.js must include depthSignal in the 200 response payload');
+  assert.match(src,
+    /res\.status\(200\)\.json\(buildChatResponsePayload\([\s\S]*?depthSignal[\s\S]*?\}\)\)/,
+    'chat.js must pass depthSignal into buildChatResponsePayload');
 });
 
 // ═════════════════════════════════════════════════════════
@@ -997,4 +1000,227 @@ test('🛑 chat.js: env fallback also default-ON (FEATURE_PROMPT_CACHING !== "fa
   assert.match(src,
     /PROMPT_CACHING: process\.env\.FEATURE_PROMPT_CACHING !== 'false'/,
     'env fallback must default-ON (use !== "false", NOT === "true")');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 v5.1 PR-23s4b hotfix (Vivi 6/4) — response assembly path MUST have test
+// coverage. PR-23s4b shipped a ReferenceError (isPhaseEntry undefined in 200
+// response payload) with 1222 tests green because the handler's response build
+// path had no unit tests. Vivi demand: add regression coverage so this gap
+// can't recur. buildChatResponsePayload extracted as pure helper for that.
+// ═════════════════════════════════════════════════════════
+
+test('🛑 buildChatResponsePayload: happy path — full shape, no missing fields', () => {
+  const r = buildChatResponsePayload({
+    content: 'AI reply',
+    turnCount: 5,
+    sessionId: 42,
+    stateForPrompt: { primary_mode: 'elicitation' },
+    fullPatch: { router_phase: 'elicitation' },
+    priorSessionState: { mode_transition_log: [] },
+    detectorPatch: {},
+    isNew: false,
+    dayComplete: false,
+    hardLimitTurns: 40,
+    depthSignal: 2,
+  });
+  // Field-by-field — frontend contract / response shape stays stable.
+  assert.equal(r.content, 'AI reply');
+  assert.equal(r.turnCount, 5);
+  assert.equal(r.sessionId, 42);
+  assert.equal(r.phase, 'elicitation', 'PR-23s4b: phase field carries primary_mode');
+  assert.equal(r.routerPhase, 'elicitation');
+  assert.equal(r.phaseAdvanced, false, 'no isNew + no mode transition → false');
+  assert.equal(r.dayComplete, false);
+  assert.equal(r.notesGenerating, false);
+  assert.equal(r.turnsLeft, 35);
+  assert.equal(r.depthSignal, 2);
+});
+
+test('🛑 buildChatResponsePayload: NEVER references undefined symbols (PR-23s4b regression)', () => {
+  // This test would have caught the isPhaseEntry ReferenceError if it had
+  // existed in PR-23s4b. Minimal happy-path call must NOT throw.
+  assert.doesNotThrow(() => buildChatResponsePayload({
+    content: '',
+    turnCount: 0,
+    sessionId: null,
+    stateForPrompt: {},
+    fullPatch: {},
+    priorSessionState: {},
+    detectorPatch: {},
+    isNew: false,
+    dayComplete: false,
+    hardLimitTurns: 40,
+    depthSignal: 0,
+  }));
+});
+
+test('🛑 buildChatResponsePayload: phaseAdvanced=true when isNew (cross-day boundary)', () => {
+  // Semantic preservation: v5.0 phaseAdvanced=true at cross-day boundary turn
+  // (Day 5 enters phase_2). v5.1 equivalent: isNew=true (first turn of new
+  // session day). loadOrCreateSession exposes this signal already.
+  const r = buildChatResponsePayload({
+    content: 'reply',
+    turnCount: 1,
+    sessionId: 99,
+    stateForPrompt: { primary_mode: 'elicitation' },
+    fullPatch: {},
+    priorSessionState: {},
+    detectorPatch: {},
+    isNew: true,
+    dayComplete: false,
+    hardLimitTurns: 40,
+    depthSignal: 0,
+  });
+  assert.equal(r.phaseAdvanced, true, 'isNew=true → phaseAdvanced=true');
+});
+
+test('🛑 buildChatResponsePayload: phaseAdvanced=true when mode transition emit log this turn', () => {
+  // v5.1 semantic addition: mid-session mode transition (e.g. identity_anchoring
+  // → cascade via mode-transition-router) also flips phaseAdvanced.
+  const r = buildChatResponsePayload({
+    content: 'reply',
+    turnCount: 8,
+    sessionId: 99,
+    stateForPrompt: { primary_mode: 'cascade' },
+    fullPatch: {},
+    // PR-23s4b: detector handler emitted a new log entry this turn.
+    priorSessionState: { mode_transition_log: [{ timestamp: 'old' }] },
+    detectorPatch: { mode_transition_log: [{ timestamp: 'old' }, { timestamp: 'new' }] },
+    isNew: false,
+    dayComplete: false,
+    hardLimitTurns: 40,
+    depthSignal: 0,
+  });
+  assert.equal(r.phaseAdvanced, true, 'mode_transition_log grew this turn → phaseAdvanced=true');
+});
+
+test('🛑 buildChatResponsePayload: phaseAdvanced=false when isNew=false AND log unchanged', () => {
+  const r = buildChatResponsePayload({
+    content: 'reply',
+    turnCount: 8,
+    sessionId: 99,
+    stateForPrompt: { primary_mode: 'integration' },
+    fullPatch: {},
+    priorSessionState: { mode_transition_log: [{ a: 1 }, { b: 2 }] },
+    detectorPatch: { mode_transition_log: [{ a: 1 }, { b: 2 }] },   // unchanged
+    isNew: false,
+    dayComplete: false,
+    hardLimitTurns: 40,
+    depthSignal: 0,
+  });
+  assert.equal(r.phaseAdvanced, false);
+});
+
+test('buildChatResponsePayload: dayComplete=true → notesGenerating=true', () => {
+  const r = buildChatResponsePayload({
+    content: '今天先到這裡',
+    turnCount: 18,
+    sessionId: 99,
+    stateForPrompt: { primary_mode: 'elicitation' },
+    fullPatch: {},
+    priorSessionState: {},
+    detectorPatch: {},
+    isNew: false,
+    dayComplete: true,
+    hardLimitTurns: 40,
+    depthSignal: 3,
+  });
+  assert.equal(r.dayComplete, true);
+  assert.equal(r.notesGenerating, true,
+    'notesGenerating mirrors dayComplete (frontend reads it for §5.2 transition)');
+});
+
+test('buildChatResponsePayload: turnsLeft never goes negative', () => {
+  // Past hard limit edge case.
+  const r = buildChatResponsePayload({
+    content: 'reply', turnCount: 50, sessionId: 1,
+    stateForPrompt: {}, fullPatch: {}, priorSessionState: {}, detectorPatch: {},
+    isNew: false, dayComplete: true, hardLimitTurns: 40, depthSignal: 0,
+  });
+  assert.equal(r.turnsLeft, 0);
+});
+
+test('buildChatResponsePayload: defensive defaults — empty args object → safe shape', () => {
+  // Even with no inputs, response shape must be complete (caller would still
+  // 200 it). content must be string-coerced or thrown — see next test for the throw path.
+  const r = buildChatResponsePayload({ content: '' });
+  assert.equal(r.content, '');
+  assert.equal(r.turnCount, 0);
+  assert.equal(r.sessionId, null);
+  assert.equal(r.phase, null, 'no primary_mode → phase=null');
+  assert.equal(r.routerPhase, null);
+  assert.equal(r.phaseAdvanced, false);
+  assert.equal(r.dayComplete, false);
+  assert.equal(r.notesGenerating, false);
+  assert.equal(r.depthSignal, 0);
+});
+
+test('🛑 buildChatResponsePayload: throws TypeError on non-string content (fail-fast)', () => {
+  // Non-string content should fail loudly, NOT silently 200 with bogus data.
+  assert.throws(() => buildChatResponsePayload({ content: null }), TypeError);
+  assert.throws(() => buildChatResponsePayload({ content: undefined }), TypeError);
+  assert.throws(() => buildChatResponsePayload({}), TypeError);
+});
+
+test('buildChatResponsePayload: routerPhase fallback chain (fullPatch → priorState → null)', () => {
+  const r1 = buildChatResponsePayload({
+    content: '', stateForPrompt: {},
+    fullPatch: { router_phase: 'cascade_down' },
+    priorSessionState: { router_phase: 'elicitation' },
+    detectorPatch: {},
+  });
+  assert.equal(r1.routerPhase, 'cascade_down', 'fullPatch wins');
+
+  const r2 = buildChatResponsePayload({
+    content: '', stateForPrompt: {},
+    fullPatch: {},
+    priorSessionState: { router_phase: 'elicitation' },
+    detectorPatch: {},
+  });
+  assert.equal(r2.routerPhase, 'elicitation', 'priorState fallback');
+
+  const r3 = buildChatResponsePayload({
+    content: '', stateForPrompt: {}, fullPatch: {}, priorSessionState: {}, detectorPatch: {},
+  });
+  assert.equal(r3.routerPhase, null, 'null when both empty');
+});
+
+test('🛑 grep guard: chat.js handler body uses buildChatResponsePayload (no inline json)', () => {
+  // Belt-and-suspenders. The previous inline body had isPhaseEntry leftover;
+  // ensure the handler routes through the tested helper, not an inline object.
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // Handler returns via buildChatResponsePayload call.
+  assert.match(src,
+    /return res\.status\(200\)\.json\(buildChatResponsePayload\(/,
+    'handler 200 path must call buildChatResponsePayload (Vivi 6/4 regression防線)');
+});
+
+test('🛑 grep guard: chat.js has no CODE-USE of retired phase-* symbols (PR-23s4b)', () => {
+  // Defends against the exact bug class that shipped in PR-23s4b (isPhaseEntry
+  // undefined in 200 payload).
+  //
+  // Strategy: scan non-comment lines only. A stale comment is informational
+  // (e.g., "原 phaseForDay 路徑廢除") and benign; a stale code-use is fatal.
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  const codeOnly = src
+    .split('\n')
+    .filter(line => !/^\s*\/\//.test(line)          // // comment line
+                 && !/^\s*\*/.test(line))            // jsdoc continuation line
+    .join('\n');
+  assert.doesNotMatch(codeOnly, /\bisPhaseEntry\b/,
+    'isPhaseEntry retired with phase-machine (PR-23s4b); never re-introduce');
+  assert.doesNotMatch(codeOnly, /\bphaseForDay\b/,
+    'phaseForDay retired with phase-advance (PR-23s4b); never re-introduce');
+  assert.doesNotMatch(codeOnly, /\bphaseEntryPatch\b/,
+    'phaseEntryPatch retired with phase-advance (PR-23s4b); never re-introduce');
+  // contextFor (without leading "mode") was the phase-context import.
+  assert.doesNotMatch(codeOnly, /(?<![a-zA-Z])contextFor(?![a-zA-Z])/,
+    'contextFor retired with phase-context (PR-23s4b); modeContextFor is the replacement');
 });
