@@ -19,7 +19,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { generateDamonNote } from './chat.js';
 import {
   appendDailyTakeaway, setLastSessionDaySummary, markExportEmailed,
-  getUserProfile,
+  getUserProfile, setCrisisStateCarryForward,
 } from '../lib/state/state-manager.js';
 import { sendExportEmail } from '../lib/email/brevo.js';
 import {
@@ -329,9 +329,9 @@ export default async function handler(req, res) {
   try {
     const sql = neon(process.env.DATABASE_URL);
 
-    // 取現有 session 狀態（幂等檢查 + 需要 student_id）
+    // 取現有 session 狀態（幂等檢查 + 需要 student_id + Step 6 PR-6b carry_forward）
     const sessionRows = await sql`
-      SELECT id, student_id, damon_note_public, notebook_page, day_complete
+      SELECT id, student_id, damon_note_public, notebook_page, day_complete, session_state
       FROM sessions WHERE id = ${sessionId} LIMIT 1
     `;
     if (sessionRows.length === 0) {
@@ -426,6 +426,33 @@ export default async function handler(req, res) {
       }
     } else {
       console.warn(`[daily_takeaways] no 【關鍵句】 in Damon Note for day=${sessionDay} — skipping append`);
+    }
+
+    // ⭐ v5.1 Step 6 PR-6b — crisis_state_carry_forward persistence.
+    //   e4TakeawayHandler emits patch.crisis_state_carry_forward_pending_write into
+    //   session_state at session close. We persist it to user_profile_evolution
+    //   here (cross-session). V6 day-opening (engine-4-mode-aware) reads it next
+    //   session and selects V6 sub-branch.
+    //   ⚠️ M73 — Safety Planning 完成不得 reset resolved. updateCarryForwardOnSessionClose
+    //     (engine-4-mode-aware) only sets resolved_at after 3-session natural de-escalation.
+    //   ⚠️ fail-soft — don't block Damon Note flow if persistence errors.
+    try {
+      const sessState = existing.session_state || {};
+      const pendingCarry = sessState.crisis_state_carry_forward_pending_write;
+      if (pendingCarry !== undefined) {
+        // pendingCarry can be null (clear crisis state) OR object (write full state).
+        await setCrisisStateCarryForward(existing.student_id, pendingCarry);
+        console.info('[crisis-carry-forward] persisted', JSON.stringify({
+          event: 'crisis_state_carry_forward_persisted',
+          student_id_present: !!existing.student_id,
+          has_payload: pendingCarry !== null,
+          si_risk_level: pendingCarry?.si_risk_level || null,
+          landing_page_reminder_delivered: !!pendingCarry?.landing_page_reminder_delivered,
+          handoff_choice: pendingCarry?.handoff_choice || null,
+        }));
+      }
+    } catch (e) {
+      console.error('[crisis_state_carry_forward] persistence failed (fail-soft):', e.message);
     }
 
     // (2) Day 21：生結業內容（coach letter + declaration）+ export prompt + email stub
