@@ -424,8 +424,12 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
   const ranking = Array.isArray(userProfile.values_ranking) ? userProfile.values_ranking : [];
 
   lines.push(`primary_mode：${primaryMode}`);
-  if (Array.isArray(modeRead.active_modes) && modeRead.active_modes.length > 1) {
-    lines.push(`active_modes：${modeRead.active_modes.join(', ')}`);
+  // ⭐ v5.1 cached §3 replacement (Step 9, 2026-06-05): §3 Engine Integration
+  //   Reference declares `active_modes: list` as inject — unconditional.
+  //   Previously we only emitted when length > 1; cached §3 expects model to
+  //   always see this list (single-mode case shows ['<primary>']).
+  if (Array.isArray(modeRead.active_modes)) {
+    lines.push(`active_modes：${modeRead.active_modes.join(', ') || primaryMode}`);
   }
   if (Array.isArray(modeRead.paused_modes) && modeRead.paused_modes.length > 0) {
     lines.push(`paused_modes：${modeRead.paused_modes.join(', ')}`);
