@@ -43,7 +43,13 @@ import { isBlocked, shouldExpireBetaWindow, BLOCKED_RESPONSE } from '../lib/api/
 // ⭐ v5.1 Step 4 PR-23s4b — phase-context retired. mode-context 取代.
 import { modeContextFor } from '../lib/session/mode-context.js';
 // ⭐ v5.2 第二塊 PR-a (Vivi 6/5) — active_context inject helper.
-import { buildActiveContextBlock, pickActiveContext } from '../lib/session/active-context.js';
+import {
+  buildActiveContextBlock, pickActiveContext, deriveContextNameForPhrasing,
+} from '../lib/session/active-context.js';
+// ⭐ v5.2 第二塊 PR-b — cross-context handler (case 3 reminder lock).
+import {
+  detectCrossContextSwapIntent, buildCrossContextReminderLockInject,
+} from '../lib/sub-prompts/cross-context-handler.js';
 // ⭐ v5.1 Step 4 PR-23s4b — phase-advance / phase-machine 退役 (廢除).
 //   chat.js Step 5b (phaseForDay + phaseEntryPatch 天數驅動) 已刪除.
 //   mode 流動由 detector handlers (尤其 mode-transition-router) 完全接管.
@@ -504,8 +510,15 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
   //   modeContextFor 取代 contextFor. elicitation mode router_phase-aware variant
   //   (opening 含起手式 / elicitation 鏈式追問) for transitional dual-write compat.
   //   E4 day-opening inject active 時走 deferred variant (避免冷起手式 collide).
+  // ⭐ v5.2 第二塊 PR-b — context anchor phrasing for Mode 1/2/4/5.
+  //   contextName derived from active_context (name OR category 短字 fallback).
+  //   When null → modeContextFor returns v5.1 phrasing (graceful fallback per §7.3).
+  const contextName = opts.activeContext
+    ? deriveContextNameForPhrasing(opts.activeContext)
+    : null;
   const modeCtx = modeContextFor(primaryMode, sessionState.router_phase, {
     dayOpeningInjectActive: !!sessionState.day_opening_inject_active,
+    contextName,
   });
   if (modeCtx) lines.push('\n' + modeCtx);
 
@@ -1143,6 +1156,31 @@ export default async function handler(req, res) {
       }
       conditionalInjects.length = 0;
       conditionalInjects.push(...filtered);
+    }
+
+    // ⭐ v5.2 第二塊 PR-b — Cross-context handler case 3: detect student-initiated
+    //   context swap intent (per spec §4.2). Inject reminder lock guidance.
+    //   Skipped in crisis mode (orthogonal override per cached §3).
+    {
+      const modeReadForCcc = readModeState(sessionState);
+      const inCrisis = modeReadForCcc.primary_mode === 'crisis'
+        || (Array.isArray(modeReadForCcc.active_modes) && modeReadForCcc.active_modes.includes('crisis'));
+      const ctxForCcc = studentRow ? pickActiveContext(studentRow) : null;
+      const ctxNameForCcc = ctxForCcc ? deriveContextNameForPhrasing(ctxForCcc) : null;
+      if (!inCrisis && ctxNameForCcc
+          && typeof ctx?.user_response === 'string'
+          && detectCrossContextSwapIntent(ctx.user_response)) {
+        const reminder = buildCrossContextReminderLockInject({
+          contextName: ctxNameForCcc,
+          studentWantedContext: '[他想換的]',
+        });
+        conditionalInjects.push(reminder);
+        console.info('[v5_2_cross_context][case_3]', JSON.stringify({
+          event: 'cross_context_swap_intent_detected',
+          active_context_category: ctxForCcc?.category || null,
+          // 鐵律 #2: no raw user text in log.
+        }));
+      }
     }
 
     // Step 8 — build system prompt array（cached prefix + dynamic）
