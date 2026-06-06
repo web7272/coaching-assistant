@@ -32,6 +32,10 @@ import {
 import {
   M_REGISTRY, getByTier, SEVERITY_TIER,
 } from '../../lib/dashboard/failure-modes.js';
+import {
+  buildActiveContextReport,
+  classifySwapLevel, SWAP_LEVELS,
+} from '../../lib/dashboard/active-context-tracker.js';
 
 export const config = {
   maxDuration: 30,
@@ -89,6 +93,28 @@ export default async function handler(req, res) {
           ORDER BY created_at DESC LIMIT 500
         `;
 
+    // ── v5.2 第五塊: pull active_context + current_day + context_onboarded ──
+    //   Aggregate-only columns from students table — small projection, no JSON
+    //   blobs. Fail-soft: if migrations 029/031 not applied (legacy DB), catch
+    //   and feed empty array → active_context block degrades gracefully.
+    let studentsRowsForContext = [];
+    try {
+      studentsRowsForContext = studentId
+        ? await sql`
+            SELECT student_id, active_context_category, current_day, context_onboarded
+            FROM students WHERE student_id = ${studentId}
+          `
+        : await sql`
+            SELECT student_id, active_context_category, current_day, context_onboarded
+            FROM students
+          `;
+    } catch (e) {
+      // Column missing → migration 029/031 not yet applied. Leave empty so the
+      // active_context section reads as zero across the board (caller knows
+      // migration status separately). Log structured event for observability.
+      console.warn('[v5-metrics][active_context] students columns missing — migrations 029/031 not applied?', e?.message);
+    }
+
     // ── Build per-profile metric snapshots ──
     const perStudent = {};
     for (const profile of profilesRows) {
@@ -140,7 +166,14 @@ export default async function handler(req, res) {
         perSessionStatesVulnerable: cohort === 'vulnerable' ? perSessionStates : [],
       });
 
-      // Alert evaluation (errata §2.2 6 categories).
+      // v5.2 第五塊 — extract this-student's cross_context_swap_count from
+      // the most recent session_state (used both for alert eval + per-student
+      // swap-level classification surfaced in the response).
+      const latestSwapCount =
+        Number(studentSessions[0]?.session_state?.cross_context_swap_count) || 0;
+      const studentContextRow = studentsRowsForContext.find(r => r.student_id === sid);
+
+      // Alert evaluation (errata §2.2 6 categories + v5.2 第五塊 rule 7).
       const alerts = evaluateAllRules({
         recentSessionTransitionCounts: perSessionLogs
           .map(log => log.filter(e => e.from_primary !== e.to_primary).length),
@@ -155,6 +188,9 @@ export default async function handler(req, res) {
         recent_landmine_attempts: [],
         reframe_invocation_counts: aggregateInvocationCountsById(invocationHistory),
         recent_reframe_rates: [],
+        // ⭐ v5.2 第五塊 — case 3 swap escalate inputs.
+        cross_context_swap_count: latestSwapCount,
+        active_context_category: studentContextRow?.active_context_category || null,
       });
 
       perStudent[sid] = {
@@ -164,6 +200,12 @@ export default async function handler(req, res) {
         landing_page: landingReport,
         signal_cascade: signalReport,
         alerts,
+        // ⭐ v5.2 第五塊 — per-student cross-context swap state (drill-down).
+        cross_context_swap: {
+          consecutive_turns: latestSwapCount,
+          level: classifySwapLevel(latestSwapCount),
+          escalate_flag: studentSessions[0]?.session_state?.cross_context_swap_escalate === true,
+        },
       };
     }
 
@@ -179,6 +221,18 @@ export default async function handler(req, res) {
       }
       return acc;
     }, { m71_violations: 0, m72_offer_max_skips: 0, m73_resolved_reset_attempts: 0 });
+
+    // ⭐ v5.2 第五塊 — aggregate active_context metrics across the cohort.
+    //   (Distribution / completion / onboarded-rate from students table, not
+    //   session_state.) Per-student swap classification lives in per_student.
+    const activeContextReport = buildActiveContextReport(studentsRowsForContext);
+
+    // Roll-up: how many students currently in each swap level.
+    const swapLevelTotals = { healthy: 0, watching: 0, escalate_vivi: 0 };
+    for (const s of Object.values(perStudent)) {
+      const lvl = s.cross_context_swap?.level || SWAP_LEVELS.HEALTHY;
+      swapLevelTotals[lvl] = (swapLevelTotals[lvl] || 0) + 1;
+    }
 
     return res.status(200).json({
       generated_at: new Date().toISOString(),
@@ -200,6 +254,13 @@ export default async function handler(req, res) {
       },
       // 6.10 four signals + mode-aware context (errata task_4).
       six_ten_signals: SIX_TEN_SIGNALS,
+      // ⭐ v5.2 第五塊 — active_context dashboard metrics.
+      active_context: {
+        distribution: activeContextReport.distribution,
+        completion:   activeContextReport.completion,
+        onboarded:    activeContextReport.onboarded,
+        cross_context_swap_totals: swapLevelTotals,
+      },
     });
   } catch (err) {
     console.error('[v5-metrics] error:', err?.message || err);

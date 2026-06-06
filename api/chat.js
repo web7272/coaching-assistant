@@ -54,6 +54,10 @@ import { onboardingFlowHandler } from '../lib/detector-handlers/onboarding-flow.
 import {
   detectCrossContextSwapIntent, buildCrossContextReminderLockInject,
 } from '../lib/sub-prompts/cross-context-handler.js';
+// ⭐ v5.2 第五塊 — case 3 連續 swap escalate threshold.
+import {
+  CROSS_CONTEXT_SWAP_THRESHOLD,
+} from '../lib/dashboard/alert-rules.js';
 // ⭐ v5.1 Step 4 PR-23s4b — phase-advance / phase-machine 退役 (廢除).
 //   chat.js Step 5b (phaseForDay + phaseEntryPatch 天數驅動) 已刪除.
 //   mode 流動由 detector handlers (尤其 mode-transition-router) 完全接管.
@@ -1237,25 +1241,53 @@ export default async function handler(req, res) {
     // ⭐ v5.2 第二塊 PR-b — Cross-context handler case 3: detect student-initiated
     //   context swap intent (per spec §4.2). Inject reminder lock guidance.
     //   Skipped in crisis mode (orthogonal override per cached §3).
+    // ⭐ v5.2 第五塊 — additive: 連續 swap turn 計數 + reset + escalate flag
+    //   (spec §4.2「連續 3 turn 學員仍堅持換 context → escalate Vivi」). The
+    //   case-3 marker埋的 alert 觸發 now lands here. Non-swap turn → reset 0
+    //   (連續性). Crisis preserves count (don't reset / don't increment).
     {
       const modeReadForCcc = readModeState(sessionState);
       const inCrisis = modeReadForCcc.primary_mode === 'crisis'
         || (Array.isArray(modeReadForCcc.active_modes) && modeReadForCcc.active_modes.includes('crisis'));
       const ctxForCcc = studentRow ? pickActiveContext(studentRow) : null;
       const ctxNameForCcc = ctxForCcc ? deriveContextNameForPhrasing(ctxForCcc) : null;
-      if (!inCrisis && ctxNameForCcc
-          && typeof ctx?.user_response === 'string'
-          && detectCrossContextSwapIntent(ctx.user_response)) {
-        const reminder = buildCrossContextReminderLockInject({
-          contextName: ctxNameForCcc,
-          studentWantedContext: '[他想換的]',
-        });
-        conditionalInjects.push(reminder);
-        console.info('[v5_2_cross_context][case_3]', JSON.stringify({
-          event: 'cross_context_swap_intent_detected',
-          active_context_category: ctxForCcc?.category || null,
-          // 鐵律 #2: no raw user text in log.
-        }));
+      const hasActiveContext = !!(ctxNameForCcc);
+      const userText = typeof ctx?.user_response === 'string' ? ctx.user_response : '';
+      // Only evaluate swap accounting when NOT in crisis AND active_context is set.
+      // (No active_context = mid-onboarding / un-provisioned → no "swap" semantics.)
+      if (!inCrisis && hasActiveContext) {
+        const swapDetected = detectCrossContextSwapIntent(userText);
+        const prevSwapCount = Number(sessionState?.cross_context_swap_count) || 0;
+        // Non-swap turn resets per spec §4.2 連續性 semantic.
+        const newSwapCount = swapDetected ? prevSwapCount + 1 : 0;
+        detectorPatch.cross_context_swap_count = newSwapCount;
+        if (newSwapCount >= CROSS_CONTEXT_SWAP_THRESHOLD.consecutive_turns
+            && prevSwapCount < CROSS_CONTEXT_SWAP_THRESHOLD.consecutive_turns) {
+          // Set escalate flag once at threshold crossing (not every subsequent turn).
+          detectorPatch.cross_context_swap_escalate = true;
+          // [v5_2_cross_context][escalate] — dashboard / alert-rules pulls
+          // session_state.cross_context_swap_count downstream (HITL Vivi review,
+          // no email dispatch yet — wire-up是既有缺口, 同 Step 8 freeze).
+          console.info('[v5_2_cross_context][escalate]', JSON.stringify({
+            event: 'cross_context_swap_threshold_crossed',
+            consecutive_turns: newSwapCount,
+            threshold: CROSS_CONTEXT_SWAP_THRESHOLD.consecutive_turns,
+            active_context_category: ctxForCcc?.category || null,
+          }));
+        }
+        if (swapDetected) {
+          const reminder = buildCrossContextReminderLockInject({
+            contextName: ctxNameForCcc,
+            studentWantedContext: '[他想換的]',
+          });
+          conditionalInjects.push(reminder);
+          console.info('[v5_2_cross_context][case_3]', JSON.stringify({
+            event: 'cross_context_swap_intent_detected',
+            active_context_category: ctxForCcc?.category || null,
+            consecutive_turns: newSwapCount,
+            // 鐵律 #2: no raw user text in log.
+          }));
+        }
       }
     }
 
