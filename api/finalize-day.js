@@ -20,6 +20,7 @@ import { generateDamonNote } from './chat.js';
 import {
   appendDailyTakeaway, setLastSessionDaySummary, markExportEmailed,
   getUserProfile, setCrisisStateCarryForward,
+  appendActiveContextSummary,
 } from '../lib/state/state-manager.js';
 import { sendExportEmail } from '../lib/email/brevo.js';
 import {
@@ -426,6 +427,43 @@ export default async function handler(req, res) {
       }
     } else {
       console.warn(`[daily_takeaways] no 【關鍵句】 in Damon Note for day=${sessionDay} — skipping append`);
+    }
+
+    // ⭐ v5.2 第三塊 PR-a (Vivi 6/5) — per-category active_context_session_summary
+    //   append (bug #7 fix: 跨天重問同 value/example).
+    //   Source 重用既有 (Patrick 工程決策, 不加 Haiku call, 成本 0):
+    //     - example = displayTerm (已抽 from Damon Note 關鍵句).
+    //     - value = top1_value (current quality candidate; UPE 已 surfaced).
+    //   category 從 students.active_context_category (migration 029 default 1=事業).
+    //   fail-soft: migration 030 未跑 / 缺欄 / 沒 category → swallow + warn.
+    if (displayTerm) {
+      try {
+        const studentCtxRow = await sql`
+          SELECT active_context_category FROM students WHERE student_id = ${existing.student_id} LIMIT 1
+        `;
+        const catRaw = Number(studentCtxRow[0]?.active_context_category);
+        const ctxCat = (Number.isInteger(catRaw) && catRaw >= 1 && catRaw <= 5) ? catRaw : null;
+        if (ctxCat !== null) {
+          const profileForVal = (await getUserProfile(existing.student_id)) || {};
+          const top1 = typeof profileForVal.top1_value === 'string' && profileForVal.top1_value.trim().length > 0
+            ? profileForVal.top1_value.trim() : null;
+          await appendActiveContextSummary(existing.student_id, ctxCat, {
+            day: sessionDay,
+            value: top1 || undefined,
+            example: keyPhrase || displayTerm,
+          });
+          console.info('[v5_2_active_context_summary] appended', JSON.stringify({
+            event: 'active_context_summary_appended',
+            category: ctxCat,
+            day: sessionDay,
+            has_value: !!top1,
+            has_example: !!(keyPhrase || displayTerm),
+            // 鐵律 #2: 不 log 學員原話 value/example 內容, 只 enum + count.
+          }));
+        }
+      } catch (e) {
+        console.error('[v5_2_active_context_summary] append failed (fail-soft):', e.message);
+      }
     }
 
     // ⭐ v5.1 Step 6 PR-6b — crisis_state_carry_forward persistence.
