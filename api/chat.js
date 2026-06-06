@@ -48,6 +48,8 @@ import {
 } from '../lib/session/active-context.js';
 // ⭐ v5.2 第三塊 PR-b — Cross-Session Memory inject (per-category bucket from UPE).
 import { buildActiveContextSummaryInject } from '../lib/session/active-context-summary-inject.js';
+// ⭐ v5.2 第四塊 PR-b — Onboarding intercept (new students, before Mode routing).
+import { onboardingFlowHandler } from '../lib/detector-handlers/onboarding-flow.js';
 // ⭐ v5.2 第二塊 PR-b — cross-context handler (case 3 reminder lock).
 import {
   detectCrossContextSwapIntent, buildCrossContextReminderLockInject,
@@ -925,7 +927,8 @@ export default async function handler(req, res) {
     try {
       const pr = await sql`
         SELECT pace, plan, is_blocked, is_beta, created_at,
-               active_context_category, active_context_name, active_context_definition
+               active_context_category, active_context_name, active_context_definition,
+               context_onboarded
           FROM students WHERE student_id = ${studentId} LIMIT 1
       `;
       if (pr.length > 0) {
@@ -1106,6 +1109,51 @@ export default async function handler(req, res) {
       }
     };
 
+    // ⭐ v5.2 第四塊 PR-b — Onboarding intercept (before Mode routing per task spec).
+    //   Gate: !students.context_onboarded → run onboarding state machine.
+    //   Handler defers internally if crisis_in_progress (safety override).
+    //   On COMPLETE → atomic UPDATE students (active_context_* + onboarded=TRUE).
+    //   Once injected, onboarding TAKES THE TURN — skip other detectors below
+    //   (mode routing / elicitation should not run during onboarding).
+    let onboardingTookTurn = false;
+    {
+      const studentContextOnboarded = studentRow ? studentRow.context_onboarded === true : true;
+      // Default to TRUE for legacy students (no row found) — avoid surprising onboarding
+      // gate trigger for pre-migration-031 students. They take normal flow.
+      const onbOut = await onboardingFlowHandler({
+        ...ctx,
+        student_context_onboarded: studentContextOnboarded,
+      });
+      if (onbOut.handled) {
+        onboardingTookTurn = true;
+        if (onbOut.inject) conditionalInjects.push(onbOut.inject);
+        if (onbOut.patch) detectorPatch = { ...detectorPatch, ...onbOut.patch };
+        // Atomic write at COMPLETE step — UPDATE students with all 4 fields in one shot.
+        if (onbOut.onboarding_complete_write) {
+          const w = onbOut.onboarding_complete_write;
+          try {
+            await sql`
+              UPDATE students SET
+                active_context_category   = ${w.active_context_category},
+                active_context_name       = ${w.active_context_name},
+                active_context_definition = ${w.active_context_definition},
+                context_onboarded         = ${w.context_onboarded}
+              WHERE student_id = ${studentId}
+            `;
+            console.info('[v5_2_onboarding][complete_write]', JSON.stringify({
+              event: 'onboarding_atomic_write',
+              category: w.active_context_category,
+              name_present: !!w.active_context_name,
+              def_present: !!w.active_context_definition,
+              // 鐵律 #2: not logging raw values.
+            }));
+          } catch (e) {
+            console.error('[v5_2_onboarding] atomic write failed (fail-soft):', e.message);
+          }
+        }
+      }
+    }
+
     // 7a — new_session_day lifecycle（E4 day opening；handler 自己 gate 有無資產）
     //   PR-4c-green E4 fix: gate on session-state flag, not isNew (which only
     //   covers fresh row inserts). See shouldDispatchDayOpening() comment block.
@@ -1126,14 +1174,18 @@ export default async function handler(req, res) {
     }
 
     // 7b — user_turn Sequential cascade
-    try {
-      const r = await detectorRegistry.dispatch('user_turn', ctx);
-      const out = collectDetectorOutput(r);
-      conditionalInjects.push(...out.injects);
-      detectorPatch = { ...detectorPatch, ...out.patch };
-      mergeIncrements(out.user_profile_increments);
-    } catch (e) {
-      console.error('user_turn dispatch failed:', e.message);
+    //   ⭐ v5.2 第四塊 PR-b: skip when onboarding intercept took the turn
+    //   (onboarding state machine is self-contained, no detector cascade needed).
+    if (!onboardingTookTurn) {
+      try {
+        const r = await detectorRegistry.dispatch('user_turn', ctx);
+        const out = collectDetectorOutput(r);
+        conditionalInjects.push(...out.injects);
+        detectorPatch = { ...detectorPatch, ...out.patch };
+        mergeIncrements(out.user_profile_increments);
+      } catch (e) {
+        console.error('user_turn dispatch failed:', e.message);
+      }
     }
 
     // 7c — soft-limit closure-guidance（PR-4c session_end）
