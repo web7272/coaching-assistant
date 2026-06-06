@@ -77,6 +77,30 @@
           <label style="display:block;margin-bottom:14px;font-size:12px;color:var(--text-secondary);">
             <input type="checkbox" id="coach-edit-isbeta" /> 封測者（is_beta）
           </label>
+
+          <!-- ⭐ v5.2 第一塊 (Vivi 6/5) — active_context (program-level 21 天 program 主場景).
+               下拉 5 enum + name (≤ 30) + definition (≤ 200). default 1 = 事業. -->
+          <hr style="margin:14px 0;border:0;border-top:0.5px solid var(--border-line);" />
+          <label style="display:block;margin-bottom:10px;font-size:12px;color:var(--text-secondary);">
+            主場景（active_context）<br/>
+            <select id="coach-edit-ctx-category"
+                    style="width:100%;padding:6px 10px;font-family:var(--font-serif);font-size:14px;margin-top:4px;">
+              <!-- options injected by coach.js _COACH_CONTEXT_OPTIONS -->
+            </select>
+          </label>
+          <label style="display:block;margin-bottom:10px;font-size:12px;color:var(--text-secondary);">
+            場景名稱（選填，≤ 30 字）<br/>
+            <input type="text" id="coach-edit-ctx-name" maxlength="30"
+                   placeholder="例:我跟先生的溝通"
+                   style="width:100%;padding:6px 10px;font-family:var(--font-serif);font-size:14px;margin-top:4px;" />
+          </label>
+          <label style="display:block;margin-bottom:14px;font-size:12px;color:var(--text-secondary);">
+            場景說明（選填，≤ 200 字）<br/>
+            <textarea id="coach-edit-ctx-definition" maxlength="200" rows="3"
+                      placeholder="例:主要是日常溝通、不含原生家庭"
+                      style="width:100%;padding:6px 10px;font-family:var(--font-serif);font-size:14px;margin-top:4px;resize:vertical;"></textarea>
+          </label>
+
           <button type="button" id="coach-edit-save"  class="btn-green" style="padding:6px 14px;">儲存</button>
           <button type="button" id="coach-edit-reset" class="paper-btn" style="padding:6px 14px;margin-left:6px;">還原</button>
           <div id="coach-edit-msg" style="margin-top:8px;font-size:12px;color:var(--text-secondary);"></div>

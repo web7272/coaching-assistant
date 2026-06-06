@@ -74,6 +74,10 @@ export default async function handler(req, res) {
         s.is_beta,
         s.is_blocked,
         s.created_at,
+        -- ⭐ v5.2 第一塊: active_context_* (Vivi 後台清單顯示 + 詳情頁編輯).
+        s.active_context_category,
+        s.active_context_name,
+        s.active_context_definition,
         ((NOW() AT TIME ZONE 'Asia/Taipei')::date
          - (s.created_at AT TIME ZONE 'Asia/Taipei')::date)::int
           AS days_since_register,
@@ -89,7 +93,8 @@ export default async function handler(req, res) {
       FROM students s
       LEFT JOIN sessions sess ON sess.student_id = s.student_id
       GROUP BY s.student_id, s.email, s.preferred_name, s.pace,
-               s.is_beta, s.is_blocked, s.created_at
+               s.is_beta, s.is_blocked, s.created_at,
+               s.active_context_category, s.active_context_name, s.active_context_definition
       ORDER BY s.student_id
     `;
 

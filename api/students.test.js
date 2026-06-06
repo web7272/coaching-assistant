@@ -524,6 +524,165 @@ test('🛑 PATCH self: 無任何 session → 401 (既有 coach 401 行為不變)
   assert.equal(res.statusCode, 401);
 });
 
+// ═════════════════════════════════════════════════════════
+// ⭐ v5.2 第一塊 (Vivi 6/5) — PATCH active_context_category / name / definition
+// ═════════════════════════════════════════════════════════
+
+test('🛑 v5.2 PATCH active_context_category=3 → 200 + UPDATE COALESCE 帶 active_context_category=3', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', active_context_category: 3 },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  const upd = sql.calls[1];
+  assert.match(upd.text, /active_context_category\s*=\s*COALESCE/i);
+  assert.ok(upd.values.includes(3),
+    `expected 3 in active_context_category UPDATE values. saw: ${JSON.stringify(upd.values)}`);
+});
+
+test('🛑 v5.2 PATCH active_context_category=6 → 400 INVALID_ACTIVE_CONTEXT_CATEGORY + no SQL', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', active_context_category: 6 },
+  }), res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'INVALID_ACTIVE_CONTEXT_CATEGORY');
+  assert.equal(sql.calls.length, 0, 'invalid category 在任何 SQL 之前 reject');
+});
+
+test('🛑 v5.2 PATCH active_context_category=0 → 400 (boundary low)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', active_context_category: 0 },
+  }), res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'INVALID_ACTIVE_CONTEXT_CATEGORY');
+});
+
+test('🛑 v5.2 PATCH active_context_name (≤ 30) → 200 + 單獨 UPDATE active_context_name', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [],   // main UPDATE
+    [],   // active_context_name UPDATE
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', active_context_name: '我跟先生的溝通' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  // 3rd call (or later) — find the active_context_name UPDATE.
+  const nameUpd = sql.calls.find(c => /UPDATE students SET\s+active_context_name\s*=/i.test(c.text));
+  assert.ok(nameUpd, 'active_context_name UPDATE not found');
+  assert.ok(nameUpd.values.includes('我跟先生的溝通'),
+    `expected 我跟先生的溝通 in values. saw: ${JSON.stringify(nameUpd.values)}`);
+});
+
+test('🛑 v5.2 PATCH active_context_name 31 chars → 400 ACTIVE_CONTEXT_NAME_TOO_LONG', async () => {
+  _setCoachSessionReader(COACH_OK);
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', active_context_name: '我'.repeat(31) },
+  }), res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'ACTIVE_CONTEXT_NAME_TOO_LONG');
+});
+
+test('🛑 v5.2 PATCH active_context_definition 201 chars → 400 ACTIVE_CONTEXT_DEFINITION_TOO_LONG', async () => {
+  _setCoachSessionReader(COACH_OK);
+  _setSqlClient(makeMockSql([]));
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', active_context_definition: '說明'.repeat(101) },
+  }), res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'ACTIVE_CONTEXT_DEFINITION_TOO_LONG');
+});
+
+test('🛑 v5.2 PATCH active_context_name="" (whitespace 清空) → null UPDATE', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [], [],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', active_context_name: '   ' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  const nameUpd = sql.calls.find(c => /UPDATE students SET\s+active_context_name\s*=/i.test(c.text));
+  assert.ok(nameUpd);
+  assert.ok(nameUpd.values.includes(null),
+    `expected null in active_context_name UPDATE. saw: ${JSON.stringify(nameUpd.values)}`);
+});
+
+test('🛑 v5.2 PATCH self (student session): 學員想送 active_context_* → 403 FORBIDDEN_FIELD', async () => {
+  for (const escalation of ['active_context_category', 'active_context_name', 'active_context_definition']) {
+    _setCoachSessionReader(NO_SESSION);
+    _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+    _setSqlClient(makeMockSql([]));
+    const res = mockRes();
+    const body = { studentId: 'A001' };
+    body[escalation] = (escalation === 'active_context_category') ? 2 : '我跟先生的溝通';
+    await handler(mockReq({ method: 'PATCH', body }), res);
+    assert.equal(res.statusCode, 403,
+      `field "${escalation}" 必須擋 (學員不可改 program-level context). 看到: ${res.statusCode}`);
+    assert.equal(res.body.error, 'FORBIDDEN_FIELD');
+    assert.equal(res.body.field, escalation);
+  }
+});
+
+test('🛑 v5.2 GET ?studentId=A001 → 含 active_context_category / name / definition', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{
+      student_id: 'A001', current_module: 'self',
+      current_week: 1, current_day: 1, plan: 'plan_a', tier: 1,
+      pace: 'daily', preferred_name: 'V', is_beta: true,
+      active_context_category: 3,
+      active_context_name: '我跟先生的溝通',
+      active_context_definition: '主要是日常溝通',
+    }],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'GET',
+    query: { studentId: 'A001' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.student.active_context_category, 3);
+  assert.equal(res.body.student.active_context_name, '我跟先生的溝通');
+  assert.equal(res.body.student.active_context_definition, '主要是日常溝通');
+  // SELECT 必須含 active_context_* (snapshot lock for future GET shape regression).
+  assert.match(sql.calls[0].text, /active_context_category/);
+  assert.match(sql.calls[0].text, /active_context_name/);
+  assert.match(sql.calls[0].text, /active_context_definition/);
+});
+
+// ═════════════════════════════════════════════════════════
+
 test('🛑 PATCH coach 路徑不受影響: coach session 仍可改 plan / is_beta (allowlist 只 apply 到 student-self)', async () => {
   _setCoachSessionReader(COACH_OK);
   _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));   // 兩個都有, coach 優先

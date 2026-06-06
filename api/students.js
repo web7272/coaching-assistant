@@ -128,8 +128,11 @@ export default async function handler(req, res) {
           return res.status(403).json({ error: 'FORBIDDEN' });
         }
         // Allowlist — 任何「非 preferred_name / pace」 的欄位都拒絕 (防自我提權).
+        // v5.2: active_context_* 也歸教練 only (學員不應自改 program-level context).
         const forbidden = ['plan', 'tier', 'current_module', 'current_week',
-                            'current_day', 'notes', 'is_beta'];
+                            'current_day', 'notes', 'is_beta',
+                            'active_context_category', 'active_context_name',
+                            'active_context_definition'];
         for (const k of forbidden) {
           if (req.body[k] !== undefined) {
             return res.status(403).json({ error: 'FORBIDDEN_FIELD', field: k });
@@ -153,6 +156,13 @@ export default async function handler(req, res) {
       const pace = req.body.pace;
       const preferredNameRaw = req.body.preferred_name;
       const isBeta = req.body.is_beta !== undefined ? !!req.body.is_beta : undefined;
+
+      // ⭐ v5.2 第一塊 (Vivi 6/5) — active_context_* (category 1-5 / name ≤ 30 /
+      //   definition ≤ 200). nullable name/definition、空字串視為清空 → null.
+      const acCategory = req.body.active_context_category !== undefined
+        ? parseInt(req.body.active_context_category, 10) : undefined;
+      const acNameRaw = req.body.active_context_name;
+      const acDefRaw  = req.body.active_context_definition;
 
       // v3.0: plan 如果有送、必須是合法 enum（PATCH 是 partial update、沒送就略過）
       if (plan !== undefined && !VALID_PLANS.has(plan)) {
@@ -178,6 +188,35 @@ export default async function handler(req, res) {
         prefSan = trimmed.length === 0 ? null : trimmed;
       }
 
+      // ⭐ v5.2 active_context 驗證:
+      //   category: integer ∈ [1, 5] (CHECK constraint 在 DB 是兜底, 此處早攔提速)
+      //   name: trim, ≤ 30 chars, 空字串 → null
+      //   definition: trim, ≤ 200 chars, 空字串 → null
+      if (acCategory !== undefined) {
+        if (!Number.isInteger(acCategory) || acCategory < 1 || acCategory > 5) {
+          return res.status(400).json({
+            error: 'INVALID_ACTIVE_CONTEXT_CATEGORY',
+            message: 'active_context_category 必須是 1-5 整數 (1=事業 / 2=親密關係 / 3=家庭 / 4=健康 / 5=自我)',
+          });
+        }
+      }
+      let acNameSan;
+      if (acNameRaw !== undefined) {
+        const trimmed = String(acNameRaw).trim();
+        if (trimmed.length > 30) {
+          return res.status(400).json({ error: 'ACTIVE_CONTEXT_NAME_TOO_LONG' });
+        }
+        acNameSan = trimmed.length === 0 ? null : trimmed;
+      }
+      let acDefSan;
+      if (acDefRaw !== undefined) {
+        const trimmed = String(acDefRaw).trim();
+        if (trimmed.length > 200) {
+          return res.status(400).json({ error: 'ACTIVE_CONTEXT_DEFINITION_TOO_LONG' });
+        }
+        acDefSan = trimmed.length === 0 ? null : trimmed;
+      }
+
       // 確認學員存在
       const exists = await sql`SELECT student_id FROM students WHERE student_id = ${studentId}`;
       if (exists.length === 0) {
@@ -197,7 +236,8 @@ export default async function handler(req, res) {
           current_week   = COALESCE(${cw ?? null}, current_week),
           current_day    = COALESCE(${cd ?? null}, current_day),
           pace           = COALESCE(${pace ?? null}, pace),
-          is_beta        = COALESCE(${isBeta ?? null}, is_beta)
+          is_beta        = COALESCE(${isBeta ?? null}, is_beta),
+          active_context_category = COALESCE(${acCategory ?? null}, active_context_category)
         WHERE student_id = ${studentId}
       `;
 
@@ -208,6 +248,13 @@ export default async function handler(req, res) {
       // preferred_name 單獨更新（支援清空成 null）
       if (prefSan !== undefined) {
         await sql`UPDATE students SET preferred_name = ${prefSan} WHERE student_id = ${studentId}`;
+      }
+      // ⭐ v5.2 active_context_name / definition 單獨更新（支援清空成 null）.
+      if (acNameSan !== undefined) {
+        await sql`UPDATE students SET active_context_name = ${acNameSan} WHERE student_id = ${studentId}`;
+      }
+      if (acDefSan !== undefined) {
+        await sql`UPDATE students SET active_context_definition = ${acDefSan} WHERE student_id = ${studentId}`;
       }
 
       return res.status(200).json({ success: true });
@@ -233,7 +280,8 @@ export default async function handler(req, res) {
       if (studentId) {
         const rows = await sql`
           SELECT student_id, current_module, current_week, current_day,
-                 plan, tier, pace, preferred_name, is_beta
+                 plan, tier, pace, preferred_name, is_beta,
+                 active_context_category, active_context_name, active_context_definition
           FROM students
           WHERE student_id = ${studentId}
         `;

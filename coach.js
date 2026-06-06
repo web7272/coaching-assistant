@@ -25,6 +25,28 @@ function escapeText(s) { const d = document.createElement('div'); d.textContent 
 // PR-4c-green P5: extended to 5 phases (was 3 weeks). The week-report I/II/III
 // grid is gone; the Phase Report shelf takes Roman 1..5.
 function roman(n) { return ['I', 'II', 'III', 'IV', 'V'][n - 1] || ''; }
+
+// ─── v5.2 active_context category labels (Vivi 6/5) ─────────────
+// 對應 migration 029 + spec §1.3 enum. Server-side label 在 admin shape; 此處 fallback
+// 給 raw /api/students GET 場景 (詳情頁 GET 不經 shapeStudentRow).
+const _COACH_CONTEXT_LABELS = {
+  1: '事業',
+  2: '親密關係',
+  3: '家庭',
+  4: '健康',
+  5: '自我',
+};
+const _COACH_CONTEXT_OPTIONS = [
+  { value: 1, label: '事業 / 工作 / 金錢' },
+  { value: 2, label: '親密關係 (伴侶 / 戀愛)' },
+  { value: 3, label: '家庭 (原生家庭 / 子女)' },
+  { value: 4, label: '健康 / 身體' },
+  { value: 5, label: '自我 / 內在狀態 / 心理' },
+];
+function _coachContextShortLabel(cat) {
+  const n = Number(cat);
+  return Number.isInteger(n) && _COACH_CONTEXT_LABELS[n] ? _COACH_CONTEXT_LABELS[n] : '事業';
+}
 const PHASE_NAMES = ['找到你真正要的', '你是誰', '擴大地圖', '串連起來', '放手帶著走'];
 
 // ─── list view ─────────────────────────────────────────────────────
@@ -102,12 +124,20 @@ function _renderCoachList(students, filter) {
     row.className = 'coach-list__row';
     row.tabIndex = 0;
     // 6/3 Patrick — 顯示 is_beta / is_blocked pills (兩個都沒勾就什麼都不顯示).
+    // ⭐ v5.2 第一塊 (Vivi 6/5): 加 active_context label pill (預設「事業」).
     const pills = [];
     if (s.is_beta === true) {
       pills.push(`<span class="coach-pill coach-pill--beta">封測</span>`);
     }
     if (s.is_blocked === true) {
       pills.push(`<span class="coach-pill coach-pill--blocked">已停用</span>`);
+    }
+    // active_context_label 來自 GET /api/students (admin shape). Fallback 「事業」
+    // for missing (e.g. /api/students raw shape not yet 經 shapeStudentRow).
+    const ctxLabel = s.active_context_label
+      || _coachContextShortLabel(s.active_context_category);
+    if (ctxLabel) {
+      pills.push(`<span class="coach-pill coach-pill--context">${escapeText(ctxLabel)}</span>`);
     }
     const pillsHtml = pills.length
       ? `<div class="coach-list__tags">${pills.join('')}</div>`
@@ -191,6 +221,11 @@ async function renderStudent(sid) {
       preferred_name: stu.preferred_name || '',
       pace:           stu.pace || 'daily',
       is_beta:        !!stu.is_beta,
+      // ⭐ v5.2 第一塊 (Vivi 6/5) — active_context (default 1=事業 per migration 029).
+      active_context_category:   Number.isInteger(Number(stu.active_context_category))
+        ? Number(stu.active_context_category) : 1,
+      active_context_name:       stu.active_context_name || '',
+      active_context_definition: stu.active_context_definition || '',
     };
     const $name  = document.getElementById('coach-edit-name');
     const $pace  = document.getElementById('coach-edit-pace');
@@ -198,11 +233,27 @@ async function renderStudent(sid) {
     const $save  = document.getElementById('coach-edit-save');
     const $reset = document.getElementById('coach-edit-reset');
     const $msg   = document.getElementById('coach-edit-msg');
+    // v5.2 active_context controls.
+    const $ctxCat  = document.getElementById('coach-edit-ctx-category');
+    const $ctxName = document.getElementById('coach-edit-ctx-name');
+    const $ctxDef  = document.getElementById('coach-edit-ctx-definition');
+    // Lazy-populate select options once per render (idempotent).
+    if ($ctxCat && $ctxCat.options.length === 0) {
+      for (const opt of _COACH_CONTEXT_OPTIONS) {
+        const o = document.createElement('option');
+        o.value = String(opt.value);
+        o.textContent = opt.label;
+        $ctxCat.appendChild(o);
+      }
+    }
 
     function fillForm(src) {
       $name.value   = src.preferred_name;
       $pace.value   = src.pace;
       $beta.checked = src.is_beta;
+      if ($ctxCat)  $ctxCat.value  = String(src.active_context_category);
+      if ($ctxName) $ctxName.value = src.active_context_name;
+      if ($ctxDef)  $ctxDef.value  = src.active_context_definition;
     }
     fillForm(original);
     // 初始標題：「學員 · 稱呼（A001）」如果已有 preferred_name.
@@ -220,6 +271,19 @@ async function renderStudent(sid) {
       if (newName        !== original.preferred_name) body.preferred_name = newName;
       if ($pace.value    !== original.pace)           body.pace           = $pace.value;
       if ($beta.checked  !== original.is_beta)        body.is_beta        = $beta.checked;
+      // ⭐ v5.2 active_context diff. Trim name/definition first.
+      const newCtxCat  = $ctxCat  ? parseInt($ctxCat.value, 10) : original.active_context_category;
+      const newCtxName = $ctxName ? $ctxName.value.trim() : original.active_context_name;
+      const newCtxDef  = $ctxDef  ? $ctxDef.value.trim()  : original.active_context_definition;
+      if (Number.isInteger(newCtxCat) && newCtxCat !== original.active_context_category) {
+        body.active_context_category = newCtxCat;
+      }
+      if (newCtxName !== original.active_context_name) {
+        body.active_context_name = newCtxName;
+      }
+      if (newCtxDef !== original.active_context_definition) {
+        body.active_context_definition = newCtxDef;
+      }
       if (Object.keys(body).length === 1) {     // 只有 studentId → 沒改
         $msg.textContent = '沒有變動。';
         $save.disabled = false;
@@ -232,6 +296,9 @@ async function renderStudent(sid) {
           preferred_name: newName,
           pace:           $pace.value,
           is_beta:        $beta.checked,
+          active_context_category:   newCtxCat,
+          active_context_name:       newCtxName,
+          active_context_definition: newCtxDef,
         });
         if (titleEl) {
           titleEl.textContent = newName ? `學員 · ${newName}（${sid}）` : `學員 · ${sid}`;

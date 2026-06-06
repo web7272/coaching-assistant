@@ -720,6 +720,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   line-height: 1.5; white-space: nowrap; }
 .coach-pill--beta { background: rgba(214,130,106,.16); color: var(--coral-soft, #b96544); }
 .coach-pill--blocked { background: rgba(156,140,135,.18); color: var(--ink-dim, #9c8c87); }
+/* v5.2 6/5 Vivi — active_context label (主場景) pill: muted blue-ink tone. */
+.coach-pill--context { background: rgba(99,124,140,.14); color: var(--ink-deep, #4a5d68); }
 .coach-section { margin-top: 32px; }
 .coach-h2 { font-family: var(--font-serif); font-size: 14px; letter-spacing: 2px; color: var(--text-secondary); margin-bottom: 10px; }
 /* P5 (PR-4c-green): 3×7 daily only — 週報 I/II/III column retired (spec 09 §10).

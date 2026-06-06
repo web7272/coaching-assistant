@@ -124,11 +124,15 @@ test('🛑 GET (no query) → 200 + count=6 + shape locked', async () => {
   assert.equal(res.body.count, 6);
   assert.equal(res.body.students.length, 6);
   // student object shape (鐵則 #2 — 不洩漏 messages / damon_note / SC 觀察)
+  // ⭐ v5.2 第一塊 (Vivi 6/5) — +4 active_context_* fields.
   const allowed = [
     'created_at', 'days_remaining_in_beta_window', 'days_since_last_session',
     'days_since_register', 'email', 'finished_21', 'finished_at',
     'is_at_risk', 'is_beta', 'is_blocked', 'last_session_at',
     'last_unlocked_day', 'pace', 'preferred_name', 'student_id',
+    // v5.2 active_context (server-side label + 3 raw fields)
+    'active_context_category', 'active_context_label',
+    'active_context_name', 'active_context_definition',
   ].sort();
   for (const r of res.body.students) {
     assert.deepEqual(Object.keys(r).sort(), allowed,
