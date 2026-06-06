@@ -224,6 +224,96 @@ test('buildDynamicContext: daily_takeaways present but last_takeaway_term missin
 });
 
 // ─────────────────────────────────────────────────────────
+// ⭐ v5.2 第二塊 PR-a — active_context dynamic inject
+// ─────────────────────────────────────────────────────────
+
+test('🛑 v5.2 buildDynamicContext: activeContext set → [Active Context] block 在最前面', () => {
+  const txt = buildDynamicContext({}, {}, 0, {
+    activeContext: { category: 2, name: '我跟先生的溝通', definition: '主要是日常溝通' },
+  });
+  // Block appears BEFORE the 「本場學員狀態」 header.
+  const blockIdx = txt.indexOf('[Active Context]');
+  const headerIdx = txt.indexOf('本場學員狀態');
+  assert.ok(blockIdx >= 0, 'block must appear');
+  assert.ok(headerIdx > blockIdx, 'block must precede 本場學員狀態 header');
+  // §4.1 verbatim anchors.
+  assert.match(txt, /Category: 親密關係 \(伴侶 \/ 戀愛\)/);
+  assert.match(txt, /Name: 我跟先生的溝通/);
+  assert.match(txt, /Definition: 主要是日常溝通/);
+  assert.match(txt, /Today's conversation focuses on this context\./);
+  assert.match(txt, /Do not initiate cross-context exploration unless learner naturally surfaces\./);
+});
+
+test('🛑 v5.2 buildDynamicContext: activeContext null → block 不出現 (fallback v5.1)', () => {
+  const txt = buildDynamicContext({}, {}, 0);   // no opts
+  assert.doesNotMatch(txt, /\[Active Context\]/);
+  // Existing v5.1 content still present.
+  assert.match(txt, /━━━ 本場學員狀態/);
+  assert.match(txt, /primary_mode：/);
+});
+
+test('🛑 v5.2 buildDynamicContext: activeContext invalid (category 0 / 6) → block 不出現', () => {
+  for (const bad of [0, 6, null, undefined, NaN]) {
+    const txt = buildDynamicContext({}, {}, 0, { activeContext: { category: bad } });
+    assert.doesNotMatch(txt, /\[Active Context\]/,
+      `category=${bad} should suppress block (fallback to v5.1)`);
+  }
+});
+
+test('🛑 v5.2 buildDynamicContext: activeContext name null → block uses 中文 category label fallback', () => {
+  // migration 029 default 1 (事業), Vivi 還沒填 name → fallback to 「事業 / 工作 / 金錢」.
+  const txt = buildDynamicContext({}, {}, 0, {
+    activeContext: { category: 1, name: null, definition: null },
+  });
+  assert.match(txt, /Category: 事業 \/ 工作 \/ 金錢/);
+  assert.match(txt, /Name: 事業 \/ 工作 \/ 金錢/);
+  assert.match(txt, /Definition: \(unspecified/);
+});
+
+test('🛑 v5.2 buildSystemPromptArrayV5: activeContext threaded into dynamic block only (NOT cached)', () => {
+  const arr = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0,
+    conditionalInjects: [], cachingEnabled: true,
+    activeContext: { category: 3, name: null, definition: null },
+  });
+  assert.equal(arr.length, 5, '4 cached + 1 dynamic — count unchanged');
+  // [Active Context] appears ONLY in dynamic block (arr[4]).
+  for (let i = 0; i < 4; i++) {
+    assert.doesNotMatch(arr[i].text, /\[Active Context\]/,
+      `cached section ${i + 1} must NOT contain [Active Context] (per-student, breaks全員 cache)`);
+  }
+  assert.match(arr[4].text, /\[Active Context\]/, 'dynamic block contains [Active Context]');
+  assert.match(arr[4].text, /Category: 家庭/);
+});
+
+test('🛑 v5.2 cache snapshot lock: breakpoint position unchanged after activeContext addition', () => {
+  // Regression guard: v5.2 must NOT shift the cache breakpoint.
+  const arr = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0, conditionalInjects: [],
+    cachingEnabled: true,
+    activeContext: { category: 2, name: 'X', definition: 'Y' },
+  });
+  assert.equal(arr[0].cache_control, undefined);
+  assert.equal(arr[1].cache_control, undefined);
+  assert.equal(arr[2].cache_control, undefined);
+  assert.deepEqual(arr[3].cache_control, { type: 'ephemeral' },
+    'breakpoint must stay on cached section 4');
+  assert.equal(arr[4].cache_control, undefined, 'dynamic (incl. active_context) NOT cached');
+});
+
+test('🛑 v5.2 buildSystemPromptArrayV5: cachingEnabled=false also includes active_context (merged)', () => {
+  const arr = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0, conditionalInjects: [],
+    cachingEnabled: false,
+    activeContext: { category: 5, name: '面對自己的不安', definition: null },
+  });
+  assert.equal(arr.length, 1, 'caching OFF → single merged block');
+  assert.match(arr[0].text, /\[Active Context\]/);
+  assert.match(arr[0].text, /Category: 自我/);
+  assert.match(arr[0].text, /Name: 面對自己的不安/);
+});
+
+// ─────────────────────────────────────────────────────────
 // buildSystemPromptArrayV5 — cache breakpoint
 // ─────────────────────────────────────────────────────────
 

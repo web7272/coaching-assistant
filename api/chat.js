@@ -42,6 +42,8 @@ import { computeDepthSignal } from '../lib/api/depth-signal.js';
 import { isBlocked, shouldExpireBetaWindow, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
 // ⭐ v5.1 Step 4 PR-23s4b — phase-context retired. mode-context 取代.
 import { modeContextFor } from '../lib/session/mode-context.js';
+// ⭐ v5.2 第二塊 PR-a (Vivi 6/5) — active_context inject helper.
+import { buildActiveContextBlock, pickActiveContext } from '../lib/session/active-context.js';
 // ⭐ v5.1 Step 4 PR-23s4b — phase-advance / phase-machine 退役 (廢除).
 //   chat.js Step 5b (phaseForDay + phaseEntryPatch 天數驅動) 已刪除.
 //   mode 流動由 detector handlers (尤其 mode-transition-router) 完全接管.
@@ -410,14 +412,29 @@ async function loadOrCreateSession(sql, {
  * @param {object} sessionState
  * @param {object} userProfile
  * @param {number} gapDays
+ * @param {object} [opts]
+ * @param {{category:number,name:string|null,definition:string|null}} [opts.activeContext]
+ *   v5.2 第二塊 PR-a — per-student active_context from students table.
+ *   When set + valid, prepends [Active Context] block per spec §4.1 (~80 tok).
+ *   When null / invalid, omitted (graceful fallback to v5.1 behavior per spec §7.3).
  * @returns {string}
  */
-export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays = 0) {
+export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays = 0, opts = {}) {
+  // ⭐ v5.2 第二塊 PR-a — Active Context block (English internal awareness for Sonnet).
+  //   Lives in dynamic block (breakpoint 後), NOT cached — per-student content,
+  //   進 cached 會破全員 cache. Per spec §4.1 verbatim template.
+  const activeContextBlock = opts.activeContext
+    ? buildActiveContextBlock(opts.activeContext)
+    : null;
+  const linesActiveContext = activeContextBlock
+    ? [activeContextBlock, '']   // block + blank line separator
+    : [];
+
   // ⭐ v5.1 Step 4 PR-23s4b — primary_mode 取代 current_phase.
   //   readModeState 走 fallback (legacy router_phase / null state → elicitation).
   const modeRead = readModeState(sessionState);
   const primaryMode = modeRead.primary_mode;
-  const lines = ['━━━ 本場學員狀態（runtime、不快取）━━━'];
+  const lines = [...linesActiveContext, '━━━ 本場學員狀態（runtime、不快取）━━━'];
 
   const top1 = userProfile.top1_value || sessionState.top1_value || null;
   const anchors = Array.isArray(userProfile.anchors) ? userProfile.anchors : [];
@@ -515,8 +532,9 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
  */
 export function buildSystemPromptArrayV5({
   sessionState, userProfile, gapDays = 0, conditionalInjects = [], cachingEnabled = false,
+  activeContext = null,   // ⭐ v5.2 第二塊 PR-a — threaded through to dynamic block
 }) {
-  const dynamicText = buildDynamicContext(sessionState, userProfile, gapDays)
+  const dynamicText = buildDynamicContext(sessionState, userProfile, gapDays, { activeContext })
     + (conditionalInjects.length ? '\n\n' + conditionalInjects.join('\n\n') : '');
 
   if (!cachingEnabled) {
@@ -869,7 +887,8 @@ export default async function handler(req, res) {
     let studentRow = null;
     try {
       const pr = await sql`
-        SELECT pace, plan, is_blocked, is_beta, created_at
+        SELECT pace, plan, is_blocked, is_beta, created_at,
+               active_context_category, active_context_name, active_context_definition
           FROM students WHERE student_id = ${studentId} LIMIT 1
       `;
       if (pr.length > 0) {
@@ -1128,12 +1147,17 @@ export default async function handler(req, res) {
 
     // Step 8 — build system prompt array（cached prefix + dynamic）
     const stateForPrompt = { ...sessionState, ...detectorPatch };
+    // ⭐ v5.2 第二塊 PR-a — derive active_context from studentRow (loaded at L869).
+    //   Fallback gracefully when row absent (legacy student before migration 029)
+    //   OR when activeContext fields are null (in-progress 不 break per spec §7.3).
+    const activeContext = studentRow ? pickActiveContext(studentRow) : null;
     const systemParam = buildSystemPromptArrayV5({
       sessionState: stateForPrompt,
       userProfile: userProfile || {},
       gapDays: gap_days,
       conditionalInjects,
       cachingEnabled,
+      activeContext,
     });
 
     // Step 9 — Anthropic Sonnet call (with 429 backoff + 5xx 1-retry, 6/3 burst protection).
