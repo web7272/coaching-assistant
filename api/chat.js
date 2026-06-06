@@ -58,6 +58,10 @@ import {
 import {
   CROSS_CONTEXT_SWAP_THRESHOLD,
 } from '../lib/dashboard/alert-rules.js';
+// ⭐ 6/6 A011 hotfix — session resume guidance inject (Vivi 6/6 拍板).
+import {
+  buildResumeGuidanceInject,
+} from '../lib/sub-prompts/session-resume/resume-guidance.js';
 // ⭐ v5.1 Step 4 PR-23s4b — phase-advance / phase-machine 退役 (廢除).
 //   chat.js Step 5b (phaseForDay + phaseEntryPatch 天數驅動) 已刪除.
 //   mode 流動由 detector handlers (尤其 mode-transition-router) 完全接管.
@@ -365,6 +369,11 @@ async function loadOrCreateSession(sql, {
       sessionStart: new Date(inProgress.created_at),
       sessionState: inProgress.session_state || {},
       isNew:        false,
+      // ⭐ 6/6 A011 hotfix — flag the reuse path so the handler can detect
+      // resume-across-gap (vs locked / awaiting_prior_finalize, which also have
+      // isNew=false). Used to inject session-resume guidance on kickoff turn
+      // when gap_days >= 1 (Vivi 6/6 spec).
+      wasReuse:     true,
     };
   }
 
@@ -732,6 +741,24 @@ export function isKickoffRequest(body) {
 }
 
 /**
+ * ⭐ 6/6 A011 hotfix (Vivi 6/6) — pure decision function for resume-across-gap.
+ *
+ * Returns true when this turn picks up an unfinished session AND a calendar
+ * gap has elapsed (≥ 1 day). chat.js uses this both to (a) inject the
+ * [SESSION RESUME] guidance on kickoff and (b) defensively gate E4 day-opening.
+ *
+ * @param {object} args
+ * @param {boolean} args.wasReuse — loadOrCreateSession set this on the reuse path
+ * @param {number}  args.gapDays  — detectNewSessionDay's gap_days (calendar days)
+ * @returns {boolean}
+ */
+export function isResumeAcrossGap({ wasReuse, gapDays } = {}) {
+  if (!wasReuse) return false;
+  const g = Number(gapDays);
+  return Number.isFinite(g) && g >= 1;
+}
+
+/**
  * The messages array Sonnet sees during a kickoff turn.
  * Single user-role meta-instruction; the actual opening question comes from
  * the system prompt's phase-context opening variant (+ E4 day-opening inject
@@ -1019,6 +1046,13 @@ export default async function handler(req, res) {
       });
     }
     const { sessionId, sessionStart, isNew } = sess;
+    // ⭐ 6/6 A011 hotfix — resume-across-gap detection (Vivi 6/6 拍板).
+    //   Fires when this turn loaded an in-progress session (wasReuse=true) AND
+    //   the calendar gap_days >= 1 (student returned a day or more later).
+    //   Used to (i) inject [SESSION RESUME] guidance on kickoff turn and
+    //   (ii) defensively gate E4 day-opening so a resume across gap can't be
+    //   misclassified as a fresh Day N+1 opening.
+    const resumeAcrossGap = isResumeAcrossGap({ wasReuse: sess.wasReuse, gapDays: gap_days });
     // 5/28 Patrick (A006 rollback) — 只記錄這 turn 自己「新建」的 row, reuse 的 in-progress
     // row 不能刪. 之後任何 downstream 炸 → finally DELETE 這個 id.
     _rollbackSessionId = isNew ? sessionId : null;
@@ -1161,7 +1195,13 @@ export default async function handler(req, res) {
     // 7a — new_session_day lifecycle（E4 day opening；handler 自己 gate 有無資產）
     //   PR-4c-green E4 fix: gate on session-state flag, not isNew (which only
     //   covers fresh row inserts). See shouldDispatchDayOpening() comment block.
-    if (shouldDispatchDayOpening(sessionState)) {
+    // ⭐ 6/6 A011 hotfix — additionally gate on !resumeAcrossGap. E4 day-opening
+    //   is for "this is a new calendar day with carry-over from yesterday".
+    //   Resume-across-gap is "this is the SAME unfinished day picked up later".
+    //   Even if day_opening_done_this_session flag is missing on a legacy row,
+    //   don't fire E4 cold-start on a resume — the [SESSION RESUME] inject
+    //   (pushed below) drives continuity instead.
+    if (shouldDispatchDayOpening(sessionState) && !resumeAcrossGap) {
       try {
         const r = await detectorRegistry.dispatch('new_session_day', ctx);
         const out = collectDetectorOutput(r);
@@ -1175,6 +1215,23 @@ export default async function handler(req, res) {
       // protection within the same session row. Flag resets naturally on Day N+1
       // (new session row → fresh session_state).
       detectorPatch.day_opening_done_this_session = true;
+    }
+
+    // ⭐ 6/6 A011 hotfix — resume-across-gap kickoff inject.
+    //   Fires only on the kickoff turn of a resume-across-gap (not on
+    //   every reuse turn). Tells the AI to look at message history and
+    //   reference the prior thread instead of cold-starting with the
+    //   elicitation 起手式. The history is already in the messages array
+    //   sent to Sonnet, so no data fetch is needed — guidance alone is enough.
+    if (resumeAcrossGap && isKickoff) {
+      conditionalInjects.push(buildResumeGuidanceInject(gap_days));
+      console.info('[session-resume][cross-gap-kickoff]', JSON.stringify({
+        event: 'session_resume_guidance_injected',
+        gap_days,
+        session_day: sess.sessionDay,
+        prior_turn_count: turnCount,
+        // 鐵律 #2: no raw user text logged.
+      }));
     }
 
     // 7b — user_turn Sequential cascade
