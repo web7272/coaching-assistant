@@ -1223,7 +1223,16 @@ export default async function handler(req, res) {
     //   reference the prior thread instead of cold-starting with the
     //   elicitation 起手式. The history is already in the messages array
     //   sent to Sonnet, so no data fetch is needed — guidance alone is enough.
-    if (resumeAcrossGap && isKickoff) {
+    // ⭐ 6/6 P0 hotfix — additionally gate on !sopActiveIncomplete. If the
+    //   session was interrupted mid-crisis-SOP (e.g. A015: 學員打「我想自殺」
+    //   進 Step 4, then disengaged), crisis-sop Fix 3 re-presents the current
+    //   SOP step on kickoff. The A011 generic "look at history, continue
+    //   prior thread" guidance would conflict ("不要重新起手式" vs crisis
+    //   re-presenting the Step 4 phrasing). Crisis re-present wins (P0 safety).
+    const sopActiveIncomplete = sessionState?.crisis_sop_state != null
+      && typeof sessionState?.crisis_sop_state === 'object'
+      && sessionState?.crisis_sop_complete !== true;
+    if (resumeAcrossGap && isKickoff && !sopActiveIncomplete) {
       conditionalInjects.push(buildResumeGuidanceInject(gap_days));
       console.info('[session-resume][cross-gap-kickoff]', JSON.stringify({
         event: 'session_resume_guidance_injected',
@@ -1231,6 +1240,12 @@ export default async function handler(req, res) {
         session_day: sess.sessionDay,
         prior_turn_count: turnCount,
         // 鐵律 #2: no raw user text logged.
+      }));
+    } else if (resumeAcrossGap && isKickoff && sopActiveIncomplete) {
+      console.info('[session-resume][cross-gap-kickoff-deferred-to-crisis]', JSON.stringify({
+        event: 'session_resume_guidance_skipped_mid_sop',
+        gap_days,
+        sop_current_step: sessionState.crisis_sop_state.current_step,
       }));
     }
 
