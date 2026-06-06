@@ -1245,6 +1245,9 @@ export default async function handler(req, res) {
     //   (spec §4.2「連續 3 turn 學員仍堅持換 context → escalate Vivi」). The
     //   case-3 marker埋的 alert 觸發 now lands here. Non-swap turn → reset 0
     //   (連續性). Crisis preserves count (don't reset / don't increment).
+    // ⭐ 6/6 hotfix: skip when onboardingTookTurn — student hasn't picked an
+    //   active_context yet so "swap" semantic is undefined, and studentRow's
+    //   migration-029 default would yield a stale ctxNameForCcc.
     {
       const modeReadForCcc = readModeState(sessionState);
       const inCrisis = modeReadForCcc.primary_mode === 'crisis'
@@ -1253,9 +1256,10 @@ export default async function handler(req, res) {
       const ctxNameForCcc = ctxForCcc ? deriveContextNameForPhrasing(ctxForCcc) : null;
       const hasActiveContext = !!(ctxNameForCcc);
       const userText = typeof ctx?.user_response === 'string' ? ctx.user_response : '';
-      // Only evaluate swap accounting when NOT in crisis AND active_context is set.
-      // (No active_context = mid-onboarding / un-provisioned → no "swap" semantics.)
-      if (!inCrisis && hasActiveContext) {
+      // Only evaluate swap accounting when NOT in crisis AND active_context is set
+      // AND not in onboarding (6/6 hotfix). No active_context = mid-onboarding /
+      // un-provisioned → no "swap" semantics.
+      if (!inCrisis && hasActiveContext && !onboardingTookTurn) {
         const swapDetected = detectCrossContextSwapIntent(userText);
         const prevSwapCount = Number(sessionState?.cross_context_swap_count) || 0;
         // Non-swap turn resets per spec §4.2 連續性 semantic.
@@ -1296,7 +1300,14 @@ export default async function handler(req, res) {
     // ⭐ v5.2 第二塊 PR-a — derive active_context from studentRow (loaded at L869).
     //   Fallback gracefully when row absent (legacy student before migration 029)
     //   OR when activeContext fields are null (in-progress 不 break per spec §7.3).
-    const activeContext = studentRow ? pickActiveContext(studentRow) : null;
+    // ⭐ 6/6 hotfix: during onboarding (onboardingTookTurn=true) the onboarding
+    //   sub-prompts (step-2/3 buildXxxInject) own the category anchor via the
+    //   in-flight onboarding_step.picked_category. studentRow.active_context_*
+    //   is still migration-029 default 1 — using it would re-introduce the
+    //   "step 2 anchors 事業 regardless of pick" bug Vivi sandboxed. Suppress.
+    const activeContext = (onboardingTookTurn || !studentRow)
+      ? null
+      : pickActiveContext(studentRow);
     const systemParam = buildSystemPromptArrayV5({
       sessionState: stateForPrompt,
       userProfile: userProfile || {},
