@@ -1125,6 +1125,11 @@ export default async function handler(req, res) {
       // PR-4c-4c kickoff: pass empty user_response so detectors (E1/E2 etc.)
       // don't fire on the synthetic sentinel content.
       user_response: isKickoff ? '' : userMessage.content,
+      // ⭐ P0 hotfix Fix 3 (Patrick 6/6 回修, A015): explicit kickoff flag so
+      //   handlers don't have to introspect a stripped user_response sentinel.
+      //   crisis-sop.js Fix 3 (kickoff RESUME re-present) checks ctx.is_kickoff
+      //   to distinguish a returning mid-SOP learner from a real user turn.
+      is_kickoff: isKickoff,
       user_profile: userProfile || {},
       anchors_top3: anchorsArr.slice(-3),
       last_3_turns: messages.slice(-6).map(m => m?.content || ''),
