@@ -46,6 +46,8 @@ import { modeContextFor } from '../lib/session/mode-context.js';
 import {
   buildActiveContextBlock, pickActiveContext, deriveContextNameForPhrasing,
 } from '../lib/session/active-context.js';
+// ⭐ v5.2 第三塊 PR-b — Cross-Session Memory inject (per-category bucket from UPE).
+import { buildActiveContextSummaryInject } from '../lib/session/active-context-summary-inject.js';
 // ⭐ v5.2 第二塊 PR-b — cross-context handler (case 3 reminder lock).
 import {
   detectCrossContextSwapIntent, buildCrossContextReminderLockInject,
@@ -504,6 +506,28 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
     // Explicit empty signal so the inject's「模式 B 安全暖開場」 path is
     // unambiguous. Sonnet must NOT fabricate when this line is here.
     lines.push('昨天的素材：（無真實素材 — 走安全暖開場、絕對不杜撰「你昨天說…」）');
+  }
+
+  // ⭐ v5.2 第三塊 PR-b — Cross-Session Memory per-category inject (bug #7 fix).
+  //   讀 UPE.active_context_session_summary[active_context.category] → format §5.2 block.
+  //   Token-controlled: 8 examples max, ≤100 chars each, ~200 tok total.
+  //   Empty bucket / no active_context → null → skip (fallback to「昨天素材」 continuity).
+  //   ⚠️ 自然乾淨切換: 換 category 後只讀新 category bucket, 舊 category 累積保留但
+  //      不引用 (design 即乾淨, no cleanup needed).
+  if (opts.activeContext && opts.activeContext.category) {
+    const summaryJsonb = (userProfile && typeof userProfile.active_context_session_summary === 'object')
+      ? userProfile.active_context_session_summary
+      : null;
+    const summaryInject = buildActiveContextSummaryInject({
+      summaryJsonb,
+      category: opts.activeContext.category,
+      // contextName via derive helper (same as Mode anchor below).
+      contextName: deriveContextNameForPhrasing(opts.activeContext),
+    });
+    if (summaryInject) {
+      lines.push('');           // blank line separator
+      lines.push(summaryInject);
+    }
   }
 
   // {{current_mode_context}} — v5.1 Step 4 PR-23s4b:
