@@ -282,8 +282,9 @@ if (typeof window !== 'undefined') {
 //   *** 部署門檻 ***: 此 commit 只有在 seeyourself.now apex DNS + SSL 已生效後
 //   才能 merge 到 production。否則未認證新用戶會被導到尚未架好的 apex →
 //   ERR_SSL_VERSION_OR_CIPHER_MISMATCH、直接吃掉 CTA 轉換。
-//   DNS/SSL 未確認前若要先部署、把這行暫時改回 '/landing.html'。
-const LANDING_URL = 'https://seeyourself.now/';
+//   注意: 必須指到 /landing(行銷頁), 非根目錄 /(根=app, 會無限迴圈)。
+//   DNS/SSL 未確認前若要先部署、把這行暫時改回 '/landing'。
+const LANDING_URL = 'https://seeyourself.now/landing';
 function renderEntry() {
   // ① 未認證 → hard redirect 到 Landing.
   if (!state.studentId) {
