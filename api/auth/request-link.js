@@ -21,6 +21,11 @@ import { sendMagicLink } from '../../lib/email/brevo.js';
 import {
   normalizeEmail, normalizePreferredName, normalizePace,
 } from '../../lib/auth/student-helpers.js';
+// ⭐ Patrick 6/7 Day-1 monthly quota gate — only NEW emails get checked;
+//   existing students (回訪) ALWAYS pass per spec 坑 1.
+import {
+  decideDay1Gate, addToWaitlist,
+} from '../../lib/api/day1-quota.js';
 
 export const maxDuration = 10;
 
@@ -110,6 +115,36 @@ export default async function handler(req, res) {
     } catch (lookupErr) {
       // Lookup 失敗 → 不擋寄信流程 (寧可寄出去也不誤鎖); log 但繼續.
       console.warn('[request-link] is_blocked lookup failed (fail-open):', lookupErr?.message || lookupErr);
+    }
+
+    // ⭐ Patrick 6/7 Day-1 monthly quota gate.
+    //   - existing student (any students-row match) → 'existing' → pass (回訪).
+    //   - new email + room (used < quota) → 'pass' → send magic-link normally.
+    //   - new email + full (used >= quota) → 'waitlist' → DON'T send; insert
+    //     into day1_waitlist + return same ok:true envelope (no leak).
+    //   Gate fail-open: if the helper throws, log + proceed to magic-link.
+    //   Reasoning: the gate failing should not lock the funnel; better mild
+    //   overage than a hard outage. 鐵律 #2: log structurally, no raw text.
+    try {
+      const decision = await decideDay1Gate(sql, email);
+      if (decision.verdict === 'waitlist') {
+        await addToWaitlist(sql, email, 'request_link');
+        console.info('[request-link][waitlist]', JSON.stringify({
+          event: 'request_link_waitlisted',
+          quota: decision.quota,
+          used:  decision.used,
+        }));
+        return res.status(200).json({ ok: true });
+      }
+      if (decision.verdict === 'existing') {
+        console.info('[request-link][returning-student]', JSON.stringify({
+          event: 'request_link_returning_student',
+        }));
+        // fall through — send magic-link as usual.
+      }
+    } catch (gateErr) {
+      // Fail-open: log and proceed to send the magic-link.
+      console.warn('[request-link][gate-fail-open]', gateErr?.message || gateErr);
     }
 
     const token = randomBytes(32).toString('hex');
