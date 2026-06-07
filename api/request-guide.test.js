@@ -132,15 +132,19 @@ test('🛑 option 2 (trial only) → only sendMagicLink called, NO PDF', async (
 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.body, { ok: true });
-  // 2 SQL calls: lead INSERT + magic_link_tokens INSERT.
-  assert.equal(sql.calls.length, 2);
-  assert.match(sql.calls[0].text, /INSERT INTO leads/i);
-  assert.ok(sql.calls[0].values.includes(2), 'lead row option=2');
+  // SQL calls (post-6/7 Day-1 gate): leads INSERT, gate's isExistingStudent
+  //   SELECT + countUsedThisMonth COUNT, then magic_link_tokens INSERT.
+  // Original test asserted exact length=2 (leads + magic_link). Now we check
+  // the IMPORTANT inserts are present without pinning the count.
+  const leadCall = sql.calls.find(c => /INSERT INTO leads/i.test(c.text));
+  assert.ok(leadCall, 'leads INSERT must fire');
+  assert.ok(leadCall.values.includes(2), 'lead row option=2');
   // answers serialized to JSON for the lead row.
-  const answersJson = sql.calls[0].values.find(v => typeof v === 'string' && v.startsWith('{'));
+  const answersJson = leadCall.values.find(v => typeof v === 'string' && v.startsWith('{'));
   assert.ok(answersJson && JSON.parse(answersJson).現況 === 'a',
     'answers must be JSON-serialized into the lead row');
-  assert.match(sql.calls[1].text, /INSERT INTO magic_link_tokens/i);
+  assert.ok(sql.calls.find(c => /INSERT INTO magic_link_tokens/i.test(c.text)),
+    'magic_link_tokens INSERT must fire');
   // PDF NOT sent; magic link sent once.
   assert.equal(sentGuide.length, 0, 'option 2 must NOT send PDF');
   assert.equal(sentMagic.length, 1);
@@ -164,11 +168,13 @@ test('🛑 option 3 (PDF + trial) → BOTH sendGuideEmail and sendMagicLink call
   }), res);
 
   assert.equal(res.statusCode, 200);
-  // 2 SQL: lead + magic_link_tokens.
-  assert.equal(sql.calls.length, 2);
-  assert.match(sql.calls[0].text, /INSERT INTO leads/i);
-  assert.ok(sql.calls[0].values.includes(3));
-  assert.match(sql.calls[1].text, /INSERT INTO magic_link_tokens/i);
+  // Post-6/7 gate adds 2 SELECTs between leads INSERT and magic_link INSERT.
+  // Assert key INSERTs are present without pinning the total count.
+  const leadCall = sql.calls.find(c => /INSERT INTO leads/i.test(c.text));
+  assert.ok(leadCall, 'leads INSERT must fire');
+  assert.ok(leadCall.values.includes(3));
+  assert.ok(sql.calls.find(c => /INSERT INTO magic_link_tokens/i.test(c.text)),
+    'magic_link_tokens INSERT must fire');
   // Both senders fired.
   assert.equal(sentGuide.length, 1, 'option 3 sends PDF');
   assert.equal(sentMagic.length, 1, 'option 3 sends magic link');
@@ -248,4 +254,128 @@ test('🛑 magic-link-tokens INSERT fails on option 2 → still returns ok:true'
   assert.deepEqual(res.body, { ok: true });
   assert.equal(sentMagic.length, 0,
     'magic link must NOT be sent if the token row failed to insert (no recoverable link)');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 Patrick 6/7 Day-1 monthly quota gate — request-guide branches
+// ═════════════════════════════════════════════════════════
+
+function mkSqlByTopic({ existingStudent, used }) {
+  const calls = [];
+  const fn = (strings, ...values) => {
+    const text = strings.join('?');
+    calls.push({ text, values });
+    // leads INSERT
+    if (/INSERT INTO leads/i.test(text)) return Promise.resolve([]);
+    // isExistingStudent
+    if (/SELECT 1 FROM students/.test(text)) {
+      return Promise.resolve(existingStudent ? [{ exists: 1 }] : []);
+    }
+    // countUsedThisMonth
+    if (/COUNT\(DISTINCT student_id\)/.test(text)) {
+      return Promise.resolve([{ used }]);
+    }
+    return Promise.resolve([]);
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test('🛑 6/7 坑 2: option 1 (PDF only) → NEVER quota-gated, no waitlist, PDF sent', async () => {
+  process.env.DAY1_QUOTA = '100';
+  // Even at over-cap, option 1 must pass freely (zero Anthropic cost).
+  const sql = mkSqlByTopic({ existingStudent: false, used: 99999 });
+  _setSqlClient(sql);
+  const sentGuide = [];
+  const sentMagic = [];
+  _setSendGuideFn(async (e, link) => { sentGuide.push({ e, link }); });
+  _setSendMagicLinkFn(async (e) => { sentMagic.push(e); });
+  await handler(mockReq({ body: { email: 'fresh@example.com', option: 1 } }), mockRes());
+  assert.equal(sentGuide.length, 1, 'PDF must always be sent for option 1');
+  assert.equal(sentMagic.length, 0, 'magic-link must NEVER be sent for option 1');
+  // No quota query consulted (early-exit before gate).
+  assert.ok(!sql.calls.find(c => /COUNT\(DISTINCT student_id\)/.test(c.text)),
+    'option 1 must NOT consult quota — never gated');
+  // No waitlist INSERT.
+  assert.ok(!sql.calls.find(c => /INSERT INTO day1_waitlist/i.test(c.text)),
+    'option 1 must NEVER add to waitlist');
+  delete process.env.DAY1_QUOTA;
+});
+
+test('🛑 6/7 option 2 + new email + room → magic-link sent normally', async () => {
+  process.env.DAY1_QUOTA = '100';
+  const sql = mkSqlByTopic({ existingStudent: false, used: 50 });
+  _setSqlClient(sql);
+  const sentGuide = [];
+  const sentMagic = [];
+  _setSendGuideFn(async (e, l) => { sentGuide.push({ e, l }); });
+  _setSendMagicLinkFn(async (e, l) => { sentMagic.push({ e, l }); });
+  await handler(mockReq({ body: { email: 'new@example.com', option: 2 } }), mockRes());
+  assert.equal(sentGuide.length, 0, 'option 2 does NOT send PDF');
+  assert.equal(sentMagic.length, 1, 'option 2 + new + room → magic-link sent');
+  delete process.env.DAY1_QUOTA;
+});
+
+test('🛑 6/7 option 2 + new email + quota full → NO magic-link, waitlist with source=request_guide', async () => {
+  process.env.DAY1_QUOTA = '100';
+  const sql = mkSqlByTopic({ existingStudent: false, used: 100 });
+  _setSqlClient(sql);
+  const sentMagic = [];
+  _setSendMagicLinkFn(async (e) => { sentMagic.push(e); });
+  await handler(mockReq({ body: { email: 'fresh@example.com', option: 2 } }), mockRes());
+  assert.equal(sentMagic.length, 0, 'no magic-link when quota full');
+  const waitlistCall = sql.calls.find(c => /INSERT INTO day1_waitlist/i.test(c.text));
+  assert.ok(waitlistCall, 'waitlist INSERT must fire');
+  assert.deepEqual(waitlistCall.values, ['fresh@example.com', 'request_guide']);
+  delete process.env.DAY1_QUOTA;
+});
+
+test('🛑 6/7 option 3 + new email + full → PDF still sent + waitlist + NO magic-link', async () => {
+  // Spec: "option 3 仍寄 PDF、email 進候補、不發 magic-link".
+  process.env.DAY1_QUOTA = '100';
+  const sql = mkSqlByTopic({ existingStudent: false, used: 100 });
+  _setSqlClient(sql);
+  const sentGuide = [];
+  const sentMagic = [];
+  _setSendGuideFn(async (e, l) => { sentGuide.push({ e, l }); });
+  _setSendMagicLinkFn(async (e) => { sentMagic.push(e); });
+  await handler(mockReq({ body: { email: 'fresh@example.com', option: 3 } }), mockRes());
+  assert.equal(sentGuide.length, 1,
+    'option 3 PDF must STILL be sent even when magic-link is waitlisted');
+  assert.equal(sentMagic.length, 0,
+    'magic-link must NOT be sent for waitlisted option 3');
+  assert.ok(sql.calls.find(c => /INSERT INTO day1_waitlist/i.test(c.text)),
+    'option 3 waitlist INSERT must fire');
+  delete process.env.DAY1_QUOTA;
+});
+
+test('🛑 6/7 option 3 + existing student (回訪) → both PDF + magic-link sent (no quota check)', async () => {
+  delete process.env.DAY1_QUOTA;
+  const sql = mkSqlByTopic({ existingStudent: true, used: 99999 });
+  _setSqlClient(sql);
+  const sentGuide = [];
+  const sentMagic = [];
+  _setSendGuideFn(async (e, l) => { sentGuide.push({ e, l }); });
+  _setSendMagicLinkFn(async (e, l) => { sentMagic.push({ e, l }); });
+  await handler(mockReq({ body: { email: 'returning@example.com', option: 3 } }), mockRes());
+  assert.equal(sentGuide.length, 1);
+  assert.equal(sentMagic.length, 1, 'returning student passes regardless of quota');
+  assert.ok(!sql.calls.find(c => /INSERT INTO day1_waitlist/i.test(c.text)));
+});
+
+test('🛑 6/7 gate throws on option 2 → fail-open (magic-link still sent)', async () => {
+  process.env.DAY1_QUOTA = '100';
+  _setSqlClient((strings) => {
+    const text = strings.join('?');
+    if (/INSERT INTO leads/i.test(text)) return Promise.resolve([]);
+    if (/SELECT 1 FROM students/.test(text)) {
+      return Promise.reject(new Error('gate down'));
+    }
+    return Promise.resolve([]);
+  });
+  const sentMagic = [];
+  _setSendMagicLinkFn(async (e) => { sentMagic.push(e); });
+  await handler(mockReq({ body: { email: 'x@y.z', option: 2 } }), mockRes());
+  assert.equal(sentMagic.length, 1, 'gate failure → fail-open');
+  delete process.env.DAY1_QUOTA;
 });

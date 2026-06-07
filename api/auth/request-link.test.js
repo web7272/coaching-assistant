@@ -294,3 +294,117 @@ test('🛑 request-link: is_blocked lookup fails → fail-open (寧可寄出去�
   assert.deepEqual(res.body, { ok: true });
   assert.equal(sent.length, 1, 'lookup 失敗時 fail-open 仍寄信');
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 Patrick 6/7 Day-1 monthly quota gate (3 funnel pitfalls fixed)
+// ═════════════════════════════════════════════════════════
+
+// SQL plan helper — routes each query by its text content rather than call-order
+// (the gate flow changes call ordering as new branches are added).
+function mkSqlByTopic({ existingStudent, used }) {
+  const calls = [];
+  const fn = (strings, ...values) => {
+    const text = strings.join('?');
+    calls.push({ text, values });
+    // is_blocked guard: SELECT student_id, is_blocked
+    if (/SELECT student_id, is_blocked/.test(text)) {
+      return Promise.resolve(existingStudent
+        ? [{ student_id: 'A123', is_blocked: false }] : []);
+    }
+    // decideDay1Gate isExistingStudent: SELECT 1 FROM students
+    if (/SELECT 1 FROM students/.test(text)) {
+      return Promise.resolve(existingStudent ? [{ exists: 1 }] : []);
+    }
+    // decideDay1Gate countUsedThisMonth
+    if (/COUNT\(DISTINCT student_id\)/.test(text)) {
+      return Promise.resolve([{ used }]);
+    }
+    // waitlist INSERT / magic-link INSERT
+    return Promise.resolve([]);
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test('🛑 6/7 坑 1: existing student (回訪) → always pass, no quota check, no waitlist', async () => {
+  delete process.env.DAY1_QUOTA;
+  const sql = mkSqlByTopic({ existingStudent: true, used: 99999 });
+  _setSqlClient(sql);
+  const sent = [];
+  _setSendMagicLinkFn(async (email, link) => { sent.push({ email, link }); });
+  const res = mockRes();
+  await handler(mockReq({ body: { email: 'returning@example.com' } }), res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { ok: true });
+  assert.equal(sent.length, 1, 'returning student must always receive magic-link');
+  assert.ok(sql.calls.find(c => /INSERT INTO magic_link_tokens/i.test(c.text)),
+    'magic-link INSERT must fire for returning student');
+  assert.ok(!sql.calls.find(c => /INSERT INTO day1_waitlist/i.test(c.text)),
+    'returning student must NEVER be added to waitlist');
+});
+
+test('🛑 6/7 new email + room (used < quota) → pass, magic-link sent', async () => {
+  process.env.DAY1_QUOTA = '100';
+  const sql = mkSqlByTopic({ existingStudent: false, used: 50 });
+  _setSqlClient(sql);
+  const sent = [];
+  _setSendMagicLinkFn(async (e, l) => { sent.push({ email: e, link: l }); });
+  const res = mockRes();
+  await handler(mockReq({ body: { email: 'new@example.com' } }), res);
+  assert.deepEqual(res.body, { ok: true });
+  assert.equal(sent.length, 1);
+  assert.ok(sql.calls.find(c => /INSERT INTO magic_link_tokens/i.test(c.text)));
+  assert.ok(!sql.calls.find(c => /INSERT INTO day1_waitlist/i.test(c.text)));
+  delete process.env.DAY1_QUOTA;
+});
+
+test('🛑 6/7 new email + quota full → NO magic-link, waitlist INSERT, same ok:true envelope', async () => {
+  process.env.DAY1_QUOTA = '100';
+  const sql = mkSqlByTopic({ existingStudent: false, used: 100 });
+  _setSqlClient(sql);
+  const sent = [];
+  _setSendMagicLinkFn(async (e, l) => { sent.push({ email: e, link: l }); });
+  const res = mockRes();
+  await handler(mockReq({ body: { email: 'fresh@example.com' } }), res);
+  // Envelope identical (no leak).
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { ok: true });
+  // Magic-link NOT sent.
+  assert.equal(sent.length, 0, 'quota-full new email must NOT receive magic-link');
+  // No magic_link_tokens INSERT.
+  assert.ok(!sql.calls.find(c => /INSERT INTO magic_link_tokens/i.test(c.text)),
+    'no magic_link_tokens row when waitlisted');
+  // Waitlist INSERT recorded.
+  const waitlistCall = sql.calls.find(c => /INSERT INTO day1_waitlist/i.test(c.text));
+  assert.ok(waitlistCall, 'waitlist INSERT must fire');
+  assert.deepEqual(waitlistCall.values, ['fresh@example.com', 'request_link']);
+  delete process.env.DAY1_QUOTA;
+});
+
+test('🛑 6/7 over-cap (used > quota — soft overage) → still waitlist new emails', async () => {
+  process.env.DAY1_QUOTA = '100';
+  const sql = mkSqlByTopic({ existingStudent: false, used: 105 });
+  _setSqlClient(sql);
+  const sent = [];
+  _setSendMagicLinkFn(async (e) => { sent.push(e); });
+  await handler(mockReq({ body: { email: 'x@y.z' } }), mockRes());
+  assert.equal(sent.length, 0);
+  assert.ok(sql.calls.find(c => /INSERT INTO day1_waitlist/i.test(c.text)));
+  delete process.env.DAY1_QUOTA;
+});
+
+test('🛑 6/7 gate throws → fail-open (still send magic-link rather than lock funnel)', async () => {
+  // Gate helper failing must not bring the funnel down. Mild overage > outage.
+  _setSqlClient((strings, ..._v) => {
+    const text = strings.join('?');
+    if (/SELECT student_id, is_blocked/.test(text)) return Promise.resolve([]);
+    if (/SELECT 1 FROM students/.test(text)) {
+      return Promise.reject(new Error('gate SELECT down'));
+    }
+    return Promise.resolve([]);
+  });
+  const sent = [];
+  _setSendMagicLinkFn(async (e) => { sent.push(e); });
+  await handler(mockReq({ body: { email: 'x@y.z' } }), mockRes());
+  assert.equal(sent.length, 1, 'gate failure → fail-open, magic-link still sent');
+});

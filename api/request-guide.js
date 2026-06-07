@@ -19,6 +19,11 @@ import { randomBytes, createHash } from 'node:crypto';
 import { sendMagicLink, sendGuideEmail } from '../lib/email/brevo.js';
 import { normalizeEmail } from '../lib/auth/student-helpers.js';
 import { resolveBaseUrl } from './auth/request-link.js';
+// ⭐ Patrick 6/7 Day-1 monthly quota gate — option 1 (PDF-only) NEVER gated;
+//   option 2/3 (with magic-link) gated only for NEW emails. See spec 坑 2.
+import {
+  decideDay1Gate, addToWaitlist,
+} from '../lib/api/day1-quota.js';
 
 export const maxDuration = 10;
 
@@ -81,23 +86,59 @@ export default async function handler(req, res) {
 
   // 3) option 2/3：發 magic link 開試用.
   //    verify-link 那端會 find-or-create 學員 (plan='trial' 是 students 表 default).
+  //
+  //    ⭐ Patrick 6/7 Day-1 monthly quota gate:
+  //      - Apply gate ONLY here (option 2/3 path); option 1 PDF-only is
+  //        already past the early-return and sent above — 坑 2 of spec.
+  //      - existing student / new email + room → send magic-link normally.
+  //      - new email + full → DON'T send magic-link, write to waitlist.
+  //      - option 3 PDF was already sent before this branch; if magic-link
+  //        is waitlisted, the PDF still went out (per spec).
+  //      - Gate fail-open: errors → log + proceed (same posture as request-link).
   if (option === 2 || option === 3) {
+    let shouldSendMagicLink = true;
     try {
-      const token     = randomBytes(32).toString('hex');
-      const tokenHash = createHash('sha256').update(token).digest('hex');
-      const expiresAt = new Date(Date.now() + TTL_MINUTES * 60 * 1000).toISOString();
-      // 稱謂 / pace 不在 Stage 0 收 → 傳 null (verify-link 已支援 null).
-      await sql`
-        INSERT INTO magic_link_tokens (token_hash, email, preferred_name, pace, expires_at)
-        VALUES (${tokenHash}, ${email}, ${null}, ${null}, ${expiresAt})
-      `;
-      try {
-        await magicSender()(email, `${base}/auth?token=${token}`);
-      } catch (sendErr) {
-        console.error('[request-guide] sendMagicLink threw unexpectedly:', sendErr?.message || sendErr);
+      const decision = await decideDay1Gate(sql, email);
+      if (decision.verdict === 'waitlist') {
+        await addToWaitlist(sql, email, 'request_guide');
+        console.info('[request-guide][waitlist]', JSON.stringify({
+          event: 'request_guide_waitlisted',
+          option,
+          quota: decision.quota,
+          used:  decision.used,
+          pdf_still_sent: option === 3,    // option 3 PDF was sent above
+        }));
+        shouldSendMagicLink = false;
+      } else if (decision.verdict === 'existing') {
+        console.info('[request-guide][returning-student]', JSON.stringify({
+          event: 'request_guide_returning_student',
+          option,
+        }));
+        // fall through — send magic-link as usual.
       }
-    } catch (e) {
-      console.error('[request-guide] trial magic-link insert failed:', e?.message || e);
+    } catch (gateErr) {
+      // Fail-open: send the magic-link anyway. Mild overage > funnel outage.
+      console.warn('[request-guide][gate-fail-open]', gateErr?.message || gateErr);
+    }
+
+    if (shouldSendMagicLink) {
+      try {
+        const token     = randomBytes(32).toString('hex');
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+        const expiresAt = new Date(Date.now() + TTL_MINUTES * 60 * 1000).toISOString();
+        // 稱謂 / pace 不在 Stage 0 收 → 傳 null (verify-link 已支援 null).
+        await sql`
+          INSERT INTO magic_link_tokens (token_hash, email, preferred_name, pace, expires_at)
+          VALUES (${tokenHash}, ${email}, ${null}, ${null}, ${expiresAt})
+        `;
+        try {
+          await magicSender()(email, `${base}/auth?token=${token}`);
+        } catch (sendErr) {
+          console.error('[request-guide] sendMagicLink threw unexpectedly:', sendErr?.message || sendErr);
+        }
+      } catch (e) {
+        console.error('[request-guide] trial magic-link insert failed:', e?.message || e);
+      }
     }
   }
 

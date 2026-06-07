@@ -1062,6 +1062,25 @@ export default async function handler(req, res) {
     // 5/28 Patrick (A006 rollback) — 只記錄這 turn 自己「新建」的 row, reuse 的 in-progress
     // row 不能刪. 之後任何 downstream 炸 → finally DELETE 這個 id.
     _rollbackSessionId = isNew ? sessionId : null;
+    // ⭐ Patrick 6/7 Day-1 monthly quota signal — write-if-null at the moment
+    //   real cost is incurred (first chat turn that creates a fresh session
+    //   row). Subsequent Day 2/3/N session creates are no-ops because of
+    //   the IS NULL guard. Existing students who already have day1_started_at
+    //   set never get re-counted. Fail-soft: write failure must not block
+    //   the chat turn.
+    if (isNew) {
+      try {
+        await sql`
+          UPDATE students
+             SET day1_started_at = NOW()
+           WHERE student_id = ${studentId}
+             AND day1_started_at IS NULL
+        `;
+      } catch (day1WriteErr) {
+        console.warn('[day1-quota][day1_started_at-write-failed]',
+          day1WriteErr?.message || day1WriteErr);
+      }
+    }
     let { turnCount, sessionState } = sess;
 
     // Step 5b 已刪除 (PR-23s4b 完成 phase-machine 退役):
