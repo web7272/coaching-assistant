@@ -3,31 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>登入中 · 看見自己</title>
+<title>登入 · 看見自己</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <!-- PR-4c-green Auth rebuild stage 1c — magic-link callback page.
-     Reads ?token=, POSTs to /api/auth/verify-link. Server sets the HttpOnly
-     student_session cookie + returns {studentId, module, currentDay, preferredName, pace}.
-     1h fix (Vivi 5/24): also writes those fields into the SAME localStorage
-     key/shape student.js uses, so the SPA's boot gate doesn't bounce her back
-     to entry. -->
+     6/7 P0 LAUNCH BLOCKER FIX (Patrick + Vivi):
+       原本「載入即自動 POST verify-link」會被 email 掃描器 (SafeLinks /
+       Gmail / Brevo render auth.html) 在 13–21 秒內觸發, 把單次 token
+       吃掉. 真人後面點時就「連結已失效」, 6/11 CTA 進來的新用戶全部
+       登不進、零轉換.
+       → 修法: 載入時 NOT POST. 改 render 一個確認頁 + 按鈕,
+       使用者點按鈕才 POST. 掃描器只 render、不 click → 不 POST →
+       token 不消耗. verify-link.js (POST-only + 單次 used_at + 60min TTL)
+       完全不動, 安全模型不變.
+     - 既有 fail() 失效 UI (寄新連結 → /login.html) 保留.
+     - 缺 token 仍走 fail() 既有錯誤路徑.
+     - persistStudentSession 仍負責 student.js localStorage bridge. -->
 <div id="app">
-  <!-- 6/4 Patrick (Vivi troubleshooting) — app.css `.view{display:none}` 要 `.active`
-       才顯示. 這頁不是 SPA、沒 router 幫加 class → 整頁隱形:
-       loading 與過期失敗文案/按鈕全看不見、只剩 10 秒後 auto-redirect、像當機. -->
-  <section id="view-auth" class="view active" aria-label="登入中">
-    <div class="entry-container" style="padding-top:96px;text-align:center;">
-      <p class="conv-waiting" id="auth-status">
-        <span class="star">✦</span><span class="text">正在打開你的旅程…</span>
-      </p>
+  <!-- 6/4 Patrick — app.css `.view{display:none}` 要 `.active` 才顯示. -->
+  <section id="view-auth" class="view active" aria-label="登入確認">
+    <div class="entry-container" id="auth-container" style="padding-top:96px;text-align:center;">
+      <!-- JS 載入時把 #auth-status 換成確認頁 + 按鈕 (no auto-POST). -->
+      <div id="auth-status"></div>
     </div>
   </section>
 </div>
 
 <script>
-(async function() {
+(function() {
   // ⚠️ Must match student.js's `LS_KEY` + the saveState() shape exactly —
   // student.js's loadState does Object.assign(state, JSON.parse(...)) on this
   // exact key, so any drift here = bounce-to-entry bug.
@@ -63,16 +67,14 @@
     } catch { /* quota / private mode — server cookie still works, SPA will hydrate via /api/me */ }
   }
 
-  const params = new URLSearchParams(location.search);
-  const token  = params.get('token');
   const status = document.getElementById('auth-status');
-  // 5/28 Vivi+Patrick — 過期/失敗文案改友善 + 加按鈕.
-  // 6/3 Patrick — 跳轉目的地從 /#/entry → /login.html (回頭流分流):
-  //   Landing 是獲客流 (新訪客 + 問卷), /login 是回頭流 (已認識品牌、只要新連結).
-  //   過期 magic link user 不該被逼回 Landing 重填問卷.
+
+  /**
+   * Render the「連結已失效 + 寄新連結」UI.
+   * Used for: missing token / verify-link 4xx / network failure.
+   * (Unchanged behaviour from 5/28 + 6/3 + 6/4 fixes; only the call sites move.)
+   */
   function fail(msg, sub) {
-    // 6/4 Patrick — #auth-status 是 .conv-waiting(flex 橫排、給 ✦+loading 字用).
-    // 錯誤訊息塞進去會被排成一橫列、字擠成直的. 清掉 class 回到 block 直排.
     status.className = '';
     status.innerHTML = '';
     const p = document.createElement('p');
@@ -90,42 +92,86 @@
       s.textContent = sub;
       status.appendChild(s);
     }
-    const btn = document.createElement('a');
-    btn.href = '/login.html';
+    // /login.html anchor — only on the FAIL path. Crawlers hitting THIS
+    // anchor only ever land on /login (寄新連結 form), never consume a token.
+    const a = document.createElement('a');
+    a.href = '/login.html';
+    a.className = 'btn-green';
+    a.style.display = 'inline-block';
+    a.style.padding = '10px 22px';
+    a.textContent = '寄新連結 →';
+    status.appendChild(a);
+    // 6/4 Vivi — 移除 10s auto-redirect.
+  }
+
+  /**
+   * Render the confirm UI: title + button. Button onclick → POST verify-link.
+   *
+   * 6/7 P0: this is the KEY change. The fetch happens ONLY inside the
+   * button.onclick handler — never at top-level / load time. Email scanners
+   * (SafeLinks / Gmail / Brevo) render the page (see the button) but do
+   * not synthesize a click → no POST → token stays unused.
+   */
+  function renderConfirm(token) {
+    status.className = '';
+    status.innerHTML = '';
+
+    // Headline.
+    const h = document.createElement('p');
+    h.className = 'hint-italic';
+    h.style.fontSize = '15px';
+    h.style.marginBottom = '20px';
+    h.textContent = '準備好了嗎?點下面登入。';
+    status.appendChild(h);
+
+    // <button> element (NOT <a href> — anchors get followed by scanners).
+    const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'btn-green';
     btn.style.display = 'inline-block';
-    btn.style.padding = '10px 22px';
-    btn.textContent = '寄新連結 →';
+    btn.style.padding = '12px 30px';
+    btn.textContent = '登入 →';
+
+    // Click handler — the ONLY place that POSTs verify-link.
+    btn.addEventListener('click', async function onLoginClick() {
+      // Anti-double-click: disable + visual loading state.
+      btn.disabled = true;
+      btn.textContent = '登入中…';
+      try {
+        const res = await fetch('/api/auth/verify-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        if (!res.ok) {
+          fail('這個登入連結已失效。',
+               '可能是已經點過、或太久沒打開(連結有效 60 分鐘)。跳到 /login 寄一個新的, 收到信後馬上點。');
+          return;
+        }
+        const payload = await res.json();
+        persistStudentSession(payload);
+        location.href = '/#/journey';
+      } catch (e) {
+        fail('沒能登入。',
+             '網路不穩、待會再試;或跳到 /login 寄新連結。');
+      }
+    });
     status.appendChild(btn);
-    // 6/4 Vivi — 移除 10s auto-redirect: 頁面修好(看得見)之後、讀到一半被強制跳走
-    // 反而像故障. 按鈕就是唯一出路、使用者自己按.
   }
+
+  // ─── Boot ─────────────────────────────────────────────────────
+  // Synchronous only — no fetch here. Read token, render confirm UI OR fail.
+  const params = new URLSearchParams(location.search);
+  const token  = params.get('token');
 
   if (!token) {
     fail('連結缺少 token、無法登入。',
          '跳到 /login、重新輸入 email 即可寄新連結。');
     return;
   }
-  try {
-    const res = await fetch('/api/auth/verify-link', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
-    if (!res.ok) {
-      fail('這個登入連結已失效。',
-           '可能是已經點過、或太久沒打開(連結有效 60 分鐘)。跳到 /login 寄一個新的, 收到信後馬上點。');
-      return;
-    }
-    const payload = await res.json();
-    // Bridge the server session → SPA localStorage so student.js boot gate sees a logged-in state.
-    persistStudentSession(payload);
-    // server cookie is set + localStorage hydrated → safe to enter the app.
-    location.href = '/#/journey';
-  } catch (e) {
-    fail('沒能登入。',
-         '網路不穩、待會再試;或跳到 /login 寄新連結。');
-  }
+
+  // Token present → render confirm. POST only fires on the real user's click.
+  renderConfirm(token);
 })();
 </script>
 </body>
