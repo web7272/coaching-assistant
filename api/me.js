@@ -64,6 +64,13 @@ export default async function handler(req, res) {
       currentDay:    s.current_day || 1,
       preferredName: s.preferred_name ?? null,
       pace:          s.pace || 'daily',
+      // ⭐ 6/7 Vivi business model — Day 2 擋牆 + flag-controlled #/upgrade.
+      //   SALES_OPEN env (default false / undefined): #/upgrade renders the
+      //   thank-you + opening-notification page (no Stripe button).
+      //   When Vivi flips to 'true' for the 100-seat first-month opening, the
+      //   existing NT$3,000 payment page revives without code change.
+      //   Server is the source of truth; frontend mirrors into state.salesOpen.
+      salesOpen:     process.env.SALES_OPEN === 'true',
     });
   } catch (e) {
     console.error('[me] error:', e?.message || e);

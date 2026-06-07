@@ -96,6 +96,10 @@ async function hydrateFromCookie() {
       state.currentDay    = me.currentDay    || 1;
       state.preferredName = me.preferredName ?? state.preferredName ?? null;
       state.pace          = me.pace          || state.pace || 'daily';
+      // ⭐ 6/7 Vivi 商業模型 — server-authoritative SALES_OPEN flag for #/upgrade.
+      //   Default conservative: missing/undefined → false (sales-closed page).
+      //   Server flips to true → existing payment page revives (no code change).
+      state.salesOpen     = me.salesOpen === true;
       saveState();
       return true;
     } catch (e) {
@@ -1358,6 +1362,27 @@ async function renderPhaseReport(phaseId) {
 // location.href 跳出去. 付款成功 Stripe 導回 #/journey?upgraded=1.
 // 鐵則：plan 升級只由驗過簽章的 webhook 寫、前端絕對不能呼叫「設我 plan_a」.
 function renderUpgradeCTA() {
+  // ⭐ 6/7 Vivi 商業模型: SALES_OPEN flag-controlled rendering.
+  //   - state.salesOpen === true  → #upgrade-sales-open (NT$3,000 + Stripe).
+  //   - else (default this wave) → #upgrade-sales-closed (謝謝 + 開賣通知).
+  //   Payment-page DOM, Stripe wiring, /api/checkout all preserved & dormant.
+  const openDiv   = document.getElementById('upgrade-sales-open');
+  const closedDiv = document.getElementById('upgrade-sales-closed');
+  const salesOpen = state.salesOpen === true;
+
+  if (openDiv)   openDiv.classList.toggle('hidden',   !salesOpen);
+  if (closedDiv) closedDiv.classList.toggle('hidden',  salesOpen);
+
+  if (!salesOpen) {
+    // Sales closed — thank-you page is static markup; no JS wiring needed.
+    // No /api/checkout call. Defensive: blank any prior inline error from a
+    // sales-open render carried over via re-route.
+    const errEl = document.getElementById('upgrade-error');
+    if (errEl) errEl.classList.add('hidden');
+    return;
+  }
+
+  // Sales open — wire the existing NT$3,000 Stripe checkout button.
   const btn  = document.getElementById('upgrade-btn');
   const errEl = document.getElementById('upgrade-error');
   if (!btn) return;

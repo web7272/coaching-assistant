@@ -212,8 +212,13 @@
   </section>
 
   <!-- ─────────── 漏斗 Stage 2 — 轉換 CTA (trial 撞 Day 2 → 402 → 這頁) ─────────── -->
+  <!-- ⭐ 6/7 Vivi 商業模型: SALES_OPEN flag 控制兩種 sub-view, renderUpgradeCTA() toggle.
+       預設 (SALES_OPEN 未設 / false): 顯「謝謝 + 開賣通知」(#upgrade-sales-closed).
+       SALES_OPEN='true' (限量 100 開賣時): 顯既有付款頁 (#upgrade-sales-open).
+       Both sub-divs ship in DOM; payment 邏輯 + Stripe 鏈休眠不刪. -->
   <section id="view-upgrade" class="view" aria-label="解鎖完整旅程">
-    <div class="entry-container" style="padding-top:64px;text-align:center;max-width:560px;margin:0 auto;">
+    <!-- A. Sales OPEN — existing NT$3,000 + Stripe payment page (dormant by default). -->
+    <div id="upgrade-sales-open" class="entry-container hidden" style="padding-top:64px;text-align:center;max-width:560px;margin:0 auto;">
       <p style="font-family:var(--font-serif);font-size:18px;color:var(--text-primary);">
         這只是第一天——你找到了你真正要的。
       </p>
@@ -226,6 +231,37 @@
       <button id="upgrade-btn" class="btn-green" style="margin-top:24px;">解鎖完整旅程</button>
       <p id="upgrade-error" class="hint-italic hidden" style="margin-top:14px;color:var(--text-secondary);">沒能打開付款頁、待會再試。</p>
       <div style="margin-top:16px;"><a href="#/journey" class="hint-italic">先回旅程</a></div>
+    </div>
+
+    <!-- B. Sales CLOSED (default this wave) — 謝謝 + 開賣通知頁 (Vivi 6/7 逐字, 不改一字). -->
+    <div id="upgrade-sales-closed" class="entry-container hidden" style="padding-top:64px;max-width:560px;margin:0 auto;font-family:var(--font-serif);color:var(--text-primary);line-height:1.9;">
+      <p style="font-size:18px;">Day 1 結束了。</p>
+
+      <p style="margin-top:20px;color:var(--text-secondary);">你剛剛經歷的不是「免費試用」——<br>而是你第一次坐下來、跟一位教練、聊你自己。</p>
+
+      <p style="margin-top:18px;color:var(--text-secondary);">你在這 10–15 分鐘裡寫下的,我們收到了。<br>它會留在那裡,等你接著走。</p>
+
+      <div class="paper-card__divider" style="margin:32px auto;width:80px;"></div>
+
+      <p style="margin-top:18px;">《看見自己》還沒正式對外開放。</p>
+
+      <p style="margin-top:18px;color:var(--text-secondary);">為了確保每一份生成的「犀利剖析」<br>都能精準對應你的生命脈絡,<br>這套對話引擎需要極高的運算資源與細膩設計。</p>
+
+      <p style="margin-top:18px;color:var(--text-secondary);">我們暫時不打算對所有人開放。<br>因為我們更在乎每一位參與者的轉變品質。</p>
+
+      <p style="margin-top:22px;font-size:18px;">第一個月,我們預計開放 100 位。</p>
+
+      <div class="paper-card__divider" style="margin:32px auto;width:80px;"></div>
+
+      <p style="margin-top:18px;color:var(--text-secondary);">當這 100 個席位正式開賣時,<br>入口會優先寄給已經完成 Day 1 對話的人——<br>包括你。</p>
+
+      <p style="margin-top:18px;color:var(--text-secondary);">你會比所有人早一步收到通知,<br>鎖定你的席位、接著走 Day 2 – 21。</p>
+
+      <div class="paper-card__divider" style="margin:32px auto;width:80px;"></div>
+
+      <p style="margin-top:18px;color:var(--text-secondary);">你已經發出了信號,而我們聽見了。<br>我們會再聯絡你。敬請期待。</p>
+
+      <div style="margin-top:32px;text-align:center;"><a href="#/journey" class="hint-italic">先回旅程</a></div>
     </div>
   </section>
 

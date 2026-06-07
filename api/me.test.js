@@ -72,7 +72,8 @@ test('🛑 /api/me: coach session → 401 (cross-role defense)', async () => {
 
 // ── happy path ──
 
-test('🛑 /api/me: valid session → 200 with {studentId, email, module, currentDay, preferredName, pace}', async () => {
+test('🛑 /api/me: valid session → 200 with {studentId, email, module, currentDay, preferredName, pace, salesOpen}', async () => {
+  delete process.env.SALES_OPEN;          // ensure default-closed for this test
   _setStudentSessionReader(SESSION_FOR('A001'));
   _setSqlClient(makeMockSql([{
     student_id:     'A001',
@@ -92,6 +93,7 @@ test('🛑 /api/me: valid session → 200 with {studentId, email, module, curren
     currentDay:    3,
     preferredName: 'Vivi',
     pace:          'self-paced',
+    salesOpen:     false,                  // 6/7 — Vivi 商業模型 default closed
   });
 });
 
@@ -112,7 +114,8 @@ test('🛑 /api/me: email is null in DB → response email:null (defensive, no c
   assert.equal(res.body.email, null);
 });
 
-test('/api/me: minimal student row → defaults filled in (currentDay=1, pace=daily)', async () => {
+test('/api/me: minimal student row → defaults filled in (currentDay=1, pace=daily, salesOpen=false)', async () => {
+  delete process.env.SALES_OPEN;
   _setStudentSessionReader(SESSION_FOR('A042'));
   _setSqlClient(makeMockSql([{
     student_id:     'A042',
@@ -127,6 +130,7 @@ test('/api/me: minimal student row → defaults filled in (currentDay=1, pace=da
   assert.deepEqual(res.body, {
     studentId: 'A042', email: null, module: 'self', currentDay: 1,
     preferredName: null, pace: 'daily',
+    salesOpen: false,
   });
 });
 
@@ -198,4 +202,64 @@ test('🛑 /api/me: is_blocked=false → 200 (normal flow, blocked field never l
   // Response shape stays minimal — is_blocked is never echoed back to client.
   assert.equal('is_blocked' in res.body, false,
     'response must not echo is_blocked (避免洩漏 access 狀態給 attacker probing)');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/7 Vivi 商業模型 — SALES_OPEN env flag exposed via /api/me
+// ═════════════════════════════════════════════════════════
+
+test('🛑 6/7 /api/me: SALES_OPEN unset → salesOpen:false (default this wave, sales-closed page)', async () => {
+  delete process.env.SALES_OPEN;
+  _setStudentSessionReader(SESSION_FOR('A001'));
+  _setSqlClient(makeMockSql([
+    { student_id: 'A001', current_module: 'self', current_day: 1,
+      preferred_name: 'Jessie', pace: 'daily', is_blocked: false },
+  ]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.salesOpen, false,
+    'SALES_OPEN unset → conservative default false → #/upgrade renders thank-you page');
+});
+
+test('🛑 6/7 /api/me: SALES_OPEN="false" → salesOpen:false', async () => {
+  process.env.SALES_OPEN = 'false';
+  _setStudentSessionReader(SESSION_FOR('A001'));
+  _setSqlClient(makeMockSql([
+    { student_id: 'A001', current_module: 'self', current_day: 1,
+      preferred_name: 'X', pace: 'daily', is_blocked: false },
+  ]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.body.salesOpen, false);
+});
+
+test('🛑 6/7 /api/me: SALES_OPEN="true" → salesOpen:true (限量 100 開賣時, NT$3,000 頁復活)', async () => {
+  process.env.SALES_OPEN = 'true';
+  _setStudentSessionReader(SESSION_FOR('A001'));
+  _setSqlClient(makeMockSql([
+    { student_id: 'A001', current_module: 'self', current_day: 1,
+      preferred_name: 'X', pace: 'daily', is_blocked: false },
+  ]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.body.salesOpen, true,
+    'SALES_OPEN="true" → existing NT$3,000 + Stripe page revives');
+  delete process.env.SALES_OPEN;   // cleanup for adjacent tests
+});
+
+test('🛑 6/7 /api/me: SALES_OPEN="1" (non-canonical) → salesOpen:false (strict "true" only)', async () => {
+  // Defensive: only the literal string 'true' enables sales. Typos / numeric
+  // truthy values default to closed. Conservative — fail-closed for sales.
+  process.env.SALES_OPEN = '1';
+  _setStudentSessionReader(SESSION_FOR('A001'));
+  _setSqlClient(makeMockSql([
+    { student_id: 'A001', current_module: 'self', current_day: 1,
+      preferred_name: 'X', pace: 'daily', is_blocked: false },
+  ]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.body.salesOpen, false,
+    'only literal "true" flips the flag (defensive: typos → closed)');
+  delete process.env.SALES_OPEN;
 });
