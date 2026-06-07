@@ -9,6 +9,8 @@ import handler, {
   _setSendGuideFn,
   _setSendMagicLinkFn,
 } from './request-guide.js';
+// 6/7 Vivi: getQuota() now caches resolved quota 30s; reset between tests.
+import { _resetQuotaCache } from '../lib/api/day1-quota.js';
 
 function makeMockSql({ rows = [], throwOn } = {}) {
   // throwOn (optional): predicate(text) → boolean; if matches, the call rejects.
@@ -44,6 +46,7 @@ beforeEach(() => {
   _setSqlClient(null);
   _setSendGuideFn(null);
   _setSendMagicLinkFn(null);
+  _resetQuotaCache();
   process.env.APP_BASE_URL = 'https://preview.example.com';
   delete process.env.VERCEL_URL;
 });

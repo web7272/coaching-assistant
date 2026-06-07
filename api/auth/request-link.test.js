@@ -9,6 +9,9 @@ import handler, {
   _setSendMagicLinkFn,
   resolveBaseUrl,
 } from './request-link.js';
+// 6/7 Vivi: getQuota() now caches resolved quota for 30s; tests must clear it
+// between cases so a prior test's DAY1_QUOTA env value doesn't bleed forward.
+import { _resetQuotaCache } from '../../lib/api/day1-quota.js';
 
 function makeMockSql(rows = []) {
   const calls = [];
@@ -45,6 +48,7 @@ function mockRes() {
 beforeEach(() => {
   _setSqlClient(null);
   _setSendMagicLinkFn(null);
+  _resetQuotaCache();
   process.env.APP_BASE_URL = 'https://preview.example.com';
   delete process.env.VERCEL_URL;
 });

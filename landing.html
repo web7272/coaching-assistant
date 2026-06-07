@@ -272,6 +272,12 @@ a{color:inherit;text-decoration:none}
 .cta-form .cta-mini.ok{color:var(--gold-soft)}
 .cta-form .cta-mini.err{color:#a33}
 
+/* 6/7 Patrick — Day-1 名額顯示 (只在右卡 data-opt="3" 出現). */
+.cta-quota{font-family:var(--sans);font-size:12.5px;letter-spacing:.06em;color:var(--gold);
+  margin:6px 0 12px;padding:6px 10px;background:rgba(214,130,106,.08);border-radius:6px;display:none}
+.cta-quota.show{display:block}
+.cta-quota.full{color:#a33;background:rgba(170,51,51,.08)}
+
 /* 展開後的 3 問題 */
 .cta-quiz-head{font-family:var(--sans);font-size:12px;letter-spacing:.16em;color:var(--gold-soft);margin:0 0 18px;padding-bottom:10px;border-bottom:1px solid var(--card-line)}
 .cta-quiz-head span{display:block;font-family:var(--serif);letter-spacing:0;color:var(--ink-soft);font-size:13.5px;margin-top:6px}
@@ -512,9 +518,11 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
       <!-- 右卡：PDF + Day 1 (option=3) — 點擊展開 3 問題 + email -->
       <div class="cta-card alt" data-opt="3">
         <button type="button" class="cta-trigger" onclick="ctaOpen(this)">
-          <p class="cta-t">下載練習 ＋ 免費體驗 Day 1</p>
-          <p class="cta-d">我們建立了一個價值觀 AI 教練，<br>模擬真實教練的對話方式，<br>陪你<span class="gold">探索自己</span>。<br><br>除了練習，你也可以試一次對話，<br>看看這種方式是不是你在找的東西。</p>
-          <p class="cta-go">兩個都拿 →</p>
+          <p class="cta-t" id="cta-t-3">下載練習 ＋ 免費體驗 Day 1</p>
+          <p class="cta-d" id="cta-d-3">我們建立了一個價值觀 AI 教練，<br>模擬真實教練的對話方式，<br>陪你<span class="gold">探索自己</span>。<br><br>除了練習，你也可以試一次對話，<br>看看這種方式是不是你在找的東西。</p>
+          <!-- 6/7 Day-1 名額狀態 (JS 載入時填入；失敗 fail-open 留空白) -->
+          <p class="cta-quota" id="cta-quota-3" aria-live="polite"></p>
+          <p class="cta-go" id="cta-go-3">兩個都拿 →</p>
         </button>
         <form class="cta-form" onsubmit="ctaSubmit(event, 3)">
           <button type="button" class="cta-back" onclick="ctaClose(this)" aria-label="返回">← 返回</button>
@@ -854,6 +862,58 @@ window.ctaSubmit=async function(e,optionNum){
 document.querySelectorAll('.faq .qq').forEach(q=>{
   q.addEventListener('click',()=>q.parentElement.classList.toggle('open'));
 });
+
+// ─────────────────────────────────────────────────────────────────
+// 6/7 Patrick — Day-1 名額顯示 (Hero 右卡 data-opt="3" only).
+//
+// Funnel rules (本文同步 spec §4):
+//   • 左卡 (data-opt="1", 純下載 PDF) 不顯示名額字 (PDF 不受限，顯示會誤導).
+//   • 右卡 (data-opt="3"):
+//       - remaining > 0   → 顯示「本月剩餘 Day-1 名額：N」(稀缺感)
+//       - remaining <= 0  → 切換文案 →「本月名額已滿 · 留 email、下月優先通知
+//                                       (仍寄你練習 PDF)」, 表單仍可送出.
+//       - fetch 失敗 → fail-open: 不顯示任何狀態, 右卡保留原文.
+//
+// SAFETY: 永不擋表單. JS 只負責 display; 真把關靠 /api/auth/request-link +
+// /api/request-guide 的後端 gate (verdict='waitlist' 時不發 magic-link、
+// option 3 PDF 仍寄).
+// ─────────────────────────────────────────────────────────────────
+
+(async function initDay1Quota(){
+  const card = document.querySelector('.cta-card[data-opt="3"]');
+  if(!card) return;
+  const quotaEl = card.querySelector('#cta-quota-3');
+  const titleEl = card.querySelector('#cta-t-3');
+  const descEl  = card.querySelector('#cta-d-3');
+  const goEl    = card.querySelector('#cta-go-3');
+  if(!quotaEl || !titleEl || !descEl || !goEl) return;
+
+  try{
+    const r = await fetch('/api/day1-quota', {credentials:'omit'});
+    if(!r.ok) throw new Error('non-2xx');
+    const j = await r.json();
+    const remaining = Math.max(0, Number(j && j.remaining) || 0);
+
+    if(remaining > 0){
+      // 稀缺感小字，不換 CTA 文案.
+      quotaEl.textContent = '本月剩餘 Day-1 名額：' + remaining;
+      quotaEl.classList.add('show');
+      quotaEl.classList.remove('full');
+    } else {
+      // 額滿 — 切換右卡文案 (form 仍可送出，走 option 3 → PDF 仍寄 + 進候補).
+      titleEl.innerHTML = '本月 Day-1 名額已滿';
+      descEl.innerHTML  = '留 email，下個月名額開放時優先通知你。<br><span class="gold">我們仍會把練習 PDF 寄給你</span>，先用起來，下次見。';
+      goEl.innerHTML    = '留 email 進候補 →';
+      quotaEl.textContent = '已滿 · 下月優先通知';
+      quotaEl.classList.add('show', 'full');
+    }
+  }catch(_err){
+    // Fail-open: 不顯示 quota 狀態，右卡保留原文 (後端 gate 仍會把關).
+    // 不 throw、不擋 UI. 唯一可接受的副作用: 不顯示稀缺感.
+    quotaEl.classList.remove('show', 'full');
+    quotaEl.textContent = '';
+  }
+})();
 </script>
 </body>
 </html>
