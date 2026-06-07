@@ -62,6 +62,12 @@ import {
 import {
   buildResumeGuidanceInject,
 } from '../lib/sub-prompts/session-resume/resume-guidance.js';
+// ⭐ 6/7 P0 safety (Vivi A016) — deterministic crisis-output scrubber.
+//   Defense 2 backstop: even if prompt rules slip, scrub「自殺」 from
+//   assistant text before persist/return. Crisis turns only.
+import {
+  scrubCrisisAssistantOutput, isInCrisisState,
+} from '../lib/util/crisis-output-scrubber.js';
 // ⭐ v5.1 Step 4 PR-23s4b — phase-advance / phase-machine 退役 (廢除).
 //   chat.js Step 5b (phaseForDay + phaseEntryPatch 天數驅動) 已刪除.
 //   mode 流動由 detector handlers (尤其 mode-transition-router) 完全接管.
@@ -1439,7 +1445,33 @@ export default async function handler(req, res) {
     }
 
     const response = callResult.data;
-    const content = response.content[0].text;
+    const rawContent = response.content[0].text;
+    // ⭐ 6/7 P0 safety (Vivi A016) — Defense 2 deterministic backstop.
+    //   Prompt rules (Defense 1, _phrasings.js CRISIS_OUTPUT_PROHIBITIONS
+    //   embedded in Step 4 / Step 6 / active SI / cached §3) lower probability,
+    //   but cannot guarantee zero「自殺」 emission from LLM improvisation.
+    //   This scrubber is the guaranteed-deterministic last line: gated on
+    //   inCrisis, replaces「自殺」 patterns with neutral noun phrases, logs
+    //   structured event (鐵律 #2: no raw text).
+    //   Production smoke (A016) caught AI emitting「你說『想自殺』」 after
+    //   Step 6 reminder inject — this scrubber would have replaced it with
+    //   「你說的這件事」 before persist + before student saw it.
+    const crisisScrub = scrubCrisisAssistantOutput(rawContent, {
+      inCrisis: isInCrisisState(stateForPrompt),
+    });
+    if (crisisScrub.scrubbed > 0) {
+      console.info('[crisis][self-harm-word-scrubbed]', JSON.stringify({
+        event: 'self_harm_word_scrubbed',
+        scrubbed_count: crisisScrub.scrubbed,
+        student_id: studentId,
+        session_id: sessionId,
+        crisis_in_progress: !!stateForPrompt?.crisis_in_progress,
+        primary_mode: stateForPrompt?.primary_mode || null,
+        sop_step: stateForPrompt?.crisis_sop_state?.current_step ?? null,
+        // 鐵律 #2: 不 log 學員 / AI 原話, 只記事件 + count.
+      }));
+    }
+    const content = crisisScrub.cleaned;
     const usage = response.usage || {};
     const durationMs = Date.now() - requestStart;
 
