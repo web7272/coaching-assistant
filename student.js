@@ -96,6 +96,10 @@ async function hydrateFromCookie() {
       state.currentDay    = me.currentDay    || 1;
       state.preferredName = me.preferredName ?? state.preferredName ?? null;
       state.pace          = me.pace          || state.pace || 'daily';
+      // ⭐ 6/7 Vivi 商業模型 — server-authoritative SALES_OPEN flag for #/upgrade.
+      //   Default conservative: missing/undefined → false (sales-closed page).
+      //   Server flips to true → existing payment page revives (no code change).
+      state.salesOpen     = me.salesOpen === true;
       saveState();
       return true;
     } catch (e) {
@@ -278,7 +282,13 @@ if (typeof window !== 'undefined') {
 // (比 404 更糟、用戶看到安全警告 interstitial). 改同源 redirect、無 SSL/DNS
 // 依賴, 立刻在 sandbox 可用. Landing 內容已在 repo 的 landing.html (Mike v0.15
 // 之後升級到 v1.7/8, 同 commit).
-const LANDING_URL = '/landing.html';
+// ⚠️ 6/7 Patrick (EP8 上架準備): 改回 apex。
+//   *** 部署門檻 ***: 此 commit 只有在 seeyourself.now apex DNS + SSL 已生效後
+//   才能 merge 到 production。否則未認證新用戶會被導到尚未架好的 apex →
+//   ERR_SSL_VERSION_OR_CIPHER_MISMATCH、直接吃掉 CTA 轉換。
+//   注意: 必須指到 /landing(行銷頁), 非根目錄 /(根=app, 會無限迴圈)。
+//   DNS/SSL 未確認前若要先部署、把這行暫時改回 '/landing'。
+const LANDING_URL = 'https://seeyourself.now/landing';
 function renderEntry() {
   // ① 未認證 → hard redirect 到 Landing.
   if (!state.studentId) {
@@ -1352,6 +1362,27 @@ async function renderPhaseReport(phaseId) {
 // location.href 跳出去. 付款成功 Stripe 導回 #/journey?upgraded=1.
 // 鐵則：plan 升級只由驗過簽章的 webhook 寫、前端絕對不能呼叫「設我 plan_a」.
 function renderUpgradeCTA() {
+  // ⭐ 6/7 Vivi 商業模型: SALES_OPEN flag-controlled rendering.
+  //   - state.salesOpen === true  → #upgrade-sales-open (NT$3,000 + Stripe).
+  //   - else (default this wave) → #upgrade-sales-closed (謝謝 + 開賣通知).
+  //   Payment-page DOM, Stripe wiring, /api/checkout all preserved & dormant.
+  const openDiv   = document.getElementById('upgrade-sales-open');
+  const closedDiv = document.getElementById('upgrade-sales-closed');
+  const salesOpen = state.salesOpen === true;
+
+  if (openDiv)   openDiv.classList.toggle('hidden',   !salesOpen);
+  if (closedDiv) closedDiv.classList.toggle('hidden',  salesOpen);
+
+  if (!salesOpen) {
+    // Sales closed — thank-you page is static markup; no JS wiring needed.
+    // No /api/checkout call. Defensive: blank any prior inline error from a
+    // sales-open render carried over via re-route.
+    const errEl = document.getElementById('upgrade-error');
+    if (errEl) errEl.classList.add('hidden');
+    return;
+  }
+
+  // Sales open — wire the existing NT$3,000 Stripe checkout button.
   const btn  = document.getElementById('upgrade-btn');
   const errEl = document.getElementById('upgrade-error');
   if (!btn) return;
