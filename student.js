@@ -640,39 +640,66 @@ async function renderConversation() {
     else                              chainHint.classList.add('hidden');
   }
 
-  // PR-4c-4c: fresh conversation → kickoff handshake so AI 起手式 appears first
-  // (per UI spec + storyboard "Day 1 對話 第一個問句"). The 起手式 text comes from
-  // the phase-context opening variant in the server's system prompt — frontend
-  // does NOT hard-code the question.
+  // ⭐ Patrick 6/6 P0 hotfix (A015 root cause): server-authoritative restore.
   //
-  // PR-4c-green Patrick 5/25 (Day-4 實測 C2) — 關視窗重開續上:
-  //   localStorage 清掉 / 別台機器 / 別瀏覽器 → state.conversation 為空、但
-  //   server 上今天的 session 可能已經開始. 在 kickoff 之前先問 server 有沒有
-  //   未完成的 conversation 要還原；有 → 不要 kickoff、把 server 的 messages
-  //   塞回 state + 補 render；沒 → fall through 走原本的 kickoff 路徑.
-  //   鐵則 1d：endpoint 從 cookie 取 studentId、忽略 client 傳的.
-  if (state.conversation.length === 0) {
-    let restored = false;
+  // Pre-fix: the guard was `if (state.conversation.length === 0)` — server
+  // restore only fired when localStorage was empty. Any stale message (even
+  // a 1-line onboarding opening pointing to old session 47) bypassed the
+  // fetch entirely; the student saw the stale cache forever, never reconciled
+  // with the real in-progress session 51 sitting in DB. A015 (Jessie) repro:
+  // session 47 cached → reload → see only the stale opening → "從頭重來" UX.
+  //
+  // Fix: always ask the server, then reconcile per decideRestoreActionInline
+  // (mirror of lib/student/restore-decision.js, tested there).
+  //   - server has session + (local empty OR stale sid OR localShorter)
+  //     → use server (clear + repaint with authoritative messages).
+  //   - server has session + local matches → no-op (avoid flicker).
+  //   - server has nothing + local empty → kickoff.
+  //   - server has nothing + local non-empty → no-op (closure-just-happened edge).
+  //   - server fetch failed → fail-open: local empty → kickoff; non-empty → keep.
+  // 鐵則 1d: studentId 從 cookie 取、忽略 client 傳的 (endpoint side).
+  {
+    let serverFetchOk = false;
+    let serverResp = null;
     try {
-      const r = await api(`/api/conversation-today?module=${encodeURIComponent(state.module || 'self')}&today=${encodeURIComponent(new Date().toLocaleDateString('sv'))}`);
-      if (r && r.hasInProgress && Array.isArray(r.messages) && r.messages.length > 0) {
-        if (r.sessionId) state._lastSessionId = r.sessionId;
-        for (const m of r.messages) {
-          if (m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string') {
-            state.conversation.push({ role: m.role, content: m.content });
-            appendMessage(m.role, m.content, /*scroll=*/false);
-          }
-        }
-        saveState();
-        restored = true;
-      }
+      serverResp = await api(`/api/conversation-today?module=${encodeURIComponent(state.module || 'self')}`);
+      serverFetchOk = true;
     } catch (e) {
-      // 還原 endpoint 失敗 → fall through 走 kickoff (新的一天的最安全 fallback).
-      // 不打擾學員、不顯示 SaaS error；reset 後若真的 day 已開始、Sonnet 會自己
-      // 從 phase-context 走 elicitation 變體、不會重複起手式 (E4 inject 接管).
-      console.warn('[conversation-today] restore failed, falling back to kickoff:', e?.message || e);
+      console.warn('[conversation-today] fetch failed (will fail-open):', e?.message || e);
     }
-    if (!restored) await requestKickoffOpening();
+
+    const decision = decideRestoreActionInline({
+      local: { conversation: state.conversation, lastSessionId: state._lastSessionId },
+      serverFetchOk,
+      server: serverResp,
+    });
+
+    // Observability — 鐵律 #2: no raw message content logged, only counts/ids.
+    console.info('[restore-decision]', JSON.stringify({
+      action: decision.action,
+      reason: decision.reason,
+      local_count:    state.conversation.length,
+      local_sid:      state._lastSessionId != null ? state._lastSessionId : null,
+      server_fetch_ok: serverFetchOk,
+      server_sid:     serverResp && serverResp.sessionId != null ? serverResp.sessionId : null,
+      server_count:   serverResp && Array.isArray(serverResp.messages) ? serverResp.messages.length : 0,
+    }));
+
+    if (decision.action === 'use-server') {
+      clearRenderedMessages();
+      state.conversation = [];
+      for (const m of decision.messages) {
+        if (m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string') {
+          state.conversation.push({ role: m.role, content: m.content });
+          appendMessage(m.role, m.content, /*scroll=*/false);
+        }
+      }
+      state._lastSessionId = decision.sessionId;
+      saveState();
+    } else if (decision.action === 'kickoff') {
+      await requestKickoffOpening();
+    }
+    // 'no-op' → keep what's already painted from the L621 pre-paint.
   }
 
   // auto-resize textarea + manage send-button disabled state
@@ -802,6 +829,64 @@ function resetDepth() {
   wrap.hidden = true;
   wrap.querySelectorAll('.conv-depth__dot').forEach(d => d.classList.remove('lit'));
 }
+
+// ⭐ Patrick 6/6 P0 hotfix (A015) — remove all rendered message bubbles while
+//   keeping the hero figure + any non-message chrome. Used when server-side
+//   conversation reconciliation says we need to repaint with the authoritative
+//   message list (stale local sid / local shorter / etc.).
+function clearRenderedMessages() {
+  const scroll = document.getElementById('conv-scroll');
+  if (!scroll) return;
+  scroll.querySelectorAll('.msg-ai, .msg-user-wrap').forEach(el => el.remove());
+}
+
+// ⭐ SYNC GATE START — decideRestoreActionInline (mirror of lib/student/restore-decision.js)
+//   Mirror of the pure decision function tested in restore-decision.test.js.
+//   Browser script can't ES-import the module; CI sync-gate test ensures both
+//   implementations agree byte-for-behavior. Any edit here MUST be mirrored
+//   in lib/student/restore-decision.js (or the sync test fails).
+function decideRestoreActionInline({ local, serverFetchOk, server } = {}) {
+  const localConv = (local && Array.isArray(local.conversation)) ? local.conversation : [];
+  const localCount = localConv.length;
+  const localSid   = (local && local.lastSessionId != null) ? local.lastSessionId : null;
+
+  if (!serverFetchOk) {
+    if (localCount === 0) {
+      return { action: 'kickoff', reason: 'server_fetch_failed_and_local_empty' };
+    }
+    return { action: 'no-op', reason: 'server_fetch_failed_keep_local' };
+  }
+
+  const hasInProgress = !!(server
+    && server.hasInProgress === true
+    && Array.isArray(server.messages)
+    && server.messages.length > 0);
+  if (!hasInProgress) {
+    if (localCount === 0) {
+      return { action: 'kickoff', reason: 'no_server_session_and_local_empty' };
+    }
+    return { action: 'no-op', reason: 'no_server_session_keep_local' };
+  }
+
+  const serverSid    = server.sessionId;
+  const serverCount  = server.messages.length;
+  const stale        = localSid != null && localSid !== serverSid;
+  const localShorter = localCount < serverCount;
+
+  if (localCount === 0 || stale || localShorter) {
+    return {
+      action: 'use-server',
+      sessionId: serverSid,
+      messages: server.messages,
+      prevLocalCount: localCount,
+      reason: localCount === 0 ? 'local_empty'
+            : stale            ? 'stale_session_id'
+            :                    'local_shorter',
+    };
+  }
+  return { action: 'no-op', reason: 'local_in_sync' };
+}
+// ⭐ SYNC GATE END — decideRestoreActionInline
 
 function appendMessage(role, content, doScroll = true) {
   const scroll = document.getElementById('conv-scroll');
