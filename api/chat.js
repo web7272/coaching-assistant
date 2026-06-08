@@ -1701,45 +1701,26 @@ function buildDamonNoteConditionalFields(week, day) {
   return parts.length === 0 ? '' : '\n\n' + parts.join('\n\n');
 }
 
-// v34 hotfix 4：generateDamonNote 加 export、讓 api/finalize-day.js 共用。
-// 6/7 Vivi — 新增 wasCrisis (default false) → 傳給 generateNotebookPage 切犀利/溫和.
-//   finalize-day.js 用 lib/api/crisis-session-flag.js 從 session_state 算好再傳.
-// 6/8 Vivi — v5.2 errata PR-a: template v5.2 化, 廢 Layer 1-5 / 工具 1-4 / 2A2B2C 池 /
-//   Cathy Q5; 加 Mode 軌跡 / 應 invoke 但未 invoke / Damon 體系命名;
-//   active_context anchor + sc_step_when_generated null placeholder 寫在 fullNote 開頭.
-//   ⚠️ 不動 generateNotebookPage (PR-d 才處理「我看見的」犀利卡).
-//   ⚠️ 不動 3 個 regex-locked header: 【關鍵句】/ 【明天的入口】/【SC 觀察】.
-export async function generateDamonNote(sql, sessionId, module, week, day, wasCrisis = false) {
-  try {
-    const messages = await sql`
-      SELECT role, content FROM messages
-      WHERE session_id = ${sessionId} AND role IN ('user', 'assistant')
-      ORDER BY created_at ASC
-    `;
-    if (messages.length < 2) return null;
-
-    const moduleLabel = module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係';
-    // PR-4c-green Vivi 5/24 polish: user-facing「Damon」 → 「教練」.
-    // 內部識別碼保留 (table damon_notes / col damon_note / fn generateDamonNote /
-    // 「Damon Cart」 persona — that's the methodology brand the coach reads by).
-    // Sonnet's persona stays「Damon Cart」 since it doesn't echo in output;
-    // but the note's own naming + 「Damon 語氣」 vernacular flips to「教練」.
-    const conversationText = messages.map(m =>
-      `${m.role === 'user' ? '【學員】' : '【教練】'} ${m.content}`
-    ).join('\n\n');
-
-    const response = await getAnthropic().messages.create({
-        model: MODEL,
-        max_tokens: 1500,
-        // v5.2 errata PR-a (Vivi 6/8) — template v5.2 化, verbatim 對齊
-        // docs/v52_damon_note_pipeline_errata.md §1.2 / §1.3 / §1.4 / §1.5 / §8.1 / §9.1.
-        // Regex-locked headers (絕不可改字, finalize-day + chat.js 抓取):
-        //   【關鍵句】 / 【明天的入口】 / 【SC 觀察】
-        // 其餘 header 可改 (無 regex 依賴): 【深度層次】 → 【Mode 軌跡】;
-        //   【Day 1-6 採集追蹤】 → 【Day 1-N 採集追蹤】.
-        // active_context anchor (§8.1) + sc_step_when_generated placeholder (§9.1) 由
-        // 系統前置注入 (從 DB 讀 active_context_*), AI 不需重複輸出 — 直接從【今天的模式】 寫起.
-        system: `你是 Damon Cart、一個 Self Concept 教練。
+/**
+ * v5.2 Damon Note system-prompt template (errata PR-a, verbatim 對齊 spec
+ * §1.1-§1.5 / §8.1 / §9.1). Pure string returned by this function — the
+ * (week, day) parameters only inject the per-session conditional fields via
+ * buildDamonNoteConditionalFields; the rest of the template is byte-stable.
+ *
+ * Regex-locked headers (絕不可改字, finalize-day + chat.js 抓取):
+ *   【關鍵句】 / 【明天的入口】 / 【SC 觀察】
+ * Other headers may evolve (no regex dependency).
+ *
+ * Why a function not a const: the template embeds week/day-conditional
+ * fields. The rest of the body is stable so test sync-gates that grep
+ * verbatim spec text still pass against any caller's output.
+ *
+ * @param {number} week  1..3
+ * @param {number} day   1..21
+ * @returns {string}
+ */
+export function buildDamonNoteTemplateV52(week, day) {
+  return `你是 Damon Cart、一個 Self Concept 教練。
 你剛完成了一段和學員的對話。
 請用教練的視角寫下今天的教練筆記 (v5.2 template).
 
@@ -1926,7 +1907,104 @@ Damon 親口高頻 metaphor:
 注意:
 - 條件欄位 (Scope 證據 / 賦予新角色狀態 / 確定類別 + Scope / Transfer 結果 /
   微證據 + 反例預演結果 / 宣言) 只在對應 week/day 採集、其他 day 不出現該欄位、
-  不要寫「本日不採集」之類佔位字.`,
+  不要寫「本日不採集」之類佔位字.`;
+}
+
+/**
+ * 6/8 Vivi v5.2 errata PR-b — generateDamonNote 的 system prompt 吃主對話那份
+ * 既有 cached prefix (對齊 spec §4).
+ *
+ * Shape 必須跟 buildSystemPromptArrayV5 的 cached prefix 段 byte-identical
+ * (text=s.content, breakpoint 在 lastIdx) — 否則 cache 不共享、甚至 thrash.
+ * 主對話呼叫的 cached prefix 已 warm; Damon Note 用同一組 CACHED_PREFIX_SECTIONS、
+ * 同順序、同 breakpoint 構法 + 同 model → 直接 cache-read 命中、0.1× 計費、
+ * 不算 TPM (Vivi 6/3 burst protection 量產實質容量 +5-10×).
+ *
+ * caching ON:  [cached_1, cached_2, cached_3, cached_4(breakpoint), template]
+ * caching OFF: [{ text: 4 段 cached content + template (merged) }]
+ *
+ * 為什麼不重用 buildSystemPromptArrayV5: 主對話的 builder 把 buildDynamicContext
+ * (sessionState / userProfile / gapDays / activeContext / conditionalInjects)
+ * 也擠進 dynamic block; Damon Note 的 dynamic block 是 template (v5.2 PR-a 內容),
+ * 跟主對話的 dynamic 語意完全不同. 共用 cached-prefix 構法 + 各自獨立的 dynamic
+ * 區段, 是「兩個函式 mirror cached prefix shape」 的最小耦合做法.
+ *
+ * @param {object} args
+ * @param {boolean} [args.cachingEnabled=false]  從 flags.PROMPT_CACHING 決定
+ * @param {number}  args.week   for buildDamonNoteTemplateV52 conditional fields
+ * @param {number}  args.day    for buildDamonNoteTemplateV52 conditional fields
+ * @returns {Array<{type:'text', text:string, cache_control?:object}>}
+ */
+export function buildDamonNoteSystemArray({ cachingEnabled = false, week, day } = {}) {
+  const templateText = buildDamonNoteTemplateV52(week, day);
+
+  if (!cachingEnabled) {
+    // caching OFF: 全部併成單一 text block (mirror buildSystemPromptArrayV5 OFF path).
+    const merged = CACHED_PREFIX_SECTIONS.map(s => s.content).join('\n\n')
+      + '\n\n' + templateText;
+    return [{ type: 'text', text: merged }];
+  }
+
+  // caching ON: 4 cached + breakpoint@last + 1 template dynamic.
+  // ⚠️ 這段 map 必須跟 buildSystemPromptArrayV5 的 cached prefix loop 逐字一致
+  // (text = s.content, cache_control 只在 lastIdx), 否則 cache 不共享.
+  const lastIdx = CACHED_PREFIX_SECTIONS.length - 1;
+  const arr = CACHED_PREFIX_SECTIONS.map((s, i) => {
+    const block = { type: 'text', text: s.content };
+    if (i === lastIdx) block.cache_control = { type: 'ephemeral' };
+    return block;
+  });
+  arr.push({ type: 'text', text: templateText });
+  return arr;
+}
+
+// v34 hotfix 4：generateDamonNote 加 export、讓 api/finalize-day.js 共用。
+// 6/7 Vivi — 新增 wasCrisis (default false) → 傳給 generateNotebookPage 切犀利/溫和.
+//   finalize-day.js 用 lib/api/crisis-session-flag.js 從 session_state 算好再傳.
+// 6/8 Vivi — v5.2 errata PR-a: template v5.2 化 (見 buildDamonNoteTemplateV52).
+// 6/8 Vivi — v5.2 errata PR-b: system prompt 改吃 cached prefix (buildDamonNoteSystemArray).
+//   ⚠️ 不動 generateNotebookPage (PR-d 才處理「我看見的」犀利卡).
+//   ⚠️ 不動 3 個 regex-locked header: 【關鍵句】/ 【明天的入口】/【SC 觀察】.
+export async function generateDamonNote(sql, sessionId, module, week, day, wasCrisis = false) {
+  try {
+    const messages = await sql`
+      SELECT role, content FROM messages
+      WHERE session_id = ${sessionId} AND role IN ('user', 'assistant')
+      ORDER BY created_at ASC
+    `;
+    if (messages.length < 2) return null;
+
+    const moduleLabel = module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係';
+    // PR-4c-green Vivi 5/24 polish: user-facing「Damon」 → 「教練」.
+    // 內部識別碼保留 (table damon_notes / col damon_note / fn generateDamonNote /
+    // 「Damon Cart」 persona — that's the methodology brand the coach reads by).
+    // Sonnet's persona stays「Damon Cart」 since it doesn't echo in output;
+    // but the note's own naming + 「Damon 語氣」 vernacular flips to「教練」.
+    const conversationText = messages.map(m =>
+      `${m.role === 'user' ? '【學員】' : '【教練】'} ${m.content}`
+    ).join('\n\n');
+
+    // 6/8 Vivi v5.2 errata PR-b — 讀 cachingEnabled 從同一個 flag 來源 (主對話用的).
+    //   loadFeatureFlags 自有 30s in-memory cache + env fallback + 內部 try/catch
+    //   → safe to call; PROMPT_CACHING default ON (跟主對話對齊).
+    //   fail-safe: 任何讀取失敗 default to ON (保 cache 共享 + Vivi 6/3 burst protection).
+    let cachingEnabled = true;
+    try {
+      const flags = await loadFeatureFlags(sql);
+      cachingEnabled = flags?.PROMPT_CACHING !== false;
+    } catch (e) {
+      console.warn('[generateDamonNote] loadFeatureFlags failed (default ON):', e?.message || e);
+    }
+
+    const response = await getAnthropic().messages.create({
+        model: MODEL,
+        max_tokens: 1500,
+        // 6/8 Vivi v5.2 errata PR-b — system: cached prefix (4 段) + v5.2 template.
+        // Same model + same cached bytes + same breakpoint → cache-share with
+        // main chat handler's buildSystemPromptArrayV5 cached prefix (~5000 tokens
+        // saved per Damon Note call). Template content (v5.2 errata PR-a verbatim)
+        // is byte-stable across calls except for (week, day)-conditional fields.
+        system: buildDamonNoteSystemArray({ cachingEnabled, week, day }),
         messages: [{
           role: 'user',
           // P5 (PR-4c-green): v5 canonical unit is sessionDay (1..21); the prior

@@ -23,8 +23,11 @@ import {
   shouldDispatchDayOpening,
   isPriorDayFinalized,
   buildChatResponsePayload,   // PR-23s4b hotfix (Vivi 6/4)
+  buildDamonNoteTemplateV52,   // 6/8 Vivi v5.2 errata PR-b
+  buildDamonNoteSystemArray,   // 6/8 Vivi v5.2 errata PR-b
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
+import { CACHED_PREFIX_SECTIONS } from '../lib/prompt-sections/cached/index.js';
 
 // ─────────────────────────────────────────────────────────
 // INITIAL_PHASE_STATE
@@ -1108,14 +1111,16 @@ test('🛑 6/7 chat.js: safety wall (rule 10) retained verbatim (scrubber alignm
 test('🛑 6/8 v5.2 PR-a: 3 regex-locked headers retained verbatim (finalize-day 抓取依賴)', () => {
   // 【關鍵句】 / 【明天的入口】 / 【SC 觀察】 — finalize-day.js + chat.js regex.
   // Without these, publicNote / next-day SC hypothesis 全爆.
-  // Locate the generateDamonNote system prompt window, check headers present.
-  const damonNoteWindow = chatJsSrc.match(
-    /generateDamonNote[\s\S]*?const fullNote = /,
-  );
-  assert.ok(damonNoteWindow, 'generateDamonNote function body must be locatable');
-  assert.match(damonNoteWindow[0], /【關鍵句】/, '【關鍵句】 header verbatim');
-  assert.match(damonNoteWindow[0], /【明天的入口】/, '【明天的入口】 header verbatim');
-  assert.match(damonNoteWindow[0], /【SC 觀察】/, '【SC 觀察】 header verbatim');
+  // PR-b refactor: template now extracted to buildDamonNoteTemplateV52. Repoint
+  // the source slice from the inline `system:` window to the template function body.
+  const templateFnStart = chatJsSrc.indexOf('export function buildDamonNoteTemplateV52');
+  const templateFnEnd   = chatJsSrc.indexOf('export function buildDamonNoteSystemArray');
+  assert.ok(templateFnStart > 0 && templateFnEnd > templateFnStart,
+    'buildDamonNoteTemplateV52 + buildDamonNoteSystemArray functions must be locatable');
+  const templateFn = chatJsSrc.slice(templateFnStart, templateFnEnd);
+  assert.match(templateFn, /【關鍵句】/, '【關鍵句】 header verbatim');
+  assert.match(templateFn, /【明天的入口】/, '【明天的入口】 header verbatim');
+  assert.match(templateFn, /【SC 觀察】/, '【SC 觀察】 header verbatim');
 });
 
 test('🛑 6/8 v5.2 PR-a: regex extraction in generateDamonNote unchanged (publicNote pipeline)', () => {
@@ -1277,29 +1282,25 @@ test('🛑 6/8 v5.2 PR-a: old v3.3 section headers GONE as instructions (only me
   //   - No 「【深度層次】」 used as a section heading line (AI would emit one).
   //   - No 「【Day 1-6 採集追蹤】」 used as a section heading line.
   //
-  // Strategy: count occurrences in chat.js. Each old v3.3 header should appear
-  // ONLY inside the FORBIDDEN_SECTION_MARKERS scrubber list (lib/api/student-
-  // note-safe.js — separate file) + the rule-10 ban list inside generateNotebook
-  // Page (the safety wall). We assert chat.js's generateDamonNote prompt
-  // does NOT carry the old header on its own line as a template instruction.
-  const fnStart = chatJsSrc.indexOf('export async function generateDamonNote');
-  const fnEnd   = chatJsSrc.indexOf('export async function generateNotebookPage');
-  assert.ok(fnStart > 0 && fnEnd > fnStart,
-    'generateDamonNote function body must be locatable + bounded by generateNotebookPage');
-  const damonFn = chatJsSrc.slice(fnStart, fnEnd);
+  // PR-b refactor: template now lives in buildDamonNoteTemplateV52. Repoint the
+  // source slice from the inline function body to the template function body.
+  const templateFnStart = chatJsSrc.indexOf('export function buildDamonNoteTemplateV52');
+  const templateFnEnd   = chatJsSrc.indexOf('export function buildDamonNoteSystemArray');
+  assert.ok(templateFnStart > 0 && templateFnEnd > templateFnStart);
+  const templateFn = chatJsSrc.slice(templateFnStart, templateFnEnd);
 
   // Old v3.3 header lines must NOT appear as the AI-facing section header
   // instruction. Pattern「\n【深度層次】\n」 (header on its own line, body below)
   // would mean we still tell the AI to emit one. New template uses 【Mode 軌跡】.
-  assert.ok(!/\n【深度層次】\n/.test(damonFn),
+  assert.ok(!/\n【深度層次】\n/.test(templateFn),
     'old【深度層次】 must not be an AI-facing section instruction (replaced by【Mode 軌跡】)');
-  assert.ok(!/\n【Day 1-6 採集追蹤】/.test(damonFn),
+  assert.ok(!/\n【Day 1-6 採集追蹤】/.test(templateFn),
     'old【Day 1-6 採集追蹤】 must not be an AI-facing section instruction (replaced by Day 1-N)');
   // Cathy Q5 must not appear as a positive instruction sentence.
-  assert.ok(!/Cathy Q5 確認[^。]*?如果整週只挖到 1 個/.test(damonFn),
+  assert.ok(!/Cathy Q5 確認[^。]*?如果整週只挖到 1 個/.test(templateFn),
     'old Cathy Q5 instruction sentence must be gone (廢除)');
   // 工具二 2A SC 池 as positive instruction (not as guard list item).
-  assert.ok(!/工具二 2A SC 池[、)]/.test(damonFn),
+  assert.ok(!/工具二 2A SC 池[、)]/.test(templateFn),
     'old「工具二 2A SC 池」 instruction must be gone (廢除)');
 });
 
@@ -1608,4 +1609,115 @@ test('🛑 grep guard: chat.js has no CODE-USE of retired phase-* symbols (PR-23
   // contextFor (without leading "mode") was the phase-context import.
   assert.doesNotMatch(codeOnly, /(?<![a-zA-Z])contextFor(?![a-zA-Z])/,
     'contextFor retired with phase-context (PR-23s4b); modeContextFor is the replacement');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/8 Vivi v5.2 errata PR-b — generateDamonNote 吃主對話 cached prefix.
+// buildDamonNoteSystemArray output structure + cache-share byte-identity guard.
+// ═════════════════════════════════════════════════════════
+
+test('🛑 6/8 PR-b: buildDamonNoteTemplateV52 returns a string (week/day deterministic)', () => {
+  const t = buildDamonNoteTemplateV52(1, 1);
+  assert.equal(typeof t, 'string');
+  assert.ok(t.length > 1000, 'template must be substantial (4-step instruction + Damon vocab + guards)');
+  // Same week/day → byte-identical output (no Date.now / random).
+  const t2 = buildDamonNoteTemplateV52(1, 1);
+  assert.equal(t, t2, 'template builder must be deterministic per (week, day)');
+});
+
+test('🛑 6/8 PR-b: caching ON → 5 blocks (4 cached + 1 template), breakpoint @ index 3', () => {
+  const arr = buildDamonNoteSystemArray({ cachingEnabled: true, week: 1, day: 1 });
+  assert.equal(Array.isArray(arr), true);
+  assert.equal(arr.length, 5,
+    `expected 5 blocks (4 cached + 1 template), got ${arr.length}`);
+  // First 4 blocks = cached prefix, with cache_control only on the last (index 3).
+  for (let i = 0; i < 4; i++) {
+    assert.equal(arr[i].type, 'text', `block[${i}].type must be "text"`);
+    if (i < 3) {
+      assert.equal(arr[i].cache_control, undefined,
+        `block[${i}] must NOT carry cache_control (only breakpoint @ index 3)`);
+    } else {
+      assert.deepEqual(arr[i].cache_control, { type: 'ephemeral' },
+        'block[3] (last cached) must carry cache_control: { type: "ephemeral" } breakpoint');
+    }
+  }
+  // Last block = template (no cache_control).
+  assert.equal(arr[4].type, 'text');
+  assert.equal(arr[4].cache_control, undefined,
+    'template block must NOT carry cache_control (dynamic, post-breakpoint)');
+  assert.equal(arr[4].text, buildDamonNoteTemplateV52(1, 1),
+    'last block.text === buildDamonNoteTemplateV52(week, day)');
+});
+
+test('🛑 6/8 PR-b: caching OFF → 1 block (4 cached merged + template)', () => {
+  const arr = buildDamonNoteSystemArray({ cachingEnabled: false, week: 1, day: 1 });
+  assert.equal(arr.length, 1, 'OFF path must collapse to 1 block');
+  assert.equal(arr[0].type, 'text');
+  assert.equal(arr[0].cache_control, undefined,
+    'OFF path block must NOT carry cache_control (single merged block, no break)');
+  // The merged block must contain all 4 cached contents + template.
+  for (const s of CACHED_PREFIX_SECTIONS) {
+    assert.ok(arr[0].text.includes(s.content),
+      `OFF merged block must contain CACHED_PREFIX_SECTIONS content (length=${s.content.length})`);
+  }
+  assert.ok(arr[0].text.includes(buildDamonNoteTemplateV52(1, 1)),
+    'OFF merged block must contain the template');
+});
+
+test('🛑 6/8 PR-b: caching OFF default (no arg) → safe', () => {
+  // Missing cachingEnabled defaults to false (no cache structure).
+  const arr = buildDamonNoteSystemArray({ week: 1, day: 1 });
+  assert.equal(arr.length, 1);
+});
+
+test('🛑 6/8 PR-b cache-share guard: 4 cached.text 逐一 === buildSystemPromptArrayV5 前 4 段 (byte-identical → cache 共享)', () => {
+  // CORE INVARIANT — if these strings ever diverge, Damon Note's cache won't
+  // share with the main chat handler's cache. That would (1) waste tokens,
+  // (2) cause cache thrash. Lock byte-identity by direct string compare.
+  const damonArr = buildDamonNoteSystemArray({ cachingEnabled: true, week: 1, day: 1 });
+  const mainArr  = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0,
+    conditionalInjects: [], cachingEnabled: true,
+    activeContext: null,
+  });
+  // Main chat handler also emits 4 cached + 1 dynamic; first 4 are the cached prefix.
+  assert.ok(mainArr.length >= 5,
+    `main chat array must be ≥ 5 blocks (4 cached + dynamic); got ${mainArr.length}`);
+  for (let i = 0; i < 4; i++) {
+    assert.equal(damonArr[i].text, mainArr[i].text,
+      `cached block[${i}].text must be byte-identical between Damon Note + main chat (cache share)`);
+    // cache_control shape must match too — same breakpoint position.
+    assert.deepEqual(damonArr[i].cache_control, mainArr[i].cache_control,
+      `cached block[${i}].cache_control must match between Damon Note + main chat`);
+  }
+});
+
+test('🛑 6/8 PR-b: cached prefix 4 段 = CACHED_PREFIX_SECTIONS map(content) (consume only, no modify)', () => {
+  // Sanity: builder consumes the same CACHED_PREFIX_SECTIONS export; never
+  // mutates content. Prevents accidental wrapping / re-formatting that would
+  // break cache share.
+  const arr = buildDamonNoteSystemArray({ cachingEnabled: true, week: 1, day: 1 });
+  for (let i = 0; i < 4; i++) {
+    assert.equal(arr[i].text, CACHED_PREFIX_SECTIONS[i].content,
+      `block[${i}].text must === CACHED_PREFIX_SECTIONS[${i}].content (no wrapping)`);
+  }
+});
+
+test('🛑 6/8 PR-b: main chat buildSystemPromptArrayV5 behavior unchanged (cached prefix len + breakpoint)', () => {
+  // Anti-regression for the main chat handler. The Damon Note PR-b refactor
+  // must NOT alter buildSystemPromptArrayV5. Lock 5-block ON path + 1-block OFF.
+  const on  = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0,
+    conditionalInjects: [], cachingEnabled: true,
+    activeContext: null,
+  });
+  const off = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0,
+    conditionalInjects: [], cachingEnabled: false,
+    activeContext: null,
+  });
+  assert.equal(on.length, 5, 'ON path: 4 cached + dynamic');
+  assert.deepEqual(on[3].cache_control, { type: 'ephemeral' },
+    'ON path: breakpoint at index 3 (last cached)');
+  assert.equal(off.length, 1, 'OFF path: collapsed single block');
 });
