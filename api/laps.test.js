@@ -39,13 +39,13 @@ function mkSql(planner) {
 
 let _savedKey;
 beforeEach(() => {
-  _savedKey = process.env.ADMIN_TOKEN;
-  process.env.ADMIN_TOKEN = 'TEST_LAPS_TOKEN_32_BYTES_xxxxxxxxxxxx';
+  _savedKey = process.env.MIKE_TOKEN;
+  process.env.MIKE_TOKEN = 'TEST_LAPS_TOKEN_32_BYTES_xxxxxxxxxxxx';
   _setSqlClient(null);
 });
 afterEach(() => {
-  if (_savedKey === undefined) delete process.env.ADMIN_TOKEN;
-  else process.env.ADMIN_TOKEN = _savedKey;
+  if (_savedKey === undefined) delete process.env.MIKE_TOKEN;
+  else process.env.MIKE_TOKEN = _savedKey;
   _setSqlClient(null);
 });
 
@@ -111,15 +111,15 @@ test('🛑 wrong key → 401, no data', async () => {
   assert.equal(res.payload.error, 'Unauthorized');
 });
 
-test('🛑 ADMIN_TOKEN env unset → 401 (rejects all, even with arbitrary key)', async () => {
-  delete process.env.ADMIN_TOKEN;
+test('🛑 MIKE_TOKEN env unset → 401 (rejects all, even with arbitrary key)', async () => {
+  delete process.env.MIKE_TOKEN;
   const { req, res } = mkReqRes({ query: { key: 'anything' } });
   await handler(req, res);
   assert.equal(res.statusCode, 401);
 });
 
 test('🛑 method not GET → 405', async () => {
-  const { req, res } = mkReqRes({ method: 'POST', query: { key: process.env.ADMIN_TOKEN } });
+  const { req, res } = mkReqRes({ method: 'POST', query: { key: process.env.MIKE_TOKEN } });
   await handler(req, res);
   assert.equal(res.statusCode, 405);
 });
@@ -130,7 +130,7 @@ test('🛑 method not GET → 405', async () => {
 
 test('🛑 malformed from → 400 INVALID_FROM', async () => {
   const { req, res } = mkReqRes({
-    query: { key: process.env.ADMIN_TOKEN, from: '2026/06/08' },
+    query: { key: process.env.MIKE_TOKEN, from: '2026/06/08' },
   });
   await handler(req, res);
   assert.equal(res.statusCode, 400);
@@ -139,7 +139,7 @@ test('🛑 malformed from → 400 INVALID_FROM', async () => {
 
 test('🛑 malformed to → 400 INVALID_TO', async () => {
   const { req, res } = mkReqRes({
-    query: { key: process.env.ADMIN_TOKEN, to: 'foo' },
+    query: { key: process.env.MIKE_TOKEN, to: 'foo' },
   });
   await handler(req, res);
   assert.equal(res.statusCode, 400);
@@ -184,7 +184,7 @@ test('🛑 happy path: correct key + window → returns LAPS shape', async () =>
   _setSqlClient(mkSql(happyPathPlanner()));
   const { req, res } = mkReqRes({
     query: {
-      key:  process.env.ADMIN_TOKEN,
+      key:  process.env.MIKE_TOKEN,
       from: '2026-06-01',
       to:   '2026-06-08',
     },
@@ -208,7 +208,7 @@ test('🛑 happy path: window echoed back (from/to as ISO strings)', async () =>
   _setSqlClient(mkSql(happyPathPlanner()));
   const { req, res } = mkReqRes({
     query: {
-      key:  process.env.ADMIN_TOKEN,
+      key:  process.env.MIKE_TOKEN,
       from: '2026-06-01',
       to:   '2026-06-08',
     },
@@ -237,7 +237,7 @@ test('🛑 window filter: from inclusive (>=) + to exclusive (<)', async () => {
     return [];
   }));
   const { req, res } = mkReqRes({
-    query: { key: process.env.ADMIN_TOKEN, from: '2026-06-01', to: '2026-06-08' },
+    query: { key: process.env.MIKE_TOKEN, from: '2026-06-01', to: '2026-06-08' },
   });
   await handler(req, res);
   assert.ok(leadsCallText, 'leads query should have fired');
@@ -262,7 +262,7 @@ test('🛑 window default: from = date_trunc(week) Asia/Taipei, to = NOW()', asy
     return [];
   }));
   // No from / to in query → defaults
-  const { req, res } = mkReqRes({ query: { key: process.env.ADMIN_TOKEN } });
+  const { req, res } = mkReqRes({ query: { key: process.env.MIKE_TOKEN } });
   await handler(req, res);
   assert.ok(windowSql, 'window SELECT must fire');
   assert.match(windowSql, /date_trunc\('week', NOW\(\) AT TIME ZONE 'Asia\/Taipei'\)/);
@@ -286,7 +286,7 @@ test('🛑 鐵律 #2: SQL queries never SELECT leads.answers (only counts)', asy
     return [];
   }));
   const { req, res } = mkReqRes({
-    query: { key: process.env.ADMIN_TOKEN, from: '2026-06-01', to: '2026-06-08' },
+    query: { key: process.env.MIKE_TOKEN, from: '2026-06-01', to: '2026-06-08' },
   });
   await handler(req, res);
   for (const sql of planned) {
@@ -319,7 +319,7 @@ test('🛑 鐵律 #2: response body never contains any raw user text (assert see
     return [];
   }));
   const { req, res } = mkReqRes({
-    query: { key: process.env.ADMIN_TOKEN, from: '2026-06-01', to: '2026-06-08' },
+    query: { key: process.env.MIKE_TOKEN, from: '2026-06-01', to: '2026-06-08' },
   });
   await handler(req, res);
   const bodyStr = JSON.stringify(res.payload);
@@ -343,7 +343,7 @@ test('🛑 P: column exists → counts returned, P_note=null', async () => {
     if (/FROM user_profile_evolution/.test(text)) return [{ p_count: 4 }];
     return [];
   }));
-  const { req, res } = mkReqRes({ query: { key: process.env.ADMIN_TOKEN } });
+  const { req, res } = mkReqRes({ query: { key: process.env.MIKE_TOKEN } });
   await handler(req, res);
   assert.equal(res.payload.P, 4);
   assert.equal(res.payload.P_note, null);
@@ -361,7 +361,7 @@ test('🛑 P: column missing (migration not applied) → 0 + P_note (fail-soft)'
     }
     return [];
   }));
-  const { req, res } = mkReqRes({ query: { key: process.env.ADMIN_TOKEN } });
+  const { req, res } = mkReqRes({ query: { key: process.env.MIKE_TOKEN } });
   await handler(req, res);
   assert.equal(res.statusCode, 200, 'overall query should not 500 — fail-soft for P');
   assert.equal(res.payload.P, 0);
@@ -381,7 +381,7 @@ test('🛑 S: stripe payment timestamp schema gap → 0 + S_note (待補來源)'
     if (/FROM user_profile_evolution/.test(text)) return [{ p_count: 0 }];
     return [];
   }));
-  const { req, res } = mkReqRes({ query: { key: process.env.ADMIN_TOKEN } });
+  const { req, res } = mkReqRes({ query: { key: process.env.MIKE_TOKEN } });
   await handler(req, res);
   assert.equal(res.payload.S, 0);
   assert.equal(typeof res.payload.S_note, 'string');
@@ -401,7 +401,7 @@ test('🛑 leads query throws → 500 (not silent 0)', async () => {
     if (/FROM leads/.test(text)) throw new Error('connection refused');
     return [];
   }));
-  const { req, res } = mkReqRes({ query: { key: process.env.ADMIN_TOKEN } });
+  const { req, res } = mkReqRes({ query: { key: process.env.MIKE_TOKEN } });
   await handler(req, res);
   assert.equal(res.statusCode, 500);
   assert.equal(res.payload.error, 'SERVER_ERROR');

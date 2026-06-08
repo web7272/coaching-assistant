@@ -3,7 +3,7 @@
 //
 // Mike weekly report 自助拉 LAPS 四數 (PRODUCT-TRUTH v2.7.1 §2.11 EP8 漏斗).
 //
-// Auth: passcode-gated via ?key=<ADMIN_TOKEN env>. Wrong / missing → 401.
+// Auth: passcode-gated via ?key=<MIKE_TOKEN env>. Wrong / missing → 401.
 //       (Mirrors lib/auth/require-admin.js but renames query param to ?key=
 //        per Mike's spec.)
 //
@@ -79,10 +79,10 @@ export default async function handler(req, res) {
   }
 
   // ─── Auth: passcode via ?key= ─────────────────────────────────────
-  const expected = process.env.ADMIN_TOKEN;
+  const expected = process.env.MIKE_TOKEN;
   const provided = typeof req.query?.key === 'string' ? req.query.key : '';
   if (!expected) {
-    console.error('[laps] ADMIN_TOKEN env var not set — all requests will fail (Vercel dashboard 設定)');
+    console.error('[laps] MIKE_TOKEN env var not set — all requests will fail (Vercel dashboard 設定)');
     return res.status(401).json({ error: 'Unauthorized' });
   }
   if (!constantTimeEqual(expected, provided)) {
