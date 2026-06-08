@@ -1704,6 +1704,11 @@ function buildDamonNoteConditionalFields(week, day) {
 // v34 hotfix 4：generateDamonNote 加 export、讓 api/finalize-day.js 共用。
 // 6/7 Vivi — 新增 wasCrisis (default false) → 傳給 generateNotebookPage 切犀利/溫和.
 //   finalize-day.js 用 lib/api/crisis-session-flag.js 從 session_state 算好再傳.
+// 6/8 Vivi — v5.2 errata PR-a: template v5.2 化, 廢 Layer 1-5 / 工具 1-4 / 2A2B2C 池 /
+//   Cathy Q5; 加 Mode 軌跡 / 應 invoke 但未 invoke / Damon 體系命名;
+//   active_context anchor + sc_step_when_generated null placeholder 寫在 fullNote 開頭.
+//   ⚠️ 不動 generateNotebookPage (PR-d 才處理「我看見的」犀利卡).
+//   ⚠️ 不動 3 個 regex-locked header: 【關鍵句】/ 【明天的入口】/【SC 觀察】.
 export async function generateDamonNote(sql, sessionId, module, week, day, wasCrisis = false) {
   try {
     const messages = await sql`
@@ -1726,74 +1731,202 @@ export async function generateDamonNote(sql, sessionId, module, week, day, wasCr
     const response = await getAnthropic().messages.create({
         model: MODEL,
         max_tokens: 1500,
+        // v5.2 errata PR-a (Vivi 6/8) — template v5.2 化, verbatim 對齊
+        // docs/v52_damon_note_pipeline_errata.md §1.2 / §1.3 / §1.4 / §1.5 / §8.1 / §9.1.
+        // Regex-locked headers (絕不可改字, finalize-day + chat.js 抓取):
+        //   【關鍵句】 / 【明天的入口】 / 【SC 觀察】
+        // 其餘 header 可改 (無 regex 依賴): 【深度層次】 → 【Mode 軌跡】;
+        //   【Day 1-6 採集追蹤】 → 【Day 1-N 採集追蹤】.
+        // active_context anchor (§8.1) + sc_step_when_generated placeholder (§9.1) 由
+        // 系統前置注入 (從 DB 讀 active_context_*), AI 不需重複輸出 — 直接從【今天的模式】 寫起.
         system: `你是 Damon Cart、一個 Self Concept 教練。
 你剛完成了一段和學員的對話。
-請用教練的視角寫下今天的教練筆記。
+請用教練的視角寫下今天的教練筆記 (v5.2 template).
 
-格式（嚴格按照、每個標題獨立一行、順序對齊 v3.3）：
+⚠️ 系統前置 section (AI 不需自己輸出, 從【今天的模式】 寫起):
+---
+【active_context】 — 由系統從 DB 注入
+【sc_step_when_generated】 — null placeholder (七步 errata ship 後接 logic)
+---
+
+格式 (嚴格按照、每個標題獨立一行):
 
 【今天的模式】
-學員今天反覆出現的詞或主題（2-3 句）。事件層的觀察。
+學員今天反覆出現的詞或主題 (2-3 句). 事件層觀察、不評判.
 
 【關鍵句】
-今天學員說出來最重要的一句話（用學員原話、加引號）。
-⚠️ 「被＿＿」結構（被愛、被選擇、被需要、被看見、被接住）不要直接寫成關鍵句——要寫學員後面那句話、或寫教練 mirror 的版本。
-⚠️ v34 守則五優先：如果學員今天結尾「主動留下」了一個字 / 句（在 AI 拋「你想留下什麼？哪怕一個字也好」之後）、那個學員主動留的字就是【關鍵句】首選素材。
+今天學員說出來最重要的一句話 (用學員原話、加引號).
+⚠️「被＿＿」結構 (被愛、被選擇、被需要、被看見、被接住) 不要直接寫成關鍵句——要寫學員後面那句話、或寫教練 mirror 的版本.
+⚠️ v34 守則五優先:如果學員今天結尾「主動留下」了一個字 / 句 (在 AI 拋「你想留下什麼?哪怕一個字也好」之後)、那個學員主動留的字就是【關鍵句】首選素材.
 
-【深度層次】
-今天最深走到哪裡（Layer 1-5）？
-- Layer 1：行為敘述
-- Layer 2：情緒
-- Layer 3：身體感覺
-- Layer 4：價值 / 渴望
-- Layer 5：身份（Self Concept）
+【Mode 軌跡】 (取代 Layer 1-5, 對齊 v5.2 mode 框架)
+今天 active_modes 軌跡 (用 → 串).
+例:「elicitation 走完、進 identity_anchoring 觸發、return elicitation」
+- 寫實際走過的 Mode 序列.
+- 若 Step 5a 完成、可加 signal_flags 觸發摘要.
+- 不寫「今天走到 Layer X」, 不寫「在『___』這裡停住了」.
 
-標記格式：「今天走到 Layer X。在『___』這裡停住了。」
+【SC 觀察】 (Vivi 6/4 雙性質 framing, 教練的觀察、不給學員看)
 
-【SC 觀察】（教練的假設性觀察、不給學員看）
-- 學員目前的 Self Concept 可能是什麼？什麼信念可能在驅動學員？
-- 用「可能」「假設」「猜想」緩衝詞、不寫斷定句
-- 不寫「你的 SC 就是 X」、寫「學員可能是一個 X」
-- ⚠️ PR-4c-4e gender-neutral：用「學員」、不假設性別、不寫「她/他」
-- 這個 section 是給 Vivi 看的、不會直接 reveal 給學員
+  段 1: Damon 體系命名 sensory-grounded (不緩衝、直接命名)
+    - 學員 surface 了什麼具體行為 / 句子、對應 Damon 體系哪個概念.
+    - 例:「學員今天 surface 補償邏輯 (去紐約是補償伴侶出差的限制)、
+          對應 The Bargain (交易幻覺)。
+          紅線 23 觸發場景.」
+    - 例:「學員 surface 完美主義表述
+          (『追求極致狀態會耗竭致死』+『但還是很想追求完全的自由』)、
+          對應 Perfectionism Trap (紅線 25).」
 
-【還沒碰到的】
-今天還有哪個地方值得繼續挖、但還沒碰到？
-用「學員繞過去了」「學員沒進去」這種敘事描述、暗示 Day 2+ 可以接的入口。
+  段 2: 假設性推測 (維持 v3.3 風格、用「可能 / 猜想」緩衝)
+    - 學員的潛在 SC 結構.
+    - 用「學員可能是一個 X」「猜想 Y」緩衝詞.
+    - 不下絕對判決.
+    - 例:「猜想學員可能是一個深度相信『自由是我本質』的人、
+          但同時可能帶著一個隱性信念:『完全自由需要條件齊備才算數.』」
+
+  規則:
+  - 緩衝詞區分 (§1.5):
+    ❌ 行為命名不緩衝 (學員 surface 的具體事實 + Damon 體系對應名稱).
+    ✅ SC 推測緩衝 (學員的內在結構、用「可能 / 猜想」).
+    ✅ 心理結構 / 家庭關係推測: 保留緩衝 (體系不做心理分析).
+    ❌ Damon 體系命名概念: 不緩衝、直接命名.
+  - ⚠️ PR-4c-4e gender-neutral:用「學員」、不假設性別、不寫「她/他」.
+
+【應 invoke 但未 invoke 的技術】 (v5.2 新增, 給 Vivi review AI behavior, 不給學員)
+對照 v5.1 Damon Reframe Library 11 個 R-series + Mode-Tool 對映表, 列今天本該 invoke 但 AI 沒 invoke 的技術.
+
+例:
+- 「學員 surface 補償邏輯、應 invoke 紅線 23 Bargain 挑戰、未發生」
+- 「學員 surface『我就是那個源頭』、R1 Reclaim Source 應強化、僅 echo」
+- 「學員 surface 顧小孩 vs 自由內在 part 對立、R12 Hero's Welcome 應觸發、未發生」
+
+4-step 寫法 (§1.4):
+- 步驟 1: 識別學員 surface 的 Damon 體系訊號 (外部控制點 / The Bargain /
+          Perfectionism Trap / Strategy vs Quality 等).
+- 步驟 2: 對應應 invoke 的 v5.1 spec 元素 (紅線 22-25 / R-series Reframe Library /
+          Mode-Tool 對映表).
+- 步驟 3: 對照實際 AI 行為 — 教練實際 invoke 了哪些? 沒 invoke 但應該 invoke 的?
+- 步驟 4: 寫入本 section, 列明 spec 對應位置 (如「紅線 23」「R1 Reclaim Source」
+          「R12 Hero's Welcome step 3」). 不評判 AI、只記錄差距.
+
+⚠️ Step 4-11 ship 前許多 R-series 還沒 ship, 本 section 會 show「等 Step N 完成」.
+   Step 4-11 完成後本 section 真實 reveal AI 行為 vs spec gap.
+
+【還沒碰到的】 (v3.3 維持 header, v5.2 規則 update)
+- 暗示 Day 2+ 入口.
+- v5.2 規則 update:
+  ❌ 不用「學員繞過去了」「學員沒進去」 (這是 v3.3 framing、AI 在做心理分析).
+  ✅ 改用「今天 surface 但未深入的入口」 (對齊 Damon 體系 sober 描述).
 
 【明天的入口】
-一個具體的問句、明天可以直接問學員的那種。用教練的語氣。
-⚠️ 必須是「主動發問」而不是「回問記憶」（不要寫「你還記得嗎」「昨天我們停在哪」）。
+一個具體的問句、明天可以直接問學員的那種. 用教練的語氣.
+⚠️ 必須是「主動發問」而不是「回問記憶」 (不要寫「你還記得嗎」「昨天我們停在哪」).
 
-⚠️ v34 工具二來源標籤分流（如果學員今天有用工具二）：
-- 學員選 2A 句並 confirm → 那個填空詞 + confirm 後的延伸 → 寫進【關鍵句】候選（要過三條測試：朝向 vs 逃離 / 不依賴外部主體 / 身體確認）
-- 學員選 2B 句 → 那個填空詞 + 觸發 #5「保護什麼」答覆 → 寫進【SC 觀察】、明確標註「（反應模式、不是 SC、是慣性）」
-- 學員選 2C 句 → 那個填空詞 + 觸發 #6 Step2「來源」答覆 → 寫進【還沒碰到的】、明確標註「Week 2 信念入口、待 Step3 反例提問」
+【Day 1-N 採集追蹤】 (重命名取代【Day 1-6 採集追蹤】, 對應 21 天 program)
+- 今天觸發的 Mode: active_modes 軌跡.
+- 今天 surface 的 Damon 體系概念: 命名清單.
+- 今天 invoke 的 R-series: Reframe Library 使用清單.
+- Top 1 / Top 2 / Top 3 quality candidates 演進: 對齊 cascade mode.
+- 明天可繼續的: 從最有能量的詞 / 還沒採集的 quality.
+- 廢除「工具一二三四 / 2A 2B 2C」分類.${buildDamonNoteConditionalFields(week, day)}
 
-【Day 1-6 採集追蹤】（v34 守則七、每天教練筆記必寫）
+注意:
+- 簡短有力、總長度上限 1000 字 (Week 3 整合日含完整宣言 + 三週素材、可寬到 1200 字).
+- 不給答案、不重寫信念.
 
-今天用了哪些工具？
-（工具一慾望 / 工具二 2A SC 池 / 工具二 2B Reactive 池 / 工具二 2C Belief 池 / 工具三自我關係 / 工具四不對勁 / 比喻路徑 / 畫面路徑 / 停頓觸發）
+═══════════════════════════════════════════════════════════════════
+【Damon 體系命名清單】(§1.3 — AI 對應使用、直接命名不緩衝)
 
-採集到哪些面向？
-- 慾望（L1-L4）：學員說了什麼想要的
-- 身份句（L5）：學員選 2A 哪一句、填什麼詞、confirm 結果
-- 反應模式（2B）：學員選哪句、觸發 #5 答覆
-- 信念表層（2C、Week 2）：學員選哪句、觸發 #6 Step2 答覆
-- 自我關係 / 不對勁：學員說的喜歡 / 不喜歡 / 不像自己
+Locus / Source:
+- External Locus of Control (外部控制點)
+- Reclaim Source (收回源頭、R1)
+- Internal Source (內在源頭、來自 Damon 親口)
 
-走到哪個 Layer？（L1 / L2 / L3 / L4 / L5）
+Trap Values 識別:
+- The Bargain (交易幻覺、紅線 23)
+- Perfectionism Trap (完美主義陷阱、紅線 25)
+- Frequency Illusion (頻率錯覺、紅線 22)
+- Self-worth Fiction (自我價值虛構、紅線 7)
+- 副產品陷阱 (Byproduct Trap、紅線 24)
+- Landmine Value (陷阱價值觀、引擎 2 黑名單)
+- 證明自己 / 自我重要性 (errata v0.2 Tier 2)
 
-明天可以繼續的：
-- 從最有能量的詞繼續
-- 還有哪個面向沒採集到（隨意提示、不強制）${buildDamonNoteConditionalFields(week, day)}
+Quality Status:
+- Ambiguous Quality (模糊特質)
+- Strategy vs Quality 區分 (引擎 2 dim 4)
+- Behavior to Identity (行為轉特質、R2)
+- Slip into Unconscious (身份滑入潛意識、R7)
 
-注意：
-- 簡短有力、總長度上限 800 字（Week 3 Day 6 整合日含完整宣言 + 三週素材、可寬到 1000 字）
-- 不給答案、不重寫信念
-- SC 觀察是假設不是判斷
-- Cathy Q5 確認（Day 6 適用）：如果整週只挖到 1 個有能量的詞、就用那 1 個詞做整合、不勉強湊三個
-- 條件欄位（Scope 證據 / 賦予新角色狀態 / 確定類別 + Scope / Transfer 結果 / 微證據 + 反例預演結果 / 宣言）只在對應 week/day 採集、其他 day 不出現該欄位、不要寫「本日不採集」之類佔位字`,
+Reframe Names (全部 11 個 R-series):
+R1 Reclaim Source (收回源頭)
+R2 Behavior to Identity (行為轉特質)
+R3 失敗作為 Feedback / Golden Information (黃金情報)
+R4 金錢 as Fuel
+R5 Away From → Toward (從遠離到迎向)
+R6 第一感知位置回歸
+R7 Slip into Unconscious (身份滑入潛意識)
+R8 T.O.T.E. Framework (errata v0.2)
+R9 As-If Frame (彷彿框架、errata v0.2)
+R10 Memento Mori (等待即是凋零、errata v0.2、⚠️ crisis disable)
+R12 Hero's Welcome (英雄式歡迎 5 步驟 SOP、errata v0.2)
+
+Tools (v5.1 IP):
+IP #1 Scope Overlap (範圍重疊、亞洲文化柔軟拆解核心)
+IP #2 東方文化柔軟拆解
+IP #3 三向歸類
+IP #4 5 層撥開技術
+IP #5 NLP Amnesia 主動整合
+
+Mode 名:
+elicitation / identity_anchoring / integration / cascade / future_pacing / crisis
+
+Tier 1-3 補充概念:
+- Diamond Essence (鑽石本質、errata v0.3)
+- Chief Validation Officer (首席驗證官、errata v0.3)
+- Care Less List (少關注清單、errata v0.3)
+- Good Enough for Now (目前已經足夠好、errata v0.2 / R7_C)
+- 科學家精神 vs 受審判的犯人 (errata v0.2 / R3_C)
+- Bias towards Action (行動偏好、errata v0.3)
+- Memento Mori 等待即是凋零 (errata v0.2 / R10)
+- 包含所有問題的感恩 (errata v0.3 / R7_D)
+- 影子自我 (errata v0.3 / Hero's Welcome step 2 變體)
+- 百萬分之一可能性 (errata v0.3)
+
+Damon 親口高頻 metaphor:
+- 鑽石本質 (Diamond Essence)
+- 合金化比喻 (Alloy Metaphor、反例整合用)
+- 魔鬼氈效應 (Velcro Effect、Submodality 操作、v5.1 不直接做)
+- 忠誠士兵 (Loyal Soldier、Hero's Welcome step 2)
+- 將軍走進防空洞 (Hero's Welcome step 1)
+- Elizabeth Gilbert 寫東西 vs 寫精彩 (R7_C Good Enough)
+═══════════════════════════════════════════════════════════════════
+
+【⛔ 廢除詞嚴禁出現】 (v5.2 explicit guard, §1.1 廢除清單)
+這些詞已廢, 任何段落都不能出現:
+- ❌ Layer 1-5 / L1 / L2 / L3 / L4 / L5 / 「走到 Layer X」 (v3.3 廢, 用 Mode 軌跡).
+- ❌ 工具一 / 工具二 / 工具三 / 工具四 (v3.3 廢).
+- ❌ 2A SC 池 / 2B Reactive 池 / 2C Belief 池 (v3.3 廢).
+- ❌ Cathy Q5 確認 (v3.3 cohort-specific, v5.1 不在).
+- ❌ 「學員繞過去了」/「學員沒進去」 (心理分析 framing 廢).
+- ❌ 「需要 X 才能 Y」 處方語氣 (體系不對學員下處方).
+- ❌ 親密關係 / 家庭結構 / 童年深入推測 (體系明確 caveat、不做心理分析).
+
+【緩衝詞分流規則】 (§1.5)
+❌ 不緩衝 (直接命名):
+- 學員 surface 的具體行為事實 (例:「學員去紐約的決定 surface 為補償邏輯」).
+- Damon 體系命名概念 (例:「對應 The Bargain (交易幻覺、紅線 23)」、「對應 Perfectionism Trap」).
+- 學員自己 surface 的句式 (例:「『追求極致狀態會耗竭致死』」).
+- 應 invoke 但未 invoke 的技術 (例:「R1 Reclaim Source 應強化、僅 echo」, 不寫「可能應該 R1」).
+
+✅ 緩衝 (用「可能 / 猜想」):
+- 學員的潛在 SC 結構 (例:「猜想學員可能是一個深度相信『自由是我本質』的人」).
+- 學員的家庭關係 / 心理結構 / 童年陰影推測 — 體系明確 caveat, 緩衝且不深入.
+- 「學員的 SC 就是 X」 型 absolute statement 不可用, 改寫成「猜想學員的 SC 結構可能包含 X」.
+
+注意:
+- 條件欄位 (Scope 證據 / 賦予新角色狀態 / 確定類別 + Scope / Transfer 結果 /
+  微證據 + 反例預演結果 / 宣言) 只在對應 week/day 採集、其他 day 不出現該欄位、
+  不要寫「本日不採集」之類佔位字.`,
         messages: [{
           role: 'user',
           // P5 (PR-4c-green): v5 canonical unit is sessionDay (1..21); the prior
@@ -1804,15 +1937,7 @@ export async function generateDamonNote(sql, sessionId, module, week, day, wasCr
         }]
     });
 
-    const fullNote = response.content[0].text;
-
-    const keyPhraseMatch = fullNote.match(/【關鍵句】\s*\n([\s\S]*?)(?=\n【|$)/);
-    const tomorrowMatch = fullNote.match(/【明天的入口】\s*\n([\s\S]*?)(?=\n【|$)/);
-    const keyPhrase = keyPhraseMatch ? keyPhraseMatch[1].trim() : '';
-    const tomorrowEntry = tomorrowMatch ? tomorrowMatch[1].trim() : '';
-    const publicNote = keyPhrase
-      ? `今天你說了一句很重要的話：\n${keyPhrase}\n\n明天我們從這裡繼續——\n${tomorrowEntry}`
-      : '';
+    const aiBody = response.content[0].text;
 
     const studentRow = await sql`SELECT student_id FROM sessions WHERE id = ${sessionId} LIMIT 1`;
     const studentIdOfSession = studentRow[0]?.student_id;
@@ -1822,17 +1947,75 @@ export async function generateDamonNote(sql, sessionId, module, week, day, wasCr
     }
 
     // PR-4c-4e — fetch preferred_name for the notebook-page Vivi-warm prompt
+    // 6/8 Vivi — 同 query 順手撈 active_context_* 給 §8 anchor 前置注入.
+    //   讀失敗 → fallback null placeholder ("(未設定)") + log; 不擋整支生成.
     let preferredName = null;
+    let activeContextCategory = null;
+    let activeContextName = null;
+    let activeContextDefinition = null;
     try {
-      const pr = await sql`SELECT preferred_name FROM students WHERE student_id = ${studentIdOfSession} LIMIT 1`;
-      if (pr.length > 0 && pr[0].preferred_name) preferredName = pr[0].preferred_name;
-    } catch (e) { console.warn('[generateDamonNote] preferred_name lookup failed:', e.message); }
+      const pr = await sql`
+        SELECT preferred_name,
+               active_context_category, active_context_name, active_context_definition
+          FROM students WHERE student_id = ${studentIdOfSession} LIMIT 1
+      `;
+      if (pr.length > 0) {
+        if (pr[0].preferred_name) preferredName = pr[0].preferred_name;
+        activeContextCategory   = pr[0].active_context_category   ?? null;
+        activeContextName       = pr[0].active_context_name       ?? null;
+        activeContextDefinition = pr[0].active_context_definition ?? null;
+      }
+    } catch (e) { console.warn('[generateDamonNote] student row lookup failed:', e.message); }
+
+    // ⭐ 6/8 Vivi v5.2 errata §8.1 + §9.1 — 前置注入 anchor + hook placeholder.
+    //   為什麼前置 (不 trust AI 重複輸出): anchor 是事實層, 來自 students 表;
+    //   每次都從 DB 讀, 不讓 AI 改寫 / 漏掉 / 寫錯 category. sc_step_when_generated
+    //   是 null placeholder, 沒 logic, 七步 errata ship 後另一個 PR 才接 logic.
+    //   位置:在 AI body 最前面, 在【關鍵句】之前. 用 `---` 分隔 (spec §8.1 / §9.1
+    //   verbatim 格式). `---` 也是 scrubber 的 section terminator → 即使這兩個
+    //   section 被 scrubber 擋 (它們都在 FORBIDDEN_SECTION_MARKERS 內), `---`
+    //   仍幫忙界定本段結束.
+    const activeContextAnchor =
+      `---\n`
+      + `【active_context】\n`
+      + `category: ${activeContextCategory ?? '(未設定)'}\n`
+      + `name: ${activeContextName ?? '(未設定)'}\n`
+      + `definition: ${activeContextDefinition ?? '(未設定)'}\n`
+      + `---\n`;
+    const scStepPlaceholder =
+      `---\n`
+      + `【sc_step_when_generated】\n`
+      + `step: null  # placeholder、七步 errata ship 後實作 logic\n`
+      + `evidence_focus: null  # placeholder、七步 errata ship 後實作 logic\n`
+      + `---\n`;
+    // AI body might or might not echo these (prompt told it to skip);
+    // strip any echoed prefix to avoid duplicates, then prepend canonical ones.
+    let bodyMinusAnchors = aiBody;
+    bodyMinusAnchors = bodyMinusAnchors.replace(
+      /^\s*【active_context】[\s\S]*?(?=\n【(?!active_context】|sc_step_when_generated】))/m,
+      '',
+    );
+    bodyMinusAnchors = bodyMinusAnchors.replace(
+      /^\s*【sc_step_when_generated】[\s\S]*?(?=\n【(?!sc_step_when_generated】))/m,
+      '',
+    );
+    bodyMinusAnchors = bodyMinusAnchors.replace(/^\s+/, '');
+    const fullNote = `${activeContextAnchor}\n${scStepPlaceholder}\n${bodyMinusAnchors}`;
+
+    // Regex extraction — UNCHANGED (3 locked headers preserved).
+    const keyPhraseMatch = fullNote.match(/【關鍵句】\s*\n([\s\S]*?)(?=\n【|$)/);
+    const tomorrowMatch = fullNote.match(/【明天的入口】\s*\n([\s\S]*?)(?=\n【|$)/);
+    const keyPhrase = keyPhraseMatch ? keyPhraseMatch[1].trim() : '';
+    const tomorrowEntry = tomorrowMatch ? tomorrowMatch[1].trim() : '';
+    const publicNote = keyPhrase
+      ? `今天你說了一句很重要的話：\n${keyPhrase}\n\n明天我們從這裡繼續——\n${tomorrowEntry}`
+      : '';
 
     await sql`
-      INSERT INTO damon_notes (student_id, module, week, day, note_text, is_week_summary)
-      VALUES (${studentIdOfSession}, ${module}, ${week}, ${day}, ${fullNote}, false)
+      INSERT INTO damon_notes (student_id, module, week, day, note_text, is_week_summary, template_version)
+      VALUES (${studentIdOfSession}, ${module}, ${week}, ${day}, ${fullNote}, false, 'v5.2')
       ON CONFLICT (student_id, module, week, day, is_week_summary)
-      DO UPDATE SET note_text = EXCLUDED.note_text, updated_at = NOW()
+      DO UPDATE SET note_text = EXCLUDED.note_text, template_version = 'v5.2', updated_at = NOW()
     `;
 
     await sql`
