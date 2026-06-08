@@ -1098,6 +1098,220 @@ test('🛑 6/7 chat.js: safety wall (rule 10) retained verbatim (scrubber alignm
   assert.match(chatJsSrc, /SC 觀察是假設、不是判斷/);
 });
 
+// ═════════════════════════════════════════════════════════
+// 🛑 6/8 Vivi v5.2 errata PR-a — generateDamonNote template v5.2 化.
+// Anti-regression sync-gates: regex-locked headers preserved, v3.3 廢除詞 gone,
+// v5.2 new headers present, active_context anchor + sc_step_when_generated prepended,
+// template_version='v5.2' on INSERT, generateNotebookPage 0 diff.
+// ═════════════════════════════════════════════════════════
+
+test('🛑 6/8 v5.2 PR-a: 3 regex-locked headers retained verbatim (finalize-day 抓取依賴)', () => {
+  // 【關鍵句】 / 【明天的入口】 / 【SC 觀察】 — finalize-day.js + chat.js regex.
+  // Without these, publicNote / next-day SC hypothesis 全爆.
+  // Locate the generateDamonNote system prompt window, check headers present.
+  const damonNoteWindow = chatJsSrc.match(
+    /generateDamonNote[\s\S]*?const fullNote = /,
+  );
+  assert.ok(damonNoteWindow, 'generateDamonNote function body must be locatable');
+  assert.match(damonNoteWindow[0], /【關鍵句】/, '【關鍵句】 header verbatim');
+  assert.match(damonNoteWindow[0], /【明天的入口】/, '【明天的入口】 header verbatim');
+  assert.match(damonNoteWindow[0], /【SC 觀察】/, '【SC 觀察】 header verbatim');
+});
+
+test('🛑 6/8 v5.2 PR-a: regex extraction in generateDamonNote unchanged (publicNote pipeline)', () => {
+  // chat.js extracts via /【關鍵句】\s*\n([\s\S]*?)(?=\n【|$)/ + 【明天的入口】.
+  // Lock both regex patterns (and the SC observation extraction).
+  assert.match(chatJsSrc, /fullNote\.match\(\/【關鍵句】\\s\*\\n\(\[\\s\\S\]\*\?\)\(\?=\\n【\|\$\)\/\)/);
+  assert.match(chatJsSrc, /fullNote\.match\(\/【明天的入口】\\s\*\\n\(\[\\s\\S\]\*\?\)\(\?=\\n【\|\$\)\/\)/);
+  assert.match(chatJsSrc, /fullNote\.match\(\/【SC 觀察】\\s\*\\n\(\[\\s\\S\]\*\?\)\(\?=\\n【\|\$\)\/\)/);
+});
+
+test('🛑 6/8 v5.2 PR-a: new headers present in template', () => {
+  // 【深度層次】 → 【Mode 軌跡】 (Layer 1-5 → Mode 軌跡)
+  // + 【應 invoke 但未 invoke 的技術】 (新 §1.4)
+  // + 【Day 1-N 採集追蹤】 (取代【Day 1-6 採集追蹤】)
+  assert.match(chatJsSrc, /【Mode 軌跡】/);
+  assert.match(chatJsSrc, /【應 invoke 但未 invoke 的技術】/);
+  assert.match(chatJsSrc, /【Day 1-N 採集追蹤】/);
+});
+
+test('🛑 6/8 v5.2 PR-a: 廢除詞 explicit guard in template prompt (Layer / 工具 / 池 / Cathy)', () => {
+  // The template must EXPLICITLY instruct the AI to NOT emit these.
+  // Locate the「⛔ 廢除詞嚴禁出現」 block.
+  const guardBlock = chatJsSrc.match(
+    /【⛔ 廢除詞嚴禁出現】[\s\S]{0,2000}/,
+  );
+  assert.ok(guardBlock, '廢除詞嚴禁出現 explicit guard block must exist');
+  // Specific forbidden terms enumerated.
+  assert.match(guardBlock[0], /Layer 1-5 \/ L1 \/ L2 \/ L3 \/ L4 \/ L5/);
+  assert.match(guardBlock[0], /工具一 \/ 工具二 \/ 工具三 \/ 工具四/);
+  assert.match(guardBlock[0], /2A SC 池 \/ 2B Reactive 池 \/ 2C Belief 池/);
+  assert.match(guardBlock[0], /Cathy Q5 確認/);
+  // Plus 廢「繞過去/沒進去」/「需要X才能Y」.
+  assert.match(guardBlock[0], /學員繞過去了/);
+  assert.match(guardBlock[0], /學員沒進去/);
+  assert.match(guardBlock[0], /需要 X 才能 Y/);
+});
+
+// (Old approximate "緩衝詞分流規則" test superseded by §1.5 verbatim test below.)
+
+test('🛑 6/8 v5.2 PR-a §1.3: Damon 體系命名清單 verbatim 對齊 spec', () => {
+  // Damon vocabulary block must list spec §1.3 verbatim categories + named items.
+  // Spec §1.3 verbatim landmarks:
+  assert.match(chatJsSrc, /External Locus of Control \(外部控制點\)/);
+  assert.match(chatJsSrc, /Reclaim Source \(收回源頭、R1\)/);
+  assert.match(chatJsSrc, /The Bargain \(交易幻覺、紅線 23\)/);
+  assert.match(chatJsSrc, /Perfectionism Trap \(完美主義陷阱、紅線 25\)/);
+  assert.match(chatJsSrc, /Frequency Illusion \(頻率錯覺、紅線 22\)/);
+  assert.match(chatJsSrc, /Self-worth Fiction \(自我價值虛構、紅線 7\)/);
+  assert.match(chatJsSrc, /副產品陷阱 \(Byproduct Trap、紅線 24\)/);
+  // R-series 11 verbatim Chinese names (spec §1.3 Reframe Names).
+  assert.match(chatJsSrc, /R1 Reclaim Source \(收回源頭\)/);
+  assert.match(chatJsSrc, /R2 Behavior to Identity \(行為轉特質\)/);
+  assert.match(chatJsSrc, /R5 Away From → Toward/);
+  assert.match(chatJsSrc, /R7 Slip into Unconscious/);
+  assert.match(chatJsSrc, /R10 Memento Mori[\s\S]{0,80}crisis disable/);
+  assert.match(chatJsSrc, /R12 Hero's Welcome/);
+  // IP #1-#5 verbatim.
+  assert.match(chatJsSrc, /IP #1 Scope Overlap/);
+  assert.match(chatJsSrc, /IP #5 NLP Amnesia 主動整合/);
+  // 6 modes verbatim.
+  assert.match(chatJsSrc, /elicitation \/ identity_anchoring \/ integration \/ cascade \/ future_pacing \/ crisis/);
+  // Tier 1-3 補充 items.
+  assert.match(chatJsSrc, /Diamond Essence/);
+  assert.match(chatJsSrc, /Chief Validation Officer/);
+  assert.match(chatJsSrc, /Memento Mori 等待即是凋零/);
+  // Damon metaphors.
+  assert.match(chatJsSrc, /鑽石本質 \(Diamond Essence\)/);
+  assert.match(chatJsSrc, /忠誠士兵 \(Loyal Soldier、Hero's Welcome step 2\)/);
+});
+
+test('🛑 6/8 v5.2 PR-a §1.2: SC 觀察 段 1 verbatim 例句 (補償邏輯 / Perfectionism)', () => {
+  // Spec §1.2 verbatim landmark examples — must appear in the template.
+  assert.match(chatJsSrc, /學員今天 surface 補償邏輯 \(去紐約是補償伴侶出差的限制\)/);
+  assert.match(chatJsSrc, /對應 The Bargain \(交易幻覺\)/);
+  assert.match(chatJsSrc, /紅線 23 觸發場景/);
+  assert.match(chatJsSrc, /『追求極致狀態會耗竭致死』/);
+  assert.match(chatJsSrc, /對應 Perfectionism Trap \(紅線 25\)/);
+});
+
+test('🛑 6/8 v5.2 PR-a §1.2: SC 觀察 段 2 verbatim 例句 (自由是我本質)', () => {
+  assert.match(chatJsSrc, /猜想學員可能是一個深度相信『自由是我本質』的人/);
+});
+
+test('🛑 6/8 v5.2 PR-a §1.2: Mode 軌跡 verbatim 例句', () => {
+  // Spec §1.2: 「elicitation 走完、進 identity_anchoring 觸發、return elicitation」
+  assert.match(chatJsSrc, /elicitation 走完、進 identity_anchoring 觸發、return elicitation/);
+});
+
+test('🛑 6/8 v5.2 PR-a §1.4: 應 invoke 但未 invoke verbatim 3 例 + 4-step instruction', () => {
+  // Spec §1.2 verbatim three examples.
+  assert.match(chatJsSrc, /學員 surface 補償邏輯、應 invoke 紅線 23 Bargain 挑戰、未發生/);
+  assert.match(chatJsSrc,
+    /學員 surface『我就是那個源頭』、R1 Reclaim Source 應強化、僅 echo/);
+  assert.match(chatJsSrc,
+    /學員 surface 顧小孩 vs 自由內在 part 對立、R12 Hero's Welcome 應觸發、未發生/);
+  // Spec §1.4 verbatim 4-step instruction structure.
+  assert.match(chatJsSrc, /步驟 1: 識別學員 surface 的 Damon 體系訊號/);
+  assert.match(chatJsSrc, /步驟 2: 對應應 invoke 的 v5\.1 spec 元素/);
+  assert.match(chatJsSrc, /步驟 3: 對照實際 AI 行為/);
+  assert.match(chatJsSrc, /步驟 4: 寫入本 section/);
+});
+
+test('🛑 6/8 v5.2 PR-a §1.5: 緩衝詞分流 4 條規則 verbatim', () => {
+  // Spec §1.5 verbatim rules.
+  assert.match(chatJsSrc,
+    /應 invoke 但未 invoke 的技術[\s\S]{0,200}R1 Reclaim Source 應強化、僅 echo[\s\S]{0,100}不寫「可能應該 R1」/);
+  // 親密關係 / 家庭結構 / 童年深入推測 — 體系明確 caveat.
+  assert.match(chatJsSrc, /親密關係 \/ 家庭結構 \/ 童年深入推測/);
+});
+
+test('🛑 6/8 v5.2 PR-a §8.1: active_context anchor SELECT + 前置注入 (--- 分隔)', () => {
+  // SELECT 一定要撈 active_context_*.
+  assert.match(chatJsSrc,
+    /SELECT preferred_name,\s*\n\s*active_context_category, active_context_name, active_context_definition/);
+  // Spec §8.1 format uses --- horizontal rules to wrap the anchor block.
+  // Template literal opens with `---\n` then 【active_context】 then fields then `---\n`.
+  assert.match(chatJsSrc,
+    /const activeContextAnchor\s*=\s*\n?\s*`---\\n`[\s\S]{0,80}`【active_context】\\n`/);
+  assert.match(chatJsSrc, /category: \$\{activeContextCategory/);
+  assert.match(chatJsSrc, /name: \$\{activeContextName/);
+  assert.match(chatJsSrc, /definition: \$\{activeContextDefinition/);
+  // fullNote = activeContextAnchor + scStepPlaceholder + bodyMinusAnchors
+  assert.match(chatJsSrc,
+    /const fullNote = `\$\{activeContextAnchor\}\\n\$\{scStepPlaceholder\}\\n\$\{bodyMinusAnchors\}`/);
+});
+
+test('🛑 6/8 v5.2 PR-a §9.1: sc_step_when_generated null placeholder (--- 分隔, 含 spec 註解)', () => {
+  // Spec §9.1 verbatim shape:
+  //   ---
+  //   【sc_step_when_generated】
+  //   step: null  # placeholder、七步 errata ship 後實作 logic
+  //   evidence_focus: null  # placeholder、七步 errata ship 後實作 logic
+  //   ---
+  assert.match(chatJsSrc,
+    /const scStepPlaceholder\s*=\s*\n?\s*`---\\n`[\s\S]{0,80}`【sc_step_when_generated】\\n`/);
+  assert.match(chatJsSrc, /step: null  # placeholder、七步 errata ship 後實作 logic/);
+  assert.match(chatJsSrc, /evidence_focus: null  # placeholder、七步 errata ship 後實作 logic/);
+});
+
+test('🛑 6/8 v5.2 PR-a: INSERT damon_notes 帶 template_version=\'v5.2\'', () => {
+  // INSERT shape:
+  //   INSERT INTO damon_notes (..., is_week_summary, template_version)
+  //   VALUES (..., false, 'v5.2')
+  //   ON CONFLICT ... DO UPDATE SET ..., template_version = 'v5.2', updated_at = NOW()
+  const insertWindow = chatJsSrc.match(
+    /INSERT INTO damon_notes[\s\S]*?ON CONFLICT[\s\S]*?updated_at = NOW\(\)/,
+  );
+  assert.ok(insertWindow, 'INSERT INTO damon_notes block must be locatable');
+  assert.match(insertWindow[0], /template_version/);
+  assert.match(insertWindow[0], /'v5\.2'/);
+});
+
+test('🛑 6/8 v5.2 PR-a: old v3.3 section headers GONE as instructions (only mentioned in guards / deprecation rules)', () => {
+  // The old v3.3 section headers must no longer be present as section headers
+  // the AI is told to USE. They may still appear inside the「⛔ 廢除詞嚴禁出現」
+  // guard block and inside §1.2's "v5.2 規則 update" rule (as deprecation
+  // language: "❌ 不用..."). The protection signal we lock here is the
+  // ABSENCE of "section heading" usage:
+  //   - No 「【深度層次】」 used as a section heading line (AI would emit one).
+  //   - No 「【Day 1-6 採集追蹤】」 used as a section heading line.
+  //
+  // Strategy: count occurrences in chat.js. Each old v3.3 header should appear
+  // ONLY inside the FORBIDDEN_SECTION_MARKERS scrubber list (lib/api/student-
+  // note-safe.js — separate file) + the rule-10 ban list inside generateNotebook
+  // Page (the safety wall). We assert chat.js's generateDamonNote prompt
+  // does NOT carry the old header on its own line as a template instruction.
+  const fnStart = chatJsSrc.indexOf('export async function generateDamonNote');
+  const fnEnd   = chatJsSrc.indexOf('export async function generateNotebookPage');
+  assert.ok(fnStart > 0 && fnEnd > fnStart,
+    'generateDamonNote function body must be locatable + bounded by generateNotebookPage');
+  const damonFn = chatJsSrc.slice(fnStart, fnEnd);
+
+  // Old v3.3 header lines must NOT appear as the AI-facing section header
+  // instruction. Pattern「\n【深度層次】\n」 (header on its own line, body below)
+  // would mean we still tell the AI to emit one. New template uses 【Mode 軌跡】.
+  assert.ok(!/\n【深度層次】\n/.test(damonFn),
+    'old【深度層次】 must not be an AI-facing section instruction (replaced by【Mode 軌跡】)');
+  assert.ok(!/\n【Day 1-6 採集追蹤】/.test(damonFn),
+    'old【Day 1-6 採集追蹤】 must not be an AI-facing section instruction (replaced by Day 1-N)');
+  // Cathy Q5 must not appear as a positive instruction sentence.
+  assert.ok(!/Cathy Q5 確認[^。]*?如果整週只挖到 1 個/.test(damonFn),
+    'old Cathy Q5 instruction sentence must be gone (廢除)');
+  // 工具二 2A SC 池 as positive instruction (not as guard list item).
+  assert.ok(!/工具二 2A SC 池[、)]/.test(damonFn),
+    'old「工具二 2A SC 池」 instruction must be gone (廢除)');
+});
+
+test('🛑 6/8 v5.2 PR-a: generateNotebookPage UNCHANGED (PR-d 才動,本 PR 不准碰)', () => {
+  // The "我看見的" sharp card is a separate function. The branch-on-wasCrisis
+  // logic shipped in 6/7 (ea53d6d) must survive this PR untouched. Pattern
+  // landmarks from that PR:
+  assert.match(chatJsSrc, /async function generateNotebookPage\([^)]*wasCrisis\s*=\s*false\s*\)/);
+  assert.match(chatJsSrc, /身份規則 \/ 隱性信念/);   // sharp variant from PR ea53d6d
+  assert.match(chatJsSrc, /不舒服 = 工具/);           // sharp variant 框架
+});
+
 test('🛑 chat.js: overload path is BEFORE Step 11b (no day_complete=TRUE WRITE on overload)', () => {
   const src = readFileSync(
     resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
