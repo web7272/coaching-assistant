@@ -70,6 +70,9 @@ export default async function handler(req, res) {
     let lastSessionComplete = false;
     let lastSessionAt = null;
     let currentPhase = null;
+    // ⭐ 6/8 Vivi (A006 unlock放行) — 最後一個 session 若未完成, 記它的 day.
+    //   傳給 computeUnlockedCurrentDay 用 Math.max 放行那天 (不會 over-unlock).
+    let inProgressDay = 0;
     try {
       const pr = await sql`SELECT pace FROM students WHERE student_id = ${studentId} LIMIT 1`;
       if (pr.length > 0 && pr[0].pace) pace = pr[0].pace;
@@ -77,8 +80,9 @@ export default async function handler(req, res) {
     try {
       // PR-4c-green P4 — also grab session_state.current_phase for phases[] derivation
       // 5/27 Patrick — 順手撈 created_at, 算台北日 gapDays 給 daily 對稱解鎖.
+      // 6/8 Vivi — 順手撈 day, 算 inProgressDay 給 unlock放行.
       const lr = await sql`
-        SELECT day_complete, session_state, created_at FROM sessions
+        SELECT day, day_complete, session_state, created_at FROM sessions
         WHERE student_id = ${studentId} AND module = ${module}
         ORDER BY created_at DESC LIMIT 1
       `;
@@ -86,6 +90,11 @@ export default async function handler(req, res) {
         lastSessionComplete = !!lr[0].day_complete;
         currentPhase = lr[0].session_state?.current_phase || null;
         lastSessionAt = lr[0].created_at ? new Date(lr[0].created_at) : null;
+        // Only treat as in-progress when not complete — completed session's day
+        // is already covered by sessionDayCount path; null/missing day → 0.
+        if (!lr[0].day_complete) {
+          inProgressDay = Number.isFinite(Number(lr[0].day)) ? Number(lr[0].day) : 0;
+        }
       }
     } catch (e) { console.warn('[journey] last session lookup failed:', e.message); }
 
@@ -100,6 +109,7 @@ export default async function handler(req, res) {
       sessionDayCount: profile?.session_day_count || 0,
       lastSessionComplete,
       gapDaysSinceLastSession: gapDays,
+      inProgressDay,
     });
 
     // PR-4c-green 5/24 cleanup — 週報 + weeks[] field retired. Spec 09 §10:
