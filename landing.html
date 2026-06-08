@@ -792,6 +792,34 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 </footer>
 
 <script>
+// ─────────────────────────────────────────────────────────────────
+// 6/7 Vivi — Landing 偵測登入 → 自動導 journey.
+//
+// 問題: 回訪登入者打 /landing (CTA 網址 / bookmark / Google 結果) → 看到行銷
+// 頁、不是自己的 journey → 以為要重註冊 (A015 4 現象之一的「打到行銷頁」).
+// session 其實是好的 (cookie 30 天正常).
+//
+// 修法: 載入時打 /api/me. 200 + 有 studentId → location.href='/#/journey'.
+// 401 / 無 studentId / fetch 失敗 → fail-open, 留在 landing.
+//
+// 平行於下方 initDay1Quota() (兩支 fetch 並行, 不阻塞彼此).
+// 可接受極短暫的行銷頁 flash (per Vivi spec).
+//
+// credentials default 是 same-origin → session cookie 自動帶上 (不用 'include').
+// ─────────────────────────────────────────────────────────────────
+(async function autoRedirectIfLoggedIn(){
+  try {
+    const r = await fetch('/api/me');
+    if (!r.ok) return;   // 401 (未登入) / 403 (blocked) / 500 → 留 landing
+    const j = await r.json();
+    if (j && typeof j.studentId === 'string' && j.studentId.length > 0) {
+      location.href = '/#/journey';
+    }
+  } catch (_err) {
+    // Fail-open: network / parse error → 留 landing (別擋到新訪客).
+  }
+})();
+
 // Hero CTA 卡片：點擊展開 → 填 email（含/不含 3 問題） → 送出
 const MSG={'1':'練習已寄到你的信箱，去收信點開連結。','3':'練習已寄出。Day 1 的入口也一起寄了，點信裡的連結就能開始。'};
 
