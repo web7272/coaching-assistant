@@ -1033,8 +1033,10 @@ const chatJsSrc = readFileSync(
 );
 
 test('🛑 6/7 chat.js: generateNotebookPage signature accepts wasCrisis param (default false)', () => {
+  // PR-d 6/8 added activeContextName + activeContextDefinition AFTER wasCrisis,
+  // so wasCrisis is followed by comma (not closing paren) in the new signature.
   assert.match(chatJsSrc,
-    /export async function generateNotebookPage\([^)]*wasCrisis\s*=\s*false\s*\)/,
+    /export async function generateNotebookPage\([^)]*wasCrisis\s*=\s*false[,)]/,
     'generateNotebookPage must accept wasCrisis (default false)');
 });
 
@@ -1043,9 +1045,11 @@ test('🛑 6/7 chat.js: generateDamonNote signature accepts wasCrisis + passes t
   assert.match(chatJsSrc,
     /export async function generateDamonNote\([^)]*wasCrisis\s*=\s*false\s*\)/,
     'generateDamonNote must accept wasCrisis (default false)');
-  // Pass-through to generateNotebookPage.
+  // Pass-through to generateNotebookPage. PR-d 6/8 added 2 more args after wasCrisis
+  // (activeContextName, activeContextDefinition) — match wasCrisis followed by
+  // comma OR closing paren.
   assert.match(chatJsSrc,
-    /generateNotebookPage\([^)]*,\s*wasCrisis\)/,
+    /generateNotebookPage\([\s\S]*?,\s*wasCrisis[,)]/,
     'generateDamonNote must pass wasCrisis through to generateNotebookPage');
 });
 
@@ -1305,12 +1309,11 @@ test('🛑 6/8 v5.2 PR-a: old v3.3 section headers GONE as instructions (only me
     'old「工具二 2A SC 池」 instruction must be gone (廢除)');
 });
 
-test('🛑 6/8 v5.2 PR-a: generateNotebookPage UNCHANGED (PR-d 才動,本 PR 不准碰)', () => {
-  // The "我看見的" sharp card is a separate function. The branch-on-wasCrisis
-  // logic shipped in 6/7 (ea53d6d) must survive this PR untouched. Pattern
-  // landmarks from that PR:
-  assert.match(chatJsSrc, /async function generateNotebookPage\([^)]*wasCrisis\s*=\s*false\s*\)/);
-  assert.match(chatJsSrc, /身份規則 \/ 隱性信念/);   // sharp variant from PR ea53d6d
+test('🛑 6/8 v5.2 PR-a → PR-d retained: generateNotebookPage sharp variant 框架 (身份規則 + 不舒服=工具)', () => {
+  // The "我看見的" sharp card landmarks (ea53d6d). PR-d (§2) added §2.1 Chinese
+  // concept naming + dropped blanket 緩衝, but these sharp-variant pillars stay.
+  assert.match(chatJsSrc, /async function generateNotebookPage\(/);
+  assert.match(chatJsSrc, /身份規則 \/ 隱性信念/);   // sharp variant 核心
   assert.match(chatJsSrc, /不舒服 = 工具/);           // sharp variant 框架
 });
 
@@ -1939,14 +1942,15 @@ test('🛑 6/8 PR-c: system prompt 結構 untouched (PR-a template + PR-b cache 
   assert.equal(off.length, 1);
 });
 
-test('🛑 6/8 PR-c: generateNotebookPage UNCHANGED (sharp/gentle 安全牆全保留)', () => {
+test('🛑 6/8 PR-c → PR-d retained: generateNotebookPage sharp variant 框架 (sharp/gentle 安全牆)', () => {
+  // PR-c PR retained generateNotebookPage 0-diff. PR-d 動了 prompt 內容 (§2 對齊)
+  // 但 sharp variant 兩個核心 landmark + 函式仍在.
   const src = readFileSync(
     resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
     'utf8',
   );
-  // PR-c must NOT touch the student-facing 我看見的 card.
-  assert.match(src, /async function generateNotebookPage\([^)]*wasCrisis\s*=\s*false\s*\)/);
-  assert.match(src, /身份規則 \/ 隱性信念/);      // sharp variant
+  assert.match(src, /async function generateNotebookPage\(/);
+  assert.match(src, /身份規則 \/ 隱性信念/);      // sharp variant 核心
   assert.match(src, /不舒服 = 工具/);              // sharp variant 框架
 });
 
@@ -1962,4 +1966,252 @@ test('🛑 6/8 PR-c: 鐵律#2 — buildSessionStateSummary never logs (pure func
   const fn = src.slice(fnStart, fnEnd);
   assert.ok(!/console\./.test(fn),
     'buildSessionStateSummary must not log (鐵律#2: derived signals are summary-only, never side-channel-logged)');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/8 Vivi v5.2 errata PR-d (§2 + §7 + §8) — generateNotebookPage v5.2 對齊.
+// 學員直接讀的「✦ 我看見的」教練卡 prompt → 對齊 spec §2.1 / §2.2 + §7 決策 A 合併
+// (保留犀利 + crisis gate, 織入概念中文化命名, 丟兩層緩衝) + §8 anchor 當 AI context.
+// ═════════════════════════════════════════════════════════
+
+// Source slice helper — locate the generateNotebookPage function body.
+function _notebookFnBody() {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  const start = src.indexOf('export async function generateNotebookPage');
+  assert.ok(start > 0, 'generateNotebookPage must be present');
+  // Ends at the closing `}` before next export (none after); use a generous slice.
+  return src.slice(start);
+}
+
+// ─── A1. Signature: accept activeContextName / activeContextDefinition ─────
+
+test('🛑 6/8 PR-d signature: generateNotebookPage accepts activeContextName + activeContextDefinition', () => {
+  const fn = _notebookFnBody();
+  // Signature now: (sql, sessionId, module, fullNote, yesterdaySCHypothesis,
+  //                 preferredName = null, wasCrisis = false,
+  //                 activeContextName = null, activeContextDefinition = null)
+  assert.match(fn, /async function generateNotebookPage\([^)]*activeContextName\s*=\s*null\s*,\s*activeContextDefinition\s*=\s*null/);
+});
+
+test('🛑 6/8 PR-d caller: generateDamonNote passes activeContextName + activeContextDefinition through', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // The call site must pass the 2 anchor fields (already fetched in PR-a §8.1).
+  assert.match(src, /generateNotebookPage\([\s\S]{0,400}activeContextName, activeContextDefinition/);
+});
+
+// ─── A2. Crisis gate non-regression (最重要) ──────────────────────
+
+test('🛑 6/8 PR-d: crisis gate 不回歸 — wasCrisis=true → gentle seeingSection + cap 350', () => {
+  const fn = _notebookFnBody();
+  // Gentle variant 必加緩衝詞 + 80 字 + crisis warning.
+  assert.match(fn, /緩衝詞必加:可能、可能不是、猜想/);
+  assert.match(fn, /約 80 字/);
+  assert.match(fn, /本場次曾觸發 crisis SOP[\s\S]{0,80}保持溫和緩衝、不要犀利點破身份規則/);
+  // ⭐ PR-d added: crisis branch 保守不動 (不命名 Damon 概念).
+  assert.match(fn,
+    /crisis 場保守不動 — 不深入 Damon 概念命名 \(中文化或英文都不要\)/);
+  // Length cap ternary: wasCrisis ? 350 : 430.
+  assert.match(fn, /totalLengthCap\s*=\s*wasCrisis\s*\?\s*350\s*:\s*430/);
+});
+
+test('🛑 6/8 PR-d: crisis gate 不回歸 — wasCrisis=false → sharp + cap 430', () => {
+  const fn = _notebookFnBody();
+  // Sharp landmarks must all survive (verbatim from ea53d6d).
+  assert.match(fn, /身份規則 \/ 隱性信念/);
+  assert.match(fn, /反例\(太溫、不要\)/);
+  assert.match(fn, /正解\(夠利、要這樣\)/);
+  assert.match(fn, /不舒服 = 工具/);
+  assert.match(fn, /別急著推開/);
+  assert.match(fn, /醍醐灌頂/);
+  assert.match(fn, /約 120-160 字/);
+});
+
+test('🛑 6/8 PR-d: default wasCrisis (no arg) treated as sharp (non-crisis)', () => {
+  const fn = _notebookFnBody();
+  // Default false in signature.
+  assert.match(fn, /async function generateNotebookPage\([^)]*wasCrisis\s*=\s*false/);
+});
+
+// ─── A3. §2.1 Chinese concept naming present (woven into sharp variant) ─────
+
+test('🛑 6/8 PR-d §2.1: 中文化對照表 verbatim in sharp seeingSection', () => {
+  const fn = _notebookFnBody();
+  // 5 pairs from spec §2.1, verbatim per Patrick's source-of-truth table.
+  assert.match(fn, /交換邏輯 \/ 補償邏輯[\s\S]{0,80}The Bargain/);
+  assert.match(fn, /完美主義陷阱 \/ 追求極致狀態[\s\S]{0,80}Perfectionism Trap/);
+  assert.match(fn, /策略 vs 你是誰 \/ 做什麼 vs 是什麼[\s\S]{0,80}Strategy vs Quality/);
+  assert.match(fn, /源頭在外面 \/ 等別人 \/ 等條件給你[\s\S]{0,80}External Locus/);
+  assert.match(fn, /你就是源頭 \/ 你內在的資源[\s\S]{0,80}Reclaim Source/);
+});
+
+test('🛑 6/8 PR-d §2.1: 不准寫英文體系名 — 每對配對都帶 explicit「不准寫 X」 禁令', () => {
+  const fn = _notebookFnBody();
+  // Each English brand name must be explicitly forbidden inline with its
+  // Chinese translation (so AI sees the rule next to the mapping).
+  assert.match(fn, /不准寫 Bargain/);
+  assert.match(fn, /不准寫 Perfectionism Trap/);
+  assert.match(fn, /不准寫 Strategy vs Quality/);
+  assert.match(fn, /不准寫 External Locus/);
+  assert.match(fn, /不准寫 Reclaim Source/);
+});
+
+// ─── A4. Rule 3 blanket buffer dropped + replaced with distinction ─────────
+
+test('🛑 6/8 PR-d: Rule 3 blanket「緩衝詞必加」全域 已廢 (改成命名不緩衝 / 推測緩衝)', () => {
+  const fn = _notebookFnBody();
+  // Rule 3 must NOT still read「SC 觀察用『可能』『猜想』緩衝、不斷定」 as an
+  // unqualified blanket. New Rule 3 is the §2.1 distinction.
+  assert.doesNotMatch(fn,
+    /3\.\s*SC 觀察用「可能」「猜想」緩衝、不斷定\s*\(本規則僅 wasCrisis=溫和場適用/,
+    'old blanket buffer Rule 3 must be gone (replaced by §2.1 distinction)');
+  // New Rule 3 verbiage present.
+  assert.match(fn, /3\.\s*緩衝詞分流 \(§2\.1[\s\S]{0,200}取代舊 blanket/);
+  // The 4 sub-rules: 不緩衝 (事實 + Damon 命名) / 緩衝 (SC 推測 + 心理結構).
+  assert.match(fn, /❌ 不緩衝: 學員 surface 的事實/);
+  assert.match(fn, /❌ 不緩衝: Damon 體系明確命名 \(中文化/);
+  assert.match(fn, /✅ 緩衝: SC 推測/);
+  assert.match(fn, /✅ 緩衝且極少用: 心理結構 \/ 家庭關係/);
+  // Crisis carve-out 明確留: crisis 溫和緩衝仍在.
+  assert.match(fn,
+    /crisis 場 \(wasCrisis=true\)[\s\S]{0,200}整個「我看見的」段保持溫和緩衝/);
+});
+
+// ─── A5. Main narrative psych-analysis language gone ───────────────────────
+
+test('🛑 6/8 PR-d §2.2: 主敘事 framing 不再寫「但你繞過去了」「你沒進去」(心理分析 framing 廢)', () => {
+  const fn = _notebookFnBody();
+  // The OLD bullet「含『還沒碰到的』(用『但你繞過去了』『你沒進去』...」 must be gone.
+  // We allow these phrases to appear ONLY in a 「⛔ 廢」 negative-example context.
+  // Strategy: locate main-narrative spec lines and check none POSITIVELY instruct
+  // those phrases.
+  assert.doesNotMatch(fn,
+    /含「還沒碰到的」\(用「但你繞過去了」「你沒進去」/,
+    'old positive instruction「(用『但你繞過去了』『你沒進去』...)」 must be gone');
+  // Sober replacement present.
+  assert.match(fn,
+    /含「還沒碰到的」\(用「今天還有 X 沒展開」「明天我們從這裡繼續」這種 sober 敘事帶出/);
+  // Explicit ⛔ 廢 negative example present (so AI sees the bad framing as forbidden).
+  assert.match(fn, /⛔ 廢「但你繞過去了」「你沒進去」/);
+});
+
+test('🛑 6/8 PR-d §2.2: 主敘事 不再寫「你碰到了一個層次的邊」Layer framing', () => {
+  const fn = _notebookFnBody();
+  // OLD bullet「含『層次』描述(『你碰到了一個層次的邊』...」 must be gone as positive instruction.
+  assert.doesNotMatch(fn,
+    /含「層次」描述\(「你碰到了一個層次的邊」/,
+    'old「層次的邊」 Layer framing instruction must be gone');
+  // Sober replacement.
+  assert.match(fn,
+    /含「今天到了哪裡」sober 描述\(別暗示「碰到層次的邊」這種 Layer framing/);
+});
+
+// ─── A6. §8 active_context anchor: AI context, NEVER printed ───────────────
+
+test('🛑 6/8 PR-d §8: activeContextHint built only when name is non-empty string', () => {
+  const fn = _notebookFnBody();
+  // const activeContextHint = (typeof activeContextName === 'string' && length > 0) ? ... : ''
+  assert.match(fn,
+    /const activeContextHint = \(typeof activeContextName === ['"]string['"] && activeContextName\.length > 0\)\s*\n?\s*\?\s*`[\s\S]{0,200}AI context \(不要印給學員看\)[\s\S]{0,200}\$\{activeContextName\}/);
+  // Empty / missing → '' empty string (no line added).
+  assert.match(fn,
+    /const activeContextHint = \(typeof activeContextName[\s\S]{0,400}:\s*['"]['"]/);
+});
+
+test('🛑 6/8 PR-d §8: anchor 「絕不印 --- 聚焦 --- 區塊」 explicit ban (兩處 — hint 內 + Rule 10)', () => {
+  const fn = _notebookFnBody();
+  // Inside the hint itself: 「絕不在卡片頂部 / 任何位置印『--- 聚焦 ---』或『--- 範圍 ---』區塊」
+  assert.match(fn,
+    /絕不在卡片頂部 \/ 任何位置印「--- 聚焦 ---」或「--- 範圍 ---」區塊/);
+  // Rule 10 double-safety: 禁止印「--- 聚焦 ---」「--- 範圍 ---」 anchor 區塊.
+  assert.match(fn,
+    /禁止印「--- 聚焦 ---」「--- 範圍 ---」 anchor 區塊 \(active_context 只當 AI context、不印\)/);
+});
+
+// ─── A7. Student-facing leak guards (Rule 10 expanded) ─────────────────────
+
+test('🛑 6/8 PR-d Rule 10: 5 v3.3 + 5 v5.2 Damon Note section markers 全擋 + 工具/Layer/池 全擋', () => {
+  const fn = _notebookFnBody();
+  // Rule 10 enumeration must cover EVERY section name the AI might know about.
+  // v3.3 section markers from the historical FORBIDDEN_SECTION_MARKERS.
+  for (const m of ['【SC 觀察】', '【深度層次】', '【還沒碰到的】',
+                    '【明天的入口】', '【關鍵句】']) {
+    assert.ok(fn.includes(m), `Rule 10 must enumerate「${m}」 (v3.3 section)`);
+  }
+  // v5.2 PR-a section markers — newly added to Rule 10 by PR-d.
+  for (const m of ['【Mode 軌跡】', '【應 invoke 但未 invoke 的技術】',
+                    '【Day 1-N 採集追蹤】', '【active_context】',
+                    '【sc_step_when_generated】']) {
+    assert.ok(fn.includes(m), `Rule 10 must enumerate「${m}」 (v5.2 PR-a section)`);
+  }
+  // Tools / Layer / pool ban retained.
+  assert.match(fn, /禁止「工具一\/二\/三\/四」/);
+  assert.match(fn, /禁止「Layer 1-5 \/ L1-L5」/);
+  assert.match(fn, /禁止「2A SC 池 \/ 2B Reactive 池 \/ 2C Belief 池」/);
+});
+
+test('🛑 6/8 PR-d Rule 10: 英文體系名 5 個 (Bargain / Perfectionism Trap / Strategy vs Quality / External Locus / Reclaim Source) 全擋', () => {
+  const fn = _notebookFnBody();
+  // Rule 10 must explicitly ban these English brand names (student-facing card).
+  assert.match(fn,
+    /禁止英文體系名:\s*Bargain \/ Perfectionism Trap \/ Strategy vs Quality \/ External Locus \/[\s\S]{0,40}Reclaim Source/);
+});
+
+// ─── A8. Don't-touch confirmations ─────────────────────────────────────────
+
+test('🛑 6/8 PR-d: PR-a Damon Note template 0-byte content drift (verbatim §1.1-§1.5 / §8.1 / §9.1 全綠)', () => {
+  // PR-a template content lives in buildDamonNoteTemplateV52 — must remain verbatim.
+  const t = buildDamonNoteTemplateV52(1, 1);
+  // Sample of §1.3 verbatim landmarks (full set covered by PR-a sync-gates).
+  assert.match(t, /External Locus of Control \(外部控制點\)/);
+  assert.match(t, /The Bargain \(交易幻覺、紅線 23\)/);
+  assert.match(t, /R12 Hero's Welcome \(英雄式歡迎 5 步驟 SOP/);
+});
+
+test('🛑 6/8 PR-d: PR-b cache structure 0 regression (ON 5 / OFF 1 / cache-share guard)', () => {
+  const on  = buildDamonNoteSystemArray({ cachingEnabled: true, week: 1, day: 1 });
+  const off = buildDamonNoteSystemArray({ cachingEnabled: false, week: 1, day: 1 });
+  assert.equal(on.length, 5);
+  assert.equal(off.length, 1);
+  assert.deepEqual(on[3].cache_control, { type: 'ephemeral' });
+});
+
+test('🛑 6/8 PR-d: PR-c session_state summary helper 0 regression', () => {
+  // Helper still works, fail-safe still in place.
+  assert.equal(typeof buildSessionStateSummary({}, []), 'string');
+  assert.match(buildSessionStateSummary({}, []), /primary_mode: \(無\)/);
+});
+
+test('🛑 6/8 PR-d: §8.1 Damon Note anchor 前置注入 邏輯 0 改變 (PR-a active_context anchor)', () => {
+  // The activeContextAnchor / scStepPlaceholder / fullNote assembly INSIDE
+  // generateDamonNote is the Damon Note anchor, not the card anchor. PR-d
+  // must NOT touch it. Locate + verify shape unchanged.
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  assert.match(src, /const activeContextAnchor\s*=\s*\n?\s*`---\\n`[\s\S]{0,80}`【active_context】\\n`/);
+  assert.match(src, /const scStepPlaceholder\s*=\s*\n?\s*`---\\n`[\s\S]{0,80}`【sc_step_when_generated】\\n`/);
+  assert.match(src,
+    /const fullNote = `\$\{activeContextAnchor\}\\n\$\{scStepPlaceholder\}\\n\$\{bodyMinusAnchors\}`/);
+});
+
+test('🛑 6/8 PR-d: 禁用詞 + 簽名 V + 第二人稱「你」 + 不寫「她/他」 全保留', () => {
+  const fn = _notebookFnBody();
+  // Forbidden words list still complete (5 items).
+  assert.match(fn,
+    /不寫禁用詞\(加油、你已經很努力了、擁抱自己、成為更好的自己、跟著做就會、立刻改變人生\)/);
+  // Sign V (not Damon).
+  assert.match(fn, /— V\s/);
+  assert.match(fn, /不簽 Damon 名字、不寫「Damon Cart」/);
+  // Second-person 「你」 + no gender.
+  assert.match(fn, /整篇用「你」、不寫「她」「他」「她\/他」雙視角/);
+  assert.match(fn, /不假設學員的性別/);
+  // preferredName 0-1 次 nameHint.
+  assert.match(fn, /整篇 0-1 次自然帶過/);
 });

@@ -2305,7 +2305,13 @@ ${conversationText}
       console.warn('Yesterday SC hypothesis lookup failed:', e.message);
     }
 
-    const notebookPage = await generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis, preferredName, wasCrisis);
+    // ⭐ 6/8 Vivi v5.2 errata PR-d §8 — pass active_context as AI context (NOT printed).
+    //   activeContextName / activeContextDefinition were already SELECTed earlier (PR-a §8.1).
+    //   generateNotebookPage uses them ONLY as system-prompt context, never in card output.
+    const notebookPage = await generateNotebookPage(
+      sql, sessionId, module, fullNote, yesterdaySCHypothesis,
+      preferredName, wasCrisis, activeContextName, activeContextDefinition,
+    );
 
     return { fullNote, publicNote, notebookPage, todaySCHypothesis };
   } catch (e) {
@@ -2314,7 +2320,7 @@ ${conversationText}
   }
 }
 
-export async function generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis, preferredName = null, wasCrisis = false) {
+export async function generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis, preferredName = null, wasCrisis = false, activeContextName = null, activeContextDefinition = null) {
   try {
     const moduleLabel = module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係';
     // PR-4c-4e — preferredName is a warm hook the prompt can use sparingly.
@@ -2324,16 +2330,26 @@ export async function generateNotebookPage(sql, sessionId, module, fullNote, yes
       ? `學員的稱呼是「${preferredName}」。整篇 0-1 次自然帶過(如「${preferredName}、今天你說了…」)— 不放開頭、不重複、寫信感不是寒暄。`
       : `學員沒提供稱呼。整篇用「你」、不用「她/他」、不用「學員」。`;
 
+    // ⭐ 6/8 Vivi v5.2 errata PR-d §8 — active_context as AI context (NOT printed).
+    //   Vivi 6/8 拍板:卡片 anchor 當 AI context、不印在學員卡. Name/definition 為空
+    //   → 整行不加 (絕不印「(未設定)」給學員看).
+    //   Hint line tells the AI: align tone/content to the focus, but DO NOT echo
+    //   it as a "--- 聚焦 ---" block in the card output. Rule 10 (below) also
+    //   bans printed anchor blocks for double-safety.
+    const activeContextHint = (typeof activeContextName === 'string' && activeContextName.length > 0)
+      ? `\n⚠️ AI context (不要印給學員看):學員當下聚焦「${activeContextName}」${(typeof activeContextDefinition === 'string' && activeContextDefinition.length > 0) ? ` (範圍:${activeContextDefinition})` : ''} — 讓這頁內容對齊這個情境. 絕不在卡片頂部 / 任何位置印「--- 聚焦 ---」或「--- 範圍 ---」區塊.`
+      : '';
+
     // ⭐ 6/7 Vivi — 「我看見的」section 分犀利 / 溫和兩版.
     //   crisis 場 (wasCrisis=true) → 溫和版 (原 80字 緩衝版本) — 學員剛脆弱過,
     //     不該回敬一句利的「身份規則」.
-    //   非 crisis 場 → 犀利版 (Patrick 6/7 spec) — 直接點破 SC 觀察那條
-    //     「身份規則 / 隱性信念」, 學員自己的詞當刀, 加「不舒服=工具」框架.
-    //   Default false (caller forgot 傳值): treat as non-crisis (sharp). This
-    //     is balanced against finalize-day.js sending the actual flag from
-    //     sessionTouchedCrisis(), which itself fail-safes to gentle. Two
-    //     layers of bias: helper biases to gentle on ambiguity; caller default
-    //     is sharp. Net effect: only well-formed non-crisis sessions get sharp.
+    //   非 crisis 場 → 犀利版 (6/7 spec) — 直接點破最核心那條「身份規則 / 隱性信念」,
+    //     學員自己的詞當刀, 加「不舒服=工具」框架.
+    //   ⭐ 6/8 Vivi PR-d §7 決策 A: 犀利段織入 §2.1 概念中文化命名 (絕不英文).
+    //     crisis 溫和段保守不動 (學員剛脆弱過, 安全優先) — Patrick spec 明訂.
+    //   Default false (caller forgot 傳值): treat as non-crisis (sharp). Two-
+    //     layer bias: sessionTouchedCrisis() biases to gentle on ambiguity;
+    //     caller default is sharp. Net: only well-formed non-crisis → sharp.
     const seeingSection = wasCrisis
       ? `✦ 我看見的(一個假設)
 
@@ -2343,14 +2359,25 @@ export async function generateNotebookPage(sql, sessionId, module, fullNote, yes
   - 不要用通用的「你自己怎麼看?」
   - 用具體的「— 這只是猜想。但我想問你——『[今天你說過的一句話]』、你聽到這句話、有什麼感覺?」
 - 約 80 字
-- ⚠️ 本場次曾觸發 crisis SOP, 學員剛脆弱過. 此段保持溫和緩衝、不要犀利點破身份規則。`
+- ⚠️ 本場次曾觸發 crisis SOP, 學員剛脆弱過. 此段保持溫和緩衝、不要犀利點破身份規則。
+- ⚠️ 6/8 v5.2 PR-d: crisis 場保守不動 — 不深入 Damon 概念命名 (中文化或英文都不要), 留空間讓學員安全著陸。`
       : `✦ 我看見的(一個假設)
 
-- 直接點破後端【SC 觀察】最核心那條「身份規則 / 隱性信念」——這段就是要犀利、
-  要讓學員「被說中」的那一下。不要磨成安全的表層觀察。
+- 直接點破最核心那條「身份規則 / 隱性信念」——這段就是要犀利、要讓學員
+  「被說中」的那一下。不要磨成安全的表層觀察。
   反例(太溫、不要):「你可能是個習慣付出的人。」
   正解(夠利、要這樣):「你可能不是在關係裡找位置——你是在用『被需要』
   換一張『我有資格存在』的入場券。不照顧人的時候,你不太確定自己是誰。」
+- ⭐ 6/8 v5.2 PR-d §2.1: 用學員聽得懂的中文化概念,絕對不出現英文體系名。
+  對照表 (照表寫、不自編):
+    交換邏輯 / 補償邏輯   (= The Bargain — 不准寫 Bargain)
+    完美主義陷阱 / 追求極致狀態  (= Perfectionism Trap — 不准寫 Perfectionism Trap)
+    策略 vs 你是誰 / 做什麼 vs 是什麼  (= Strategy vs Quality — 不准寫 Strategy vs Quality)
+    源頭在外面 / 等別人 / 等條件給你  (= External Locus — 不准寫 External Locus)
+    你就是源頭 / 你內在的資源       (= Reclaim Source — 不准寫 Reclaim Source)
+  例 (照這個語氣):
+    「你今天有一個『交換邏輯』在運作——『因為他做了 X, 我才允許 Y』。
+     這不是自由的決定, 是補償的決定。」
 - 用學員自己今天的詞當刀(他自己說的「廢人」「愧疚」這類原話),讓尖銳是
   「他自己的」、不是 AI 外加的評斷。
 - 這是「假設」不是判決:框成「我猜想 / 一個假設」一次就好,不要層層堆
@@ -2377,7 +2404,7 @@ export async function generateNotebookPage(sql, sessionId, module, fullNote, yes
 ⚠️ 人稱 / 性別(PR-4c-4e 拍板):
 - 整篇用「你」、不寫「她」「他」「她/他」雙視角。
 - 不假設學員的性別、不用代詞猜性別。
-- ${nameHint}
+- ${nameHint}${activeContextHint}
 
 格式(嚴格按照):
 
@@ -2385,8 +2412,10 @@ export async function generateNotebookPage(sql, sessionId, module, fullNote, yes
 - 第二人稱「你」(「今天你說了…」「我聽著你…」「你停了一下、那裡有什麼?」)
 - 含學員今天反覆出現的詞(自然帶過、不列點)
 - 含關鍵句(用學員原話加引號)
-- 含「還沒碰到的」(用「但你繞過去了」「你沒進去」這種敘事帶出)
-- 含「層次」描述(「你碰到了一個層次的邊」、不直接寫 Layer 1-5、不寫「工具一/二/三/四」)
+- 含「還沒碰到的」(用「今天還有 X 沒展開」「明天我們從這裡繼續」這種 sober 敘事帶出 —
+  ⛔ 廢「但你繞過去了」「你沒進去」「那裡有個房間你還沒進去」這種心理分析 framing)
+- 含「今天到了哪裡」sober 描述(別暗示「碰到層次的邊」這種 Layer framing —
+  ⛔ 不直接寫 Layer 1-5、不寫「工具一/二/三/四」、不寫「2A/2B/2C 池」)
 - 約 200 字
 
 ${seeingSection}
@@ -2402,14 +2431,27 @@ ${seeingSection}
 【嚴格規則】
 1. 不簽 Damon 名字、不寫「Damon Cart」
 2. 用 Vivi 風格:短句、留白、不雞湯
-3. SC 觀察用「可能」「猜想」緩衝、不斷定 (本規則僅 wasCrisis=溫和場適用; 犀利場走上面 ✦ 段內指引: 一次「猜想/假設」標記即可、不重複堆疊)
+3. 緩衝詞分流 (§2.1, 取代舊 blanket「緩衝詞必加」):
+   ❌ 不緩衝: 學員 surface 的事實 (例:「你今天有一個交換邏輯在運作」)
+   ❌ 不緩衝: Damon 體系明確命名 (中文化, 例:「交換邏輯」/「補償邏輯」/「完美主義陷阱」)
+   ✅ 緩衝: SC 推測 (用「猜想」「可能」, 例:「猜想你可能…」)
+   ✅ 緩衝且極少用: 心理結構 / 家庭關係推測 (體系明確 caveat、不深入)
+   ⚠️ crisis 場 (wasCrisis=true): 整個「我看見的」段保持溫和緩衝, 不直接命名 Damon 概念
+       (學員剛脆弱過, 安全優先 — Vivi 6/8 拍板).
 4. 不寫禁用詞(加油、你已經很努力了、擁抱自己、成為更好的自己、跟著做就會、立刻改變人生)
 5. 簡短有力、總長度不超過 ${totalLengthCap} 字
 6. 不替你「修正」信念、只讓信念被看見
 7. SC 觀察是假設、不是判斷 (犀利 ≠ 下判決;是精準點破 + 留給他)
 8. 如果有「昨天的 SC 假設」(yesterdaySCHypothesis)、今天的「我看見的」要 reference、寫成「進化感」、不重複昨天的話、要精煉
 9. 如果今天 Damon Note 有「教練給的正面身份候選」(如「為朋友、為公司付出的你、也是你」)、必須保留進敘事末段
-10. ⚠️ 學員會直接讀這頁:禁止出現任何 Damon Note section 名稱(【SC 觀察】 / 【深度層次】 / 【還沒碰到的】 / 【明天的入口】 / 【採集追蹤】 / 【關鍵句】 等)、禁止「工具一/二/三/四」、禁止「Layer 1-5 / L1-L5」、禁止「2A SC 池 / 2B Reactive 池 / 2C Belief 池」`,
+10. ⚠️ 學員會直接讀這頁:
+    - 禁止出現任何 Damon Note section 名稱:【SC 觀察】 / 【深度層次】 / 【還沒碰到的】 /
+      【明天的入口】 / 【採集追蹤】 / 【關鍵句】 / 【Mode 軌跡】 / 【應 invoke 但未 invoke 的技術】 /
+      【Day 1-N 採集追蹤】 / 【active_context】 / 【sc_step_when_generated】
+    - 禁止「工具一/二/三/四」、禁止「Layer 1-5 / L1-L5」、禁止「2A SC 池 / 2B Reactive 池 / 2C Belief 池」
+    - 禁止英文體系名: Bargain / Perfectionism Trap / Strategy vs Quality / External Locus /
+      Reclaim Source — 用對應中文化命名 (見 §2.1, 見 ✦ 我看見的 段內對照表)
+    - 禁止印「--- 聚焦 ---」「--- 範圍 ---」 anchor 區塊 (active_context 只當 AI context、不印)`,
         messages: [{
           role: 'user',
           content: `模組：${moduleLabel}
