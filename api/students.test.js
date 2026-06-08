@@ -409,12 +409,13 @@ test('PATCH partial (只送 pace): 其他欄位 COALESCE 用 null → DB 端保�
   }), res);
   assert.equal(res.statusCode, 200);
   const upd = sql.calls[1];
-  // pace 有送 → 'self-paced'; 其他 (plan/tier/current_module/current_week/current_day/is_beta) → null.
+  // pace 有送 → 'self-paced'; 其他 (plan/tier/current_module/current_week/current_day/is_beta/is_blocked) → null.
   assert.ok(upd.values.includes('self-paced'));
-  // 至少 5 個 null (plan/tier/cm/cw/cd + is_beta) — COALESCE(null, 原值) 保留原值.
+  // 至少 6 個 null (plan/tier/cm/cw/cd + is_beta + is_blocked) — COALESCE(null, 原值) 保留原值.
+  // 6/7 Vivi: is_blocked 加入 main UPDATE COALESCE → null arm 上限從 5 → 6.
   const nullCount = upd.values.filter(v => v === null).length;
-  assert.ok(nullCount >= 5,
-    `expected at least 5 null COALESCE arms (plan/tier/cm/cw/cd/is_beta unset). saw values: ${JSON.stringify(upd.values)}`);
+  assert.ok(nullCount >= 6,
+    `expected at least 6 null COALESCE arms (plan/tier/cm/cw/cd/is_beta/is_blocked unset). saw values: ${JSON.stringify(upd.values)}`);
 });
 
 // ═════════════════════════════════════════════════════════
@@ -696,4 +697,141 @@ test('🛑 PATCH coach 路徑不受影響: coach session 仍可改 plan / is_bet
     body: { studentId: 'A001', plan: 'plan_a', is_beta: true },
   }), res);
   assert.equal(res.statusCode, 200, 'coach 仍可改 plan/is_beta (既有後台編輯功能不破)');
+});
+
+// ═════════════════════════════════════════════════════════
+// ⭐ 6/7 Vivi — PATCH is_blocked (教練後台「封鎖」勾選, 取代手動下 SQL)
+// ═════════════════════════════════════════════════════════
+
+test('🛑 6/7 PATCH coach is_blocked=true → 200 + UPDATE COALESCE 帶 is_blocked=true', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', is_blocked: true },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  const upd = sql.calls[1];
+  assert.match(upd.text, /is_blocked\s*=\s*COALESCE/i,
+    'main UPDATE must reference is_blocked COALESCE');
+  assert.ok(upd.values.includes(true),
+    `expected true in is_blocked UPDATE values. saw: ${JSON.stringify(upd.values)}`);
+});
+
+test('🛑 6/7 PATCH coach is_blocked=false → 200 + UPDATE COALESCE 帶 is_blocked=false (解封)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', is_blocked: false },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  const upd = sql.calls[1];
+  assert.ok(upd.values.includes(false),
+    `expected false in is_blocked UPDATE values (unblock). saw: ${JSON.stringify(upd.values)}`);
+});
+
+test('🛑 6/7 PATCH coach is_blocked undefined → COALESCE 用 null (不動原值)', async () => {
+  // 教練只勾 is_beta 沒勾 is_blocked → is_blocked 不應被覆寫.
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{ student_id: 'A001' }],
+    [],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'PATCH',
+    body: { studentId: 'A001', is_beta: true },   // 沒送 is_blocked
+  }), res);
+  assert.equal(res.statusCode, 200);
+  const upd = sql.calls[1];
+  // 至少 6 個 null (plan/tier/cm/cw/cd + is_blocked 未送) — COALESCE 保留原值.
+  const nullCount = upd.values.filter(v => v === null).length;
+  assert.ok(nullCount >= 6,
+    `expected ≥ 6 null COALESCE arms (incl. is_blocked unset). saw values: ${JSON.stringify(upd.values)}`);
+});
+
+// 🛑 P0 security: 學員絕不可自我解封 (allowlist must block is_blocked).
+test('🛑 6/7 PATCH self: 學員送 is_blocked → 403 FORBIDDEN_FIELD (鐵則: 學員不能自己解封)', async () => {
+  for (const val of [true, false]) {
+    _setCoachSessionReader(NO_SESSION);
+    _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+    const sql = makeMockSql([]);
+    _setSqlClient(sql);
+    const res = mockRes();
+    await handler(mockReq({
+      method: 'PATCH',
+      body: { studentId: 'A001', is_blocked: val },
+    }), res);
+    assert.equal(res.statusCode, 403,
+      `is_blocked=${val} 必須擋 (學員不可自我解封 / 自我封鎖)`);
+    assert.equal(res.body.error, 'FORBIDDEN_FIELD');
+    assert.equal(res.body.field, 'is_blocked');
+    assert.equal(sql.calls.length, 0, 'forbidden 在 DB touch 之前');
+  }
+});
+
+// ═════════════════════════════════════════════════════════
+// ⭐ 6/7 Vivi — GET single student SELECT 帶 is_blocked + day1_completed_at
+// ═════════════════════════════════════════════════════════
+
+test('🛑 6/7 GET ?studentId=A001 → 含 is_blocked + day1_completed_at (教練後台表單回填)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const completedAt = '2026-06-08T03:15:00.000Z';   // arbitrary ISO
+  const sql = makeMockSql([
+    [{
+      student_id: 'A001', current_module: 'self',
+      current_week: 1, current_day: 2, plan: 'trial', tier: 0,
+      pace: 'daily', preferred_name: 'V', is_beta: true,
+      is_blocked: true,
+      day1_completed_at: completedAt,
+      active_context_category: 5,
+      active_context_name: '我的焦慮',
+      active_context_definition: '工作時段最明顯',
+    }],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'GET', query: { studentId: 'A001' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.student.is_blocked, true);
+  assert.equal(res.body.student.day1_completed_at, completedAt);
+  // SELECT 必須含 is_blocked + day1_completed_at (lock for regression).
+  assert.match(sql.calls[0].text, /is_blocked/);
+  assert.match(sql.calls[0].text, /day1_completed_at/);
+});
+
+test('🛑 6/7 GET ?studentId=A001 → day1_completed_at=null (未完成 Day 1)', async () => {
+  _setCoachSessionReader(COACH_OK);
+  const sql = makeMockSql([
+    [{
+      student_id: 'A001', current_module: 'self',
+      current_week: 1, current_day: 1, plan: 'trial', tier: 0,
+      pace: 'daily', preferred_name: null, is_beta: false,
+      is_blocked: false, day1_completed_at: null,
+      active_context_category: 1,
+      active_context_name: null, active_context_definition: null,
+    }],
+  ]);
+  _setSqlClient(sql);
+  const res = mockRes();
+  await handler(mockReq({
+    method: 'GET', query: { studentId: 'A001' },
+  }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.student.day1_completed_at, null);
+  assert.equal(res.body.student.is_blocked, false);
 });

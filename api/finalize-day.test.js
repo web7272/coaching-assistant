@@ -285,3 +285,82 @@ test('parseGraduationResponse: not-JSON / empty → null', () => {
   assert.equal(parseGraduationResponse('{'), null);
   assert.equal(parseGraduationResponse(null), null);
 });
+
+// ═══════════════════════════════════════════════════════════════
+// ⭐ 6/7 Vivi — day1_completed_at write-if-null at finalize-day handler.
+// ═══════════════════════════════════════════════════════════════
+//
+// Spec (Patrick 6/7):
+//   - day === 1 finalize → UPDATE students SET day1_completed_at = NOW()
+//                          WHERE student_id = $sid AND day1_completed_at IS NULL
+//   - day === 1 re-finalize → alreadyDone early-return; write block unreached
+//     (combined with the IS NULL guard = double protection)
+//   - day ≥ 2 finalize → write block guarded by `if (day === 1)` → untouched
+//
+// Note: full handler round-trip would require mocking guardStudentOr401 +
+// generateDamonNote + several state-manager helpers. We use static analysis
+// of the source to lock the SQL contract + branch structure — same pattern
+// established for lib/landing/, lib/auth-html/ sync-gates.
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __finalizeDayDir = dirname(fileURLToPath(import.meta.url));
+const finalizeDaySrc = readFileSync(
+  join(__finalizeDayDir, 'finalize-day.js'),
+  'utf8',
+);
+
+test('🛑 6/7 finalize-day day1_completed_at: SQL contract = write-if-null on students', () => {
+  // Locks the production tagged-template shape:
+  //   UPDATE students
+  //      SET day1_completed_at = NOW()
+  //    WHERE student_id = ${...}
+  //      AND day1_completed_at IS NULL
+  assert.match(finalizeDaySrc,
+    /UPDATE students\s*\n\s*SET day1_completed_at\s*=\s*NOW\(\)\s*\n\s*WHERE student_id\s*=\s*\$\{[^}]+\}\s*\n\s*AND day1_completed_at IS NULL/,
+    'write-if-null SQL contract must match Patrick 6/7 spec verbatim');
+});
+
+test('🛑 6/7 finalize-day: day1 write guarded by `if (day === 1)` (day ≥ 2 untouched)', () => {
+  // Day 2 through Day 21 finalize must NOT touch day1_completed_at.
+  // The only safeguard at the handler level is this `if (day === 1)` wrapper.
+  assert.match(finalizeDaySrc,
+    /if\s*\(\s*day\s*===\s*1\s*\)\s*\{[\s\S]{0,500}day1_completed_at\s*=\s*NOW\(\)/,
+    'day1_completed_at write must be inside `if (day === 1)` guard');
+});
+
+test('🛑 6/7 finalize-day: day1 write is fail-soft (try/catch wraps + structured warn log)', () => {
+  // Spec: 寫失敗不擋 finalize (UX 不能因為 metadata 寫不進去就讓 Day 1 結業流程當掉).
+  assert.match(finalizeDaySrc,
+    /try\s*\{[\s\S]{0,500}day1_completed_at\s*=\s*NOW\(\)[\s\S]{0,500}\}\s*catch\s*\([^)]*\)\s*\{[\s\S]{0,500}console\.warn[\s\S]{0,200}day1_completed_at-write-failed/,
+    'day1_completed_at write must be wrapped in try/catch with structured warn log');
+});
+
+test('🛑 6/7 finalize-day: day1 write happens AFTER day_complete UPDATE (lifecycle order)', () => {
+  const dayCompleteIdx = finalizeDaySrc.indexOf('SET day_complete = TRUE');
+  const day1WriteIdx   = finalizeDaySrc.indexOf('day1_completed_at = NOW()');
+  assert.ok(dayCompleteIdx > 0, 'day_complete UPDATE must exist');
+  assert.ok(day1WriteIdx > 0,   'day1_completed_at UPDATE must exist');
+  assert.ok(day1WriteIdx > dayCompleteIdx,
+    'day1_completed_at write must come AFTER day_complete=TRUE (correct lifecycle order)');
+});
+
+test('🛑 6/7 finalize-day: day1 write is AFTER alreadyDone early-return (re-finalize = no-op)', () => {
+  // Re-finalize of an already-done Day 1 session early-returns BEFORE the
+  // write block. Combined with `WHERE day1_completed_at IS NULL` → double
+  // protection; first-finalize timestamp is preserved.
+  const earlyReturnIdx = finalizeDaySrc.indexOf('alreadyDone: true');
+  const day1WriteIdx   = finalizeDaySrc.indexOf('day1_completed_at = NOW()');
+  assert.ok(earlyReturnIdx > 0, 'alreadyDone early-return must exist');
+  assert.ok(day1WriteIdx > 0,   'day1_completed_at write must exist');
+  assert.ok(day1WriteIdx > earlyReturnIdx,
+    'day1_completed_at write must be AFTER alreadyDone early-return');
+});
+
+test('🛑 6/7 finalize-day: _setSqlClient seam exported (enables future mock-based handler tests)', () => {
+  // Locks the seam shape for any future test that wants full handler round-trip
+  // (would also need to mock guardStudentOr401 + generateDamonNote downstream).
+  assert.match(finalizeDaySrc, /export function _setSqlClient\s*\(/);
+});

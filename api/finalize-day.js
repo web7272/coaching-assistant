@@ -37,6 +37,16 @@ function getAnthropic() {
   return _anthropic;
 }
 
+// ⭐ 6/7 Vivi — SQL test seam (mirrors api/students.js / api/chat.js pattern).
+//   Needed for day1_completed_at write-if-null tests at handler level.
+//   Production path unchanged: getSql() returns neon(DATABASE_URL).
+let _sql = null;
+export function _setSqlClient(client) { _sql = client; }
+function getSql() {
+  if (_sql) return _sql;
+  return neon(process.env.DATABASE_URL);
+}
+
 // Vercel Pro 預設 60s、明寫保險
 export const config = {
   maxDuration: 60,
@@ -328,7 +338,7 @@ export default async function handler(req, res) {
   const graduation = isGraduationDay(sessionDay);
 
   try {
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = getSql();
 
     // 取現有 session 狀態（幂等檢查 + 需要 student_id + Step 6 PR-6b carry_forward）
     const sessionRows = await sql`
@@ -380,6 +390,26 @@ export default async function handler(req, res) {
     // chat.js 已 set day_complete=TRUE，此處保險（finalize 直接被呼叫的 case）
     if (!existing.day_complete) {
       await sql`UPDATE sessions SET day_complete = TRUE, updated_at = NOW() WHERE id = ${sessionId}`;
+    }
+
+    // ⭐ 6/7 Vivi — Day 1 完成日 write-if-null.
+    //   只在 day===1 且 day1_completed_at IS NULL 時寫 (mirror day1_started_at
+    //   write pattern from chat.js / migration 033).
+    //   Re-finalize 不覆蓋 (IS NULL guard). Day ≥ 2 不動 (day===1 guard).
+    //   Fail-soft: 寫失敗 log 但不擋 finalize (UX 不能因為 metadata 寫不進去
+    //   就讓學員 Day 1 結業流程當掉).
+    if (day === 1) {
+      try {
+        await sql`
+          UPDATE students
+             SET day1_completed_at = NOW()
+           WHERE student_id = ${existing.student_id}
+             AND day1_completed_at IS NULL
+        `;
+      } catch (day1WriteErr) {
+        console.warn('[finalize-day][day1_completed_at-write-failed]',
+          day1WriteErr?.message || day1WriteErr);
+      }
     }
 
     // Damon Note + yesterdaySCHypothesis lookup + Notebook page（內含的既有實作）
