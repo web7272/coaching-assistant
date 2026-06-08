@@ -1702,7 +1702,9 @@ function buildDamonNoteConditionalFields(week, day) {
 }
 
 // v34 hotfix 4：generateDamonNote 加 export、讓 api/finalize-day.js 共用。
-export async function generateDamonNote(sql, sessionId, module, week, day) {
+// 6/7 Vivi — 新增 wasCrisis (default false) → 傳給 generateNotebookPage 切犀利/溫和.
+//   finalize-day.js 用 lib/api/crisis-session-flag.js 從 session_state 算好再傳.
+export async function generateDamonNote(sql, sessionId, module, week, day, wasCrisis = false) {
   try {
     const messages = await sql`
       SELECT role, content FROM messages
@@ -1867,7 +1869,7 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
       console.warn('Yesterday SC hypothesis lookup failed:', e.message);
     }
 
-    const notebookPage = await generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis, preferredName);
+    const notebookPage = await generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis, preferredName, wasCrisis);
 
     return { fullNote, publicNote, notebookPage, todaySCHypothesis };
   } catch (e) {
@@ -1876,46 +1878,82 @@ export async function generateDamonNote(sql, sessionId, module, week, day) {
   }
 }
 
-export async function generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis, preferredName = null) {
+export async function generateNotebookPage(sql, sessionId, module, fullNote, yesterdaySCHypothesis, preferredName = null, wasCrisis = false) {
   try {
     const moduleLabel = module === 'self' ? '自我關係' : module === 'money' ? '金錢關係' : '伴侶關係';
     // PR-4c-4e — preferredName is a warm hook the prompt can use sparingly.
     // The page is addressed to the student in 第二人稱「你」, with {preferredName}
     // appearing 0-1 times for warmth — NOT a SaaS 「歡迎回來」 greeting and not at the top.
     const nameHint = preferredName
-      ? `學員的稱呼是「${preferredName}」。整篇 0-1 次自然帶過（如「${preferredName}、今天你說了…」）— 不放開頭、不重複、寫信感不是寒暄。`
+      ? `學員的稱呼是「${preferredName}」。整篇 0-1 次自然帶過(如「${preferredName}、今天你說了…」)— 不放開頭、不重複、寫信感不是寒暄。`
       : `學員沒提供稱呼。整篇用「你」、不用「她/他」、不用「學員」。`;
+
+    // ⭐ 6/7 Vivi — 「我看見的」section 分犀利 / 溫和兩版.
+    //   crisis 場 (wasCrisis=true) → 溫和版 (原 80字 緩衝版本) — 學員剛脆弱過,
+    //     不該回敬一句利的「身份規則」.
+    //   非 crisis 場 → 犀利版 (Patrick 6/7 spec) — 直接點破 SC 觀察那條
+    //     「身份規則 / 隱性信念」, 學員自己的詞當刀, 加「不舒服=工具」框架.
+    //   Default false (caller forgot 傳值): treat as non-crisis (sharp). This
+    //     is balanced against finalize-day.js sending the actual flag from
+    //     sessionTouchedCrisis(), which itself fail-safes to gentle. Two
+    //     layers of bias: helper biases to gentle on ambiguity; caller default
+    //     is sharp. Net effect: only well-formed non-crisis sessions get sharp.
+    const seeingSection = wasCrisis
+      ? `✦ 我看見的(一個假設)
+
+- 把後端 SC 觀察寫成「你可能是 X」的猜想語氣、不要「她可能是」
+- 緩衝詞必加:可能、可能不是、猜想
+- 結尾必加:邀請你 sit with 一句具體的話
+  - 不要用通用的「你自己怎麼看?」
+  - 用具體的「— 這只是猜想。但我想問你——『[今天你說過的一句話]』、你聽到這句話、有什麼感覺?」
+- 約 80 字
+- ⚠️ 本場次曾觸發 crisis SOP, 學員剛脆弱過. 此段保持溫和緩衝、不要犀利點破身份規則。`
+      : `✦ 我看見的(一個假設)
+
+- 直接點破後端【SC 觀察】最核心那條「身份規則 / 隱性信念」——這段就是要犀利、
+  要讓學員「被說中」的那一下。不要磨成安全的表層觀察。
+  反例(太溫、不要):「你可能是個習慣付出的人。」
+  正解(夠利、要這樣):「你可能不是在關係裡找位置——你是在用『被需要』
+  換一張『我有資格存在』的入場券。不照顧人的時候,你不太確定自己是誰。」
+- 用學員自己今天的詞當刀(他自己說的「廢人」「愧疚」這類原話),讓尖銳是
+  「他自己的」、不是 AI 外加的評斷。
+- 這是「假設」不是判決:框成「我猜想 / 一個假設」一次就好,不要層層堆
+  「可能、可能不是、或許」把力道稀釋掉。
+- 不評價、不替他修正信念——點破,然後把它留在他面前。
+- 不舒服 = 工具(必加一句、約這個意思):
+  「如果這句讓你心裡一震、或者很想反駁——別急著推開。那個不舒服就是線索。
+   回來看看:是哪一句、哪個字讓你不舒服?那裡,往往就是還沒被你看見的自己。」
+- 結尾邀請 sit with 一句具體的話:
+  「——這只是一個假設。但我想問你——『[今天你說過的一句話]』、
+   你聽到自己說這句話、有什麼感覺?」
+- 約 120-160 字, 要有「醍醐灌頂」的一下, 寧可短而利、不要長而鈍。`;
+
+    // Rule 5 length cap: sharp section is longer → bump cap. Crisis/gentle keeps the original 350.
+    const totalLengthCap = wasCrisis ? 350 : 430;
 
     const response = await getAnthropic().messages.create({
         model: MODEL,
         max_tokens: 800,
         system: `你是 Vivi 教練。
-把今天的學員觀察（後端 Damon Note）改寫成「私人筆記本一頁」、給學員看（學員會直接讀這頁）。
+把今天的學員觀察(後端 Damon Note)改寫成「私人筆記本一頁」、給學員看(學員會直接讀這頁)。
 這頁是 Vivi 教練「寫給這個學員的私信」、第二人稱「你」、有溫度但不雞湯。
 
-⚠️ 人稱 / 性別（PR-4c-4e 拍板）：
+⚠️ 人稱 / 性別(PR-4c-4e 拍板):
 - 整篇用「你」、不寫「她」「他」「她/他」雙視角。
 - 不假設學員的性別、不用代詞猜性別。
 - ${nameHint}
 
-格式（嚴格按照）：
+格式(嚴格按照):
 
 [主敘事段、無標題、開頭即敘事]
-- 第二人稱「你」(「今天你說了…」「我聽著你…」「你停了一下、那裡有什麼？」)
-- 含學員今天反覆出現的詞（自然帶過、不列點）
-- 含關鍵句（用學員原話加引號）
-- 含「還沒碰到的」（用「但你繞過去了」「你沒進去」這種敘事帶出）
-- 含「層次」描述（「你碰到了一個層次的邊」、不直接寫 Layer 1-5、不寫「工具一/二/三/四」）
+- 第二人稱「你」(「今天你說了…」「我聽著你…」「你停了一下、那裡有什麼?」)
+- 含學員今天反覆出現的詞(自然帶過、不列點)
+- 含關鍵句(用學員原話加引號)
+- 含「還沒碰到的」(用「但你繞過去了」「你沒進去」這種敘事帶出)
+- 含「層次」描述(「你碰到了一個層次的邊」、不直接寫 Layer 1-5、不寫「工具一/二/三/四」)
 - 約 200 字
 
-✦ 我看見的（一個假設）
-
-- 把後端 SC 觀察寫成「你可能是 X」的猜想語氣、不要「她可能是」
-- 緩衝詞必加：可能、可能不是、猜想
-- 結尾必加：邀請你 sit with 一句具體的話
-  - 不要用通用的「你自己怎麼看？」
-  - 用具體的「— 這只是猜想。但我想問你——『[今天你說過的一句話]』、你聽到這句話、有什麼感覺？」
-- 約 80 字
+${seeingSection}
 
 ✦ 明天
 
@@ -1927,15 +1965,15 @@ export async function generateNotebookPage(sql, sessionId, module, fullNote, yes
 
 【嚴格規則】
 1. 不簽 Damon 名字、不寫「Damon Cart」
-2. 用 Vivi 風格：短句、留白、不雞湯
-3. SC 觀察用「可能」「猜想」緩衝、不斷定
-4. 不寫禁用詞（加油、你已經很努力了、擁抱自己、成為更好的自己、跟著做就會、立刻改變人生）
-5. 簡短有力、總長度不超過 350 字
+2. 用 Vivi 風格:短句、留白、不雞湯
+3. SC 觀察用「可能」「猜想」緩衝、不斷定 (本規則僅 wasCrisis=溫和場適用; 犀利場走上面 ✦ 段內指引: 一次「猜想/假設」標記即可、不重複堆疊)
+4. 不寫禁用詞(加油、你已經很努力了、擁抱自己、成為更好的自己、跟著做就會、立刻改變人生)
+5. 簡短有力、總長度不超過 ${totalLengthCap} 字
 6. 不替你「修正」信念、只讓信念被看見
-7. SC 觀察是假設、不是判斷
-8. 如果有「昨天的 SC 假設」（yesterdaySCHypothesis）、今天的「我看見的」要 reference、寫成「進化感」、不重複昨天的話、要精煉
-9. 如果今天 Damon Note 有「教練給的正面身份候選」（如「為朋友、為公司付出的你、也是你」）、必須保留進敘事末段
-10. ⚠️ 學員會直接讀這頁：禁止出現任何 Damon Note section 名稱（【SC 觀察】 / 【深度層次】 / 【還沒碰到的】 / 【明天的入口】 / 【採集追蹤】 / 【關鍵句】 等）、禁止「工具一/二/三/四」、禁止「Layer 1-5 / L1-L5」、禁止「2A SC 池 / 2B Reactive 池 / 2C Belief 池」`,
+7. SC 觀察是假設、不是判斷 (犀利 ≠ 下判決;是精準點破 + 留給他)
+8. 如果有「昨天的 SC 假設」(yesterdaySCHypothesis)、今天的「我看見的」要 reference、寫成「進化感」、不重複昨天的話、要精煉
+9. 如果今天 Damon Note 有「教練給的正面身份候選」(如「為朋友、為公司付出的你、也是你」)、必須保留進敘事末段
+10. ⚠️ 學員會直接讀這頁:禁止出現任何 Damon Note section 名稱(【SC 觀察】 / 【深度層次】 / 【還沒碰到的】 / 【明天的入口】 / 【採集追蹤】 / 【關鍵句】 等)、禁止「工具一/二/三/四」、禁止「Layer 1-5 / L1-L5」、禁止「2A SC 池 / 2B Reactive 池 / 2C Belief 池」`,
         messages: [{
           role: 'user',
           content: `模組：${moduleLabel}

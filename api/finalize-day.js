@@ -26,6 +26,8 @@ import { sendExportEmail } from '../lib/email/brevo.js';
 import {
   sanitizeStudentNote, containsForbiddenContent, safeNoteForStudent,
 } from '../lib/api/student-note-safe.js';
+// 6/7 Vivi — notebook page「我看見的」 register switch (sharp / gentle).
+import { sessionTouchedCrisis } from '../lib/api/crisis-session-flag.js';
 // PR-4c-green Auth rebuild stage 1d — sessionId must belong to authenticated student.
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
 
@@ -412,8 +414,16 @@ export default async function handler(req, res) {
       }
     }
 
+    // ⭐ 6/7 Vivi — derive wasCrisis from THIS session's session_state.
+    //   sessionTouchedCrisis() biases to TRUE on ambiguity (per spec fail-safe).
+    //   The bias direction: a non-crisis session getting gentle costs sharpness;
+    //   a crisis session getting sharp risks landing an identity-rule sentence
+    //   on a just-vulnerable learner. Former >>> latter.
+    //   existing.session_state was already SELECTed at L335 of this handler.
+    const wasCrisis = sessionTouchedCrisis(existing.session_state);
+
     // Damon Note + yesterdaySCHypothesis lookup + Notebook page（內含的既有實作）
-    const noteResult = await generateDamonNote(sql, sessionId, module, week, day);
+    const noteResult = await generateDamonNote(sql, sessionId, module, week, day, wasCrisis);
     if (!noteResult) {
       return res.status(500).json({ error: 'NOTE_GENERATION_FAILED' });
     }
