@@ -1017,6 +1017,87 @@ test('🛑 chat.js: overload path rolls back the user message INSERT (no double-
     'overload cleanup must decrement questions_today');
 });
 
+// ═════════════════════════════════════════════════════════
+// 🛑 6/7 Vivi — generateNotebookPage「我看見的」 sharp / gentle branch.
+// Sync-gate: the prompt source must contain BOTH register variants and switch
+// on the wasCrisis parameter. (LLM round-trip not mocked; we lock the source.)
+// ═════════════════════════════════════════════════════════
+
+const chatJsSrc = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+  'utf8',
+);
+
+test('🛑 6/7 chat.js: generateNotebookPage signature accepts wasCrisis param (default false)', () => {
+  assert.match(chatJsSrc,
+    /export async function generateNotebookPage\([^)]*wasCrisis\s*=\s*false\s*\)/,
+    'generateNotebookPage must accept wasCrisis (default false)');
+});
+
+test('🛑 6/7 chat.js: generateDamonNote signature accepts wasCrisis + passes through', () => {
+  // Signature.
+  assert.match(chatJsSrc,
+    /export async function generateDamonNote\([^)]*wasCrisis\s*=\s*false\s*\)/,
+    'generateDamonNote must accept wasCrisis (default false)');
+  // Pass-through to generateNotebookPage.
+  assert.match(chatJsSrc,
+    /generateNotebookPage\([^)]*,\s*wasCrisis\)/,
+    'generateDamonNote must pass wasCrisis through to generateNotebookPage');
+});
+
+test('🛑 6/7 chat.js: prompt branches on wasCrisis (ternary or if to pick seeingSection)', () => {
+  // The branch must read wasCrisis. Use a flexible match — any reference to
+  // wasCrisis in a conditional that yields a seeingSection / similar string.
+  assert.match(chatJsSrc,
+    /wasCrisis\s*\?[\s\S]*?:[\s\S]*?\)/,
+    'prompt construction must branch on wasCrisis');
+});
+
+test('🛑 6/7 chat.js: SHARP variant — 點破身份規則 / 反例(太溫、不要) / 不舒服=工具', () => {
+  // Spec verbatim landmarks (Patrick 6/7): these must appear literally in the
+  // non-crisis prompt fragment. Locking each individually catches drift.
+  assert.match(chatJsSrc, /身份規則 \/ 隱性信念/, 'sharp variant must include the spec phrase 「身份規則 / 隱性信念」');
+  assert.match(chatJsSrc, /反例\(太溫、不要\)/, 'sharp variant must include the 反例(太溫、不要) lead-in');
+  assert.match(chatJsSrc, /正解\(夠利、要這樣\)/, 'sharp variant must include the 正解(夠利、要這樣) lead-in');
+  assert.match(chatJsSrc, /不舒服 = 工具/, 'sharp variant must include the 不舒服=工具 reframe');
+  assert.match(chatJsSrc, /別急著推開/, 'sharp variant must include the 別急著推開 phrasing');
+  assert.match(chatJsSrc, /醍醐灌頂/, 'sharp variant must call for the 醍醐灌頂 effect (寧可短而利)');
+  // Length target: 120-160 字.
+  assert.match(chatJsSrc, /約 120-160 字/);
+});
+
+test('🛑 6/7 chat.js: GENTLE variant (wasCrisis=true) — 原 80 字緩衝版本 retained', () => {
+  // Crisis sessions get the original gentle 80字 version verbatim.
+  assert.match(chatJsSrc, /緩衝詞必加:可能、可能不是、猜想/);
+  assert.match(chatJsSrc, /結尾必加:邀請你 sit with 一句具體的話/);
+  // Crisis-context warning note must be present (explains to LLM why register is soft).
+  assert.match(chatJsSrc,
+    /本場次曾觸發 crisis SOP[\s\S]{0,80}保持溫和緩衝、不要犀利點破身份規則/,
+    'gentle variant must explain crisis context to the LLM (避免犀利)');
+  // Length target remains 80 字.
+  assert.match(chatJsSrc, /約 80 字/);
+});
+
+test('🛑 6/7 chat.js: rule 5 length cap is conditional (350 gentle / 430 sharp)', () => {
+  // Spec: "350 → 約 430 字 (犀利段變長, 留空間)".
+  assert.match(chatJsSrc, /totalLengthCap\s*=\s*wasCrisis\s*\?\s*350\s*:\s*430/,
+    'totalLengthCap ternary must be wasCrisis ? 350 : 430');
+  // Rule 5 in the prompt must render the cap variable, not a literal 350.
+  assert.match(chatJsSrc, /總長度不超過 \$\{totalLengthCap\} 字/);
+});
+
+test('🛑 6/7 chat.js: safety wall (rule 10) retained verbatim (scrubber alignment)', () => {
+  // Spec rules 6/7/10 must remain. Rule 10 is the section-name + tool + Layer
+  // ban that pairs with student-note-safe.js scrubber. Lock the key fragments.
+  assert.match(chatJsSrc, /禁止「工具一\/二\/三\/四」/);
+  assert.match(chatJsSrc, /禁止「Layer 1-5 \/ L1-L5」/);
+  assert.match(chatJsSrc, /禁止「2A SC 池 \/ 2B Reactive 池 \/ 2C Belief 池」/);
+  // Rule 6: 不替學員修正信念 (preserved per spec).
+  assert.match(chatJsSrc, /不替你「修正」信念、只讓信念被看見/);
+  // Rule 7: SC 是假設 不是判斷 (preserved per spec: 犀利 ≠ 下判決).
+  assert.match(chatJsSrc, /SC 觀察是假設、不是判斷/);
+});
+
 test('🛑 chat.js: overload path is BEFORE Step 11b (no day_complete=TRUE WRITE on overload)', () => {
   const src = readFileSync(
     resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),

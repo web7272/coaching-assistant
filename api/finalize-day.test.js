@@ -364,3 +364,27 @@ test('🛑 6/7 finalize-day: _setSqlClient seam exported (enables future mock-ba
   // (would also need to mock guardStudentOr401 + generateDamonNote downstream).
   assert.match(finalizeDaySrc, /export function _setSqlClient\s*\(/);
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 🛑 6/7 Vivi — notebook 「我看見的」 sharp / gentle wiring (finalize-day).
+// ═══════════════════════════════════════════════════════════════
+
+test('🛑 6/7 finalize-day: imports sessionTouchedCrisis from lib/api/crisis-session-flag.js', () => {
+  assert.match(finalizeDaySrc,
+    /import \{ sessionTouchedCrisis \} from ['"]\.\.\/lib\/api\/crisis-session-flag\.js['"]/);
+});
+
+test('🛑 6/7 finalize-day: derives wasCrisis from this session_state', () => {
+  // existing.session_state was already SELECTed at L335 (verify still there).
+  assert.match(finalizeDaySrc, /SELECT[^;]*session_state/);
+  // The flag is computed from existing.session_state — the row we just SELECTed.
+  assert.match(finalizeDaySrc,
+    /const wasCrisis = sessionTouchedCrisis\(\s*existing\.session_state\s*\)/);
+});
+
+test('🛑 6/7 finalize-day: passes wasCrisis through to generateDamonNote', () => {
+  // The notebook-page sharp/gentle register lives downstream; this is the
+  // bridge from finalize-day → chat.js generateDamonNote → generateNotebookPage.
+  assert.match(finalizeDaySrc,
+    /generateDamonNote\(sql, sessionId, module, week, day, wasCrisis\)/);
+});
