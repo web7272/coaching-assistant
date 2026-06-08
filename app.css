@@ -705,14 +705,18 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .coach-nav a { margin-left: 14px; }
 .coach-list { display: grid; grid-template-columns: 1fr; gap: 8px; }
 /* 6/3 Patrick — list row grid: sid (110) / email (1fr) / tags (auto, min 110) /
-   day (90) / open (88). Tags column 顯 is_beta + is_blocked pills (空格也 reserve). */
-.coach-list__row { display: grid; grid-template-columns: 110px 1fr minmax(100px,auto) 90px 88px; gap: 12px;
+   day (90) / plan (76) / open (88). 6/8 Vivi: + plan column.
+   Tags column 顯 is_beta + is_blocked pills (空格也 reserve). */
+.coach-list__row { display: grid; grid-template-columns: 110px 1fr minmax(100px,auto) 90px 76px 88px; gap: 12px;
   background: var(--paper-card); border: 0.5px solid var(--border-line); border-radius: 6px;
   padding: 12px 16px; align-items: center; font-family: var(--font-sans); font-size: 13px; color: var(--text-primary); cursor: pointer; }
 .coach-list__sid { font-family: var(--font-sans); font-size: 13px; letter-spacing: 0.5px; }
 .coach-list__email { color: var(--text-secondary); }
 .coach-list__tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .coach-list__day { font-family: var(--font-serif); font-size: 13px; }
+/* 6/8 Vivi — plan column. enum 原始值 (trial / plan_a / plan_b), 等寬數位字體
+   讓 trial 跟 plan_a 一眼對齊;弱對比顏色避免搶眼. */
+.coach-list__plan { font-family: var(--font-sans); font-size: 12px; letter-spacing: 0.5px; color: var(--text-secondary); }
 .coach-list__open { font-family: var(--font-serif); font-size: 13px; color: var(--text-secondary); text-align: right; }
 /* 6/3 Patrick — is_beta / is_blocked pill 樣式 (brand peach / 灰). */
 .coach-pill { display: inline-block; padding: 2px 9px; border-radius: 12px;

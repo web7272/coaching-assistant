@@ -74,6 +74,18 @@
               <option value="self-paced">依自己步調（self-paced）</option>
             </select>
           </label>
+          <!-- ⭐ 6/8 Vivi — plan 下拉 (trial / plan_a / plan_b enum).
+               原本封測者卡 plan='trial' 會被 Day-2 閘門擋, 教練要改成 plan_a 才放行.
+               api/students.js PATCH 教練路徑早就收 plan + 驗 VALID_PLANS enum. -->
+          <label style="display:block;margin-bottom:10px;font-size:12px;color:var(--text-secondary);">
+            方案（plan）<br/>
+            <select id="coach-edit-plan"
+                    style="width:100%;padding:6px 10px;font-family:var(--font-serif);font-size:14px;margin-top:4px;">
+              <option value="trial">trial（試用 · Day-2 起被閘門擋）</option>
+              <option value="plan_a">plan_a（付費 / 完整 21 天）</option>
+              <option value="plan_b">plan_b（付費 / 完整 21 天）</option>
+            </select>
+          </label>
           <label style="display:block;margin-bottom:10px;font-size:12px;color:var(--text-secondary);">
             <input type="checkbox" id="coach-edit-isbeta" /> 封測者（is_beta）
           </label>
