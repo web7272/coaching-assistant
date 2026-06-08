@@ -163,11 +163,16 @@ function _renderCoachList(students, filter) {
     const pillsHtml = pills.length
       ? `<div class="coach-list__tags">${pills.join('')}</div>`
       : `<div class="coach-list__tags"></div>`;
+    // ⭐ 6/8 Vivi — plan 顯示 (Day 那欄旁). 原始 enum (trial / plan_a / plan_b)
+    //   Vivi 一眼看出誰還卡 trial. null/undefined/空 → "—".
+    //   escapeText 包,雖然 enum 是 server-side 驗過的安全 set, 防線一致.
+    const planLabel = (typeof s.plan === 'string' && s.plan.length > 0) ? s.plan : '—';
     row.innerHTML = `
       <div class="coach-list__sid">${escapeText(s.student_id)}</div>
       <div class="coach-list__email">${escapeText(s.email || '—')}</div>
       ${pillsHtml}
       <div class="coach-list__day">Day ${escapeText(s.effective_day ?? s.current_day ?? '—')}</div>
+      <div class="coach-list__plan">${escapeText(planLabel)}</div>
       <div class="coach-list__open">看 →</div>`;
     const open = () => { location.hash = `#/student/${encodeURIComponent(s.student_id)}`; };
     row.addEventListener('click', open);
@@ -244,6 +249,10 @@ async function renderStudent(sid) {
       is_beta:        !!stu.is_beta,
       // ⭐ 6/7 Vivi — is_blocked checkbox 接 PATCH 教練路徑.
       is_blocked:     !!stu.is_blocked,
+      // ⭐ 6/8 Vivi — plan 下拉. Fallback 'trial' 對齊 students 表 default.
+      //   後端 PATCH 已驗 VALID_PLANS = {trial, plan_a, plan_b}; 下拉本身只給 3 個值,
+      //   雙層防呆.
+      plan:           stu.plan || 'trial',
       // ⭐ v5.2 第一塊 — active_context category (default 1=事業 per migration 029).
       // 6/7 Vivi: 場景名/說明手動編輯欄拿掉 — onboarding 仍會寫入, 教練不再手調.
       active_context_category:   Number.isInteger(Number(stu.active_context_category))
@@ -251,6 +260,7 @@ async function renderStudent(sid) {
     };
     const $name    = document.getElementById('coach-edit-name');
     const $pace    = document.getElementById('coach-edit-pace');
+    const $plan    = document.getElementById('coach-edit-plan');
     const $beta    = document.getElementById('coach-edit-isbeta');
     const $blocked = document.getElementById('coach-edit-isblocked');
     const $save    = document.getElementById('coach-edit-save');
@@ -273,6 +283,7 @@ async function renderStudent(sid) {
     function fillForm(src) {
       $name.value      = src.preferred_name;
       $pace.value      = src.pace;
+      if ($plan)    $plan.value      = src.plan;
       $beta.checked    = src.is_beta;
       if ($blocked) $blocked.checked = src.is_blocked;
       if ($ctxCat)  $ctxCat.value    = String(src.active_context_category);
@@ -297,8 +308,12 @@ async function renderStudent(sid) {
       const body = { studentId: sid };
       const newName = $name.value.trim();
       const newBlocked = $blocked ? !!$blocked.checked : original.is_blocked;
+      // ⭐ 6/8 Vivi — plan diff. 下拉 value 限定 3 個 enum (trial/plan_a/plan_b),
+      //   後端 PATCH 教練路徑驗 VALID_PLANS 兜底.
+      const newPlan = $plan ? $plan.value : original.plan;
       if (newName        !== original.preferred_name) body.preferred_name = newName;
       if ($pace.value    !== original.pace)           body.pace           = $pace.value;
+      if (newPlan        !== original.plan)           body.plan           = newPlan;
       if ($beta.checked  !== original.is_beta)        body.is_beta        = $beta.checked;
       // ⭐ 6/7 Vivi — is_blocked diff (教練後台 only; api/students.js 學員自助路徑擋).
       if (newBlocked     !== original.is_blocked)     body.is_blocked     = newBlocked;
@@ -318,6 +333,7 @@ async function renderStudent(sid) {
         Object.assign(original, {
           preferred_name: newName,
           pace:           $pace.value,
+          plan:           newPlan,
           is_beta:        $beta.checked,
           is_blocked:     newBlocked,
           active_context_category:   newCtxCat,
@@ -327,12 +343,14 @@ async function renderStudent(sid) {
         }
         // 6/7 Vivi — refresh list cache so the "封鎖" pill in the list view
         // reflects the change next time the coach navigates back.
+        // 6/8 Vivi — same patch for plan column.
         if (_coachStudentsCache) {
           const idx = _coachStudentsCache.findIndex(s => s.student_id === sid);
           if (idx >= 0) {
             _coachStudentsCache[idx] = Object.assign({}, _coachStudentsCache[idx], {
               preferred_name: newName,
               pace:           $pace.value,
+              plan:           newPlan,
               is_beta:        $beta.checked,
               is_blocked:     newBlocked,
               active_context_category: newCtxCat,
