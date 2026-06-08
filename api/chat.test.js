@@ -25,6 +25,7 @@ import {
   buildChatResponsePayload,   // PR-23s4b hotfix (Vivi 6/4)
   buildDamonNoteTemplateV52,   // 6/8 Vivi v5.2 errata PR-b
   buildDamonNoteSystemArray,   // 6/8 Vivi v5.2 errata PR-b
+  buildSessionStateSummary,    // 6/8 Vivi v5.2 errata PR-c
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 import { CACHED_PREFIX_SECTIONS } from '../lib/prompt-sections/cached/index.js';
@@ -1720,4 +1721,245 @@ test('🛑 6/8 PR-b: main chat buildSystemPromptArrayV5 behavior unchanged (cach
   assert.deepEqual(on[3].cache_control, { type: 'ephemeral' },
     'ON path: breakpoint at index 3 (last cached)');
   assert.equal(off.length, 1, 'OFF path: collapsed single block');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/8 Vivi v5.2 errata PR-c — buildSessionStateSummary + user message inject.
+// session_state derived signals summary for Damon Note user message review context.
+// ═════════════════════════════════════════════════════════
+
+test('🛑 6/8 PR-c: full session_state → summary 含 mode / transitions / signal counts / R-series / takeaway', () => {
+  const sessionState = {
+    primary_mode: 'identity_anchoring',
+    active_modes: ['identity_anchoring', 'reframe_invitation'],
+    paused_modes: ['containment'],
+    mode_transition_log: [
+      { from_primary: 'elicitation', to_primary: 'identity_anchoring',
+        trigger_type: 'learner_surfaced', timestamp: '2026-06-08T...' },
+      { from_primary: 'identity_anchoring', to_primary: 'reframe_invitation',
+        trigger_type: 'mode_natural_progression', timestamp: '2026-06-08T...' },
+    ],
+    external_locus_count_this_session: 4,
+    passive_hope_count_this_session: 1,
+    modal_operator_count_this_session: 7,
+    takeaway_term: '可以決定',
+  };
+  const reframeHistory = [
+    { reframe_id: 'R1', session_id: 'sess-1', invoked_at_turn: 3, outcome: 'success' },
+    { reframe_id: 'R7', session_id: 'sess-1', invoked_at_turn: 8, outcome: 'partial' },
+  ];
+  const summary = buildSessionStateSummary(sessionState, reframeHistory);
+  // primary / active / paused.
+  assert.match(summary, /primary_mode: identity_anchoring/);
+  assert.match(summary, /active_modes: \[identity_anchoring, reframe_invitation\]/);
+  assert.match(summary, /paused_modes: \[containment\]/);
+  // transitions in order.
+  assert.match(summary, /mode_transition_log \(2 次轉移\):/);
+  assert.match(summary, /elicitation → identity_anchoring \(trigger: learner_surfaced\)/);
+  assert.match(summary, /identity_anchoring → reframe_invitation \(trigger: mode_natural_progression\)/);
+  // signal counts (only non-zero shown).
+  assert.match(summary, /signal_counts_this_session:[^\n]*external_locus: 4/);
+  assert.match(summary, /signal_counts_this_session:[^\n]*passive_hope: 1/);
+  assert.match(summary, /signal_counts_this_session:[^\n]*modal_operator: 7/);
+  // R-series.
+  assert.match(summary, /reframe_invocations_this_session: \[R1, R7\]/);
+  // takeaway.
+  assert.match(summary, /takeaway_term: 「可以決定」/);
+  // crisis: 此 fixture 沒 crisis → (無)
+  assert.match(summary, /crisis: \(無\)/);
+});
+
+test('🛑 6/8 PR-c: empty session_state → summary graceful「(無)」, never throws', () => {
+  // Day 1 brand-new session: session_state = {} (no signals yet, no transitions, no R-series).
+  const summary = buildSessionStateSummary({}, []);
+  assert.match(summary, /primary_mode: \(無\)/);
+  assert.match(summary, /active_modes: \(無\)/);
+  assert.match(summary, /mode_transition_log: \(無\)/);
+  assert.match(summary, /signal_counts_this_session: \(無\)/);
+  assert.match(summary, /reframe_invocations_this_session: \(無\)/);
+  // takeaway absent → line omitted (not "takeaway_term: (無)").
+  assert.doesNotMatch(summary, /takeaway_term:/);
+  assert.match(summary, /crisis: \(無\)/);
+});
+
+test('🛑 6/8 PR-c: null / undefined / non-object session_state → fail-safe, no throw', () => {
+  // Defensive — caller passed bad shape; helper must not crash.
+  for (const bad of [null, undefined, 'foo', 42, true, ['array']]) {
+    const s = buildSessionStateSummary(bad, null);
+    assert.equal(typeof s, 'string', `${String(bad)} input → string output`);
+    assert.match(s, /primary_mode: \(無\)/, `${String(bad)} input → safe fallback`);
+  }
+});
+
+test('🛑 6/8 PR-c: malformed transitions / non-array signal keys → skip silently (fail-open)', () => {
+  const summary = buildSessionStateSummary({
+    primary_mode: 'elicitation',
+    active_modes: 'not-an-array',                       // wrong shape
+    mode_transition_log: [
+      { from_primary: 'a', to_primary: 'b', trigger_type: 'learner_surfaced' },
+      null,                                              // bad entry
+      'string-entry',                                    // bad entry
+      { /* missing keys */ },
+      { from_primary: 'c', to_primary: 'd', trigger_type: 'ai_initiated' },
+    ],
+    external_locus_count_this_session: 'not-a-number',  // junk
+    passive_hope_count_this_session: 2,
+  }, 'not-an-array-rh');
+  // active_modes wrong shape → "(無)"
+  assert.match(summary, /active_modes: \(無\)/);
+  // 5 transitions logged but bad ones rendered as "? → ?" or skipped null/strings.
+  assert.match(summary, /mode_transition_log \(5 次轉移\):/);
+  assert.match(summary, /a → b \(trigger: learner_surfaced\)/);
+  assert.match(summary, /c → d \(trigger: ai_initiated\)/);
+  // bad numeric key → not in summary (Number('not-a-number') = NaN, falsy).
+  assert.doesNotMatch(summary, /external_locus/);
+  assert.match(summary, /passive_hope: 2/);
+  // reframe history non-array → "(無)"
+  assert.match(summary, /reframe_invocations_this_session: \(無\)/);
+});
+
+test('🛑 6/8 PR-c: crisis_in_progress + sop_state + carry_forward → 全部 surface', () => {
+  const summary = buildSessionStateSummary({
+    crisis_in_progress: true,
+    crisis_sop_state: { current_step: 4, awaiting: 'handoff_ack' },
+    crisis_state_carry_forward_pending_write: { reason: 'passive_dw' },
+  }, []);
+  assert.match(summary, /crisis: in_progress, sop_step=4, carry_forward_pending/);
+});
+
+test('🛑 6/8 PR-c: crisis closure (sop_complete=true) → marked as complete', () => {
+  const summary = buildSessionStateSummary({
+    crisis_sop_state: { current_step: 8, awaiting: null, closure_explicit: true },
+    crisis_sop_complete: true,
+    crisis_in_progress: false,    // released by closure
+    primary_mode: null,
+  }, []);
+  assert.match(summary, /crisis:.*sop_step=8 \(complete\)/);
+});
+
+test('🛑 6/8 PR-c: reframe_invocation_history entries with missing reframe_id → skip silently', () => {
+  const summary = buildSessionStateSummary({}, [
+    { reframe_id: 'R3', session_id: 's' },
+    null,
+    { /* no reframe_id */ session_id: 's' },
+    { reframe_id: 'R10', session_id: 's' },
+  ]);
+  assert.match(summary, /reframe_invocations_this_session: \[R3, R10\]/);
+});
+
+test('🛑 6/8 PR-c: signal counts of 0 NOT shown (only positive counts surface)', () => {
+  const summary = buildSessionStateSummary({
+    external_locus_count_this_session: 0,
+    passive_hope_count_this_session: 0,
+    modal_operator_count_this_session: 3,
+  }, []);
+  // Only modal_operator: 3 should appear.
+  assert.match(summary, /signal_counts_this_session: modal_operator: 3/);
+  assert.doesNotMatch(summary, /external_locus/);
+  assert.doesNotMatch(summary, /passive_hope/);
+});
+
+// ─── Source-grep: summary inject wired into user message ───────────
+
+test('🛑 6/8 PR-c source-grep: generateDamonNote SELECTs session_state BEFORE the AI call', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // Locate generateDamonNote body, ensure the new SELECT is before messages.create.
+  const fnStart = src.indexOf('export async function generateDamonNote');
+  const fnEnd   = src.indexOf('export async function generateNotebookPage');
+  assert.ok(fnStart > 0 && fnEnd > fnStart);
+  const fn = src.slice(fnStart, fnEnd);
+  const selectIdx = fn.indexOf('SELECT session_state, student_id FROM sessions WHERE id =');
+  const aiCallIdx = fn.indexOf('await getAnthropic().messages.create(');
+  assert.ok(selectIdx > 0, 'session_state SELECT must be present in generateDamonNote');
+  assert.ok(aiCallIdx > selectIdx,
+    'session_state SELECT must come BEFORE the AI messages.create call');
+});
+
+test('🛑 6/8 PR-c source-grep: generateDamonNote SELECTs reframe_invocation_history (filtered to this session)', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  assert.match(src, /SELECT reframe_invocation_history FROM user_profile_evolution/);
+  // Filter by session_id === current sessionId — "本場" semantic.
+  assert.match(src, /history\.filter\([\s\S]{0,200}e\.session_id === sessionId/);
+});
+
+test('🛑 6/8 PR-c source-grep: user message content carries the summary block with derived signals header', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // The summary block uses a clear header marking it as derived signals,
+  // distinct from the conversation transcript.
+  assert.match(src, /【session 訊號摘要 \(derived signals、給教練 review、非學員逐字語料\)】/);
+  // Summary inserted in user message content.
+  assert.match(src, /content: `模組：\$\{moduleLabel\}，Day \$\{day\}（共 21 天）。\s*\n\s*\n【session 訊號摘要/);
+  // Summary inserted BEFORE conversationText (review context first, then 逐字).
+  const contentBlockMatch = src.match(
+    /content: `模組：[\s\S]*?請寫下今天的教練筆記。`/,
+  );
+  assert.ok(contentBlockMatch, 'user message content block must be locatable');
+  const idxSummary = contentBlockMatch[0].indexOf('【session 訊號摘要');
+  const idxConvo   = contentBlockMatch[0].indexOf('${conversationText}');
+  assert.ok(idxSummary > 0 && idxConvo > idxSummary,
+    'summary block must come BEFORE conversationText interpolation');
+});
+
+test('🛑 6/8 PR-c source-grep: fail-open on session_state + reframe history read failures (never throws)', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // session_state SELECT wrapped in try/catch with structured warn.
+  // (Generous regex limits because Windows CRLF + multi-line SQL templates.)
+  assert.match(src,
+    /try \{[\s\S]{0,600}SELECT session_state, student_id[\s\S]{0,600}\} catch \([\s\S]{0,200}\) \{[\s\S]{0,400}session_state fetch failed \(fail-open\)/);
+  // reframe history SELECT wrapped in try/catch with structured warn.
+  assert.match(src,
+    /try \{[\s\S]{0,800}SELECT reframe_invocation_history[\s\S]{0,800}\} catch \([\s\S]{0,200}\) \{[\s\S]{0,400}reframe_invocation_history fetch failed \(fail-open\)/);
+});
+
+// ─── Don't-touch confirmations ───────────────────────────────────
+
+test('🛑 6/8 PR-c: system prompt 結構 untouched (PR-a template + PR-b cache structure 0 regression)', () => {
+  // template still in buildDamonNoteTemplateV52.
+  const t = buildDamonNoteTemplateV52(1, 1);
+  // PR-a verbatim landmarks all still present (sanity).
+  assert.match(t, /【關鍵句】/);
+  assert.match(t, /【應 invoke 但未 invoke 的技術】/);
+  assert.match(t, /R1 Reclaim Source/);
+  // PR-b cache structure: ON 5 / OFF 1.
+  const on  = buildDamonNoteSystemArray({ cachingEnabled: true, week: 1, day: 1 });
+  const off = buildDamonNoteSystemArray({ cachingEnabled: false, week: 1, day: 1 });
+  assert.equal(on.length, 5);
+  assert.equal(off.length, 1);
+});
+
+test('🛑 6/8 PR-c: generateNotebookPage UNCHANGED (sharp/gentle 安全牆全保留)', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  // PR-c must NOT touch the student-facing 我看見的 card.
+  assert.match(src, /async function generateNotebookPage\([^)]*wasCrisis\s*=\s*false\s*\)/);
+  assert.match(src, /身份規則 \/ 隱性信念/);      // sharp variant
+  assert.match(src, /不舒服 = 工具/);              // sharp variant 框架
+});
+
+test('🛑 6/8 PR-c: 鐵律#2 — buildSessionStateSummary never logs (pure function, no console.*)', () => {
+  // Helper is pure — no DB I/O, no console.* call. Test by source-greping the function body.
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), 'chat.js'),
+    'utf8',
+  );
+  const fnStart = src.indexOf('export function buildSessionStateSummary');
+  const fnEnd   = src.indexOf('export async function generateDamonNote');
+  assert.ok(fnStart > 0 && fnEnd > fnStart);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(!/console\./.test(fn),
+    'buildSessionStateSummary must not log (鐵律#2: derived signals are summary-only, never side-channel-logged)');
 });

@@ -1958,13 +1958,137 @@ export function buildDamonNoteSystemArray({ cachingEnabled = false, week, day } 
   return arr;
 }
 
+/**
+ * 6/8 Vivi v5.2 errata PR-c (§5) — derived session_state summary 給 generateDamonNote
+ * user message review context 用. Pure — 不打 DB, 不 log.
+ *
+ * Covers spec §5 list:
+ *   - signal_flags 軌跡 (per-session count_this_session, 來自 engine-1 5 signals + S6)
+ *   - mode_transition_log (mode 序列, 來自 lib/session/mode-transition-logger.js)
+ *   - active_modes / primary_mode / paused_modes (lib/session/mode-tracker.js)
+ *   - reframe_invocation_history (本場, caller 已 filter session_id = current)
+ *   - takeaway_term (若有, engine-4-mode-aware 寫入 session_state)
+ *   - crisis carry-forward / crisis_in_progress / sop_state
+ *
+ * 防禦性 (per spec §5 phased rollout — 任何 key 缺 / 空陣列):
+ *   - 缺 / 非預期 shape → 該行寫「(無)」 或略過.
+ *   - 絕不 throw → 絕不擋筆記生成.
+ *
+ * 鐵律 #2: 摘要只含 derived signals (signal name / mode name / R-series id / count /
+ * trigger_type 等 enum-shaped 詞), 不含 raw user text. takeaway_term 是學員 surface
+ * 的詞 (e.g.「可以決定」), 是 derived takeaway 不是 raw 諮商內容, 進 prompt OK.
+ *
+ * @param {object|null|undefined} sessionState               sessions.session_state JSONB
+ * @param {Array<object>|null|undefined} reframeHistoryThisSession  filtered to current sessionId
+ * @returns {string}  multi-line summary block (no leading / trailing newlines)
+ */
+export function buildSessionStateSummary(sessionState, reframeHistoryThisSession) {
+  const s = (sessionState && typeof sessionState === 'object' && !Array.isArray(sessionState))
+    ? sessionState : {};
+  const lines = [];
+
+  // ─── 1. Mode (primary / active / paused) ─────────────────────────
+  const primary = (typeof s.primary_mode === 'string' && s.primary_mode.length > 0)
+    ? s.primary_mode : null;
+  const activeModes = Array.isArray(s.active_modes)
+    ? s.active_modes.filter(m => typeof m === 'string') : [];
+  const pausedModes = Array.isArray(s.paused_modes)
+    ? s.paused_modes.filter(m => typeof m === 'string') : [];
+  lines.push(`primary_mode: ${primary || '(無)'}`);
+  lines.push(`active_modes: ${activeModes.length > 0 ? `[${activeModes.join(', ')}]` : '(無)'}`);
+  if (pausedModes.length > 0) {
+    lines.push(`paused_modes: [${pausedModes.join(', ')}]`);
+  }
+
+  // ─── 2. Mode transition log (順序軌跡) ──────────────────────────
+  const transitions = Array.isArray(s.mode_transition_log) ? s.mode_transition_log : [];
+  if (transitions.length === 0) {
+    lines.push('mode_transition_log: (無)');
+  } else {
+    lines.push(`mode_transition_log (${transitions.length} 次轉移):`);
+    for (const t of transitions) {
+      if (!t || typeof t !== 'object') continue;
+      const from = (typeof t.from_primary === 'string' && t.from_primary.length > 0)
+        ? t.from_primary : '?';
+      const to   = (typeof t.to_primary === 'string' && t.to_primary.length > 0)
+        ? t.to_primary : '?';
+      const trig = (typeof t.trigger_type === 'string' && t.trigger_type.length > 0)
+        ? t.trigger_type : '?';
+      lines.push(`  ${from} → ${to} (trigger: ${trig})`);
+    }
+  }
+
+  // ─── 3. Signal counts this session (engine-1 S1-S6) ─────────────
+  //   keys 由 lib/detector-handlers/engine-1-signals/_base.js sessionCountKey:
+  //   `${signal}_count_this_session`. 缺 / 0 → 略過該 signal.
+  const SIGNAL_NAMES_FOR_SUMMARY = [
+    'external_locus', 'passive_hope', 'frequency_illusion',
+    'conditional_worth', 'negative_generalization', 'modal_operator',
+  ];
+  const sigCounts = [];
+  for (const signal of SIGNAL_NAMES_FOR_SUMMARY) {
+    const cnt = Number(s[`${signal}_count_this_session`] || 0);
+    if (Number.isFinite(cnt) && cnt > 0) sigCounts.push(`${signal}: ${cnt}`);
+  }
+  lines.push(sigCounts.length > 0
+    ? `signal_counts_this_session: ${sigCounts.join(', ')}`
+    : 'signal_counts_this_session: (無)');
+
+  // ─── 4. Reframe Library invocations (本場 only) ─────────────────
+  const rh = Array.isArray(reframeHistoryThisSession) ? reframeHistoryThisSession : [];
+  if (rh.length === 0) {
+    lines.push('reframe_invocations_this_session: (無)');
+  } else {
+    const ids = rh
+      .map(r => (r && typeof r === 'object' && typeof r.reframe_id === 'string')
+        ? r.reframe_id : null)
+      .filter(Boolean);
+    lines.push(ids.length > 0
+      ? `reframe_invocations_this_session: [${ids.join(', ')}]`
+      : 'reframe_invocations_this_session: (無)');
+  }
+
+  // ─── 5. takeaway_term (若有, 由 engine-4-mode-aware 寫入) ────────
+  const tk = (typeof s.takeaway_term === 'string' && s.takeaway_term.length > 0)
+    ? s.takeaway_term : null;
+  if (tk) lines.push(`takeaway_term: 「${tk}」`);
+
+  // ─── 6. Crisis 跡象 (in_progress / sop_state / carry_forward) ───
+  const crisisInProgress = s.crisis_in_progress === true;
+  const sopState = (s.crisis_sop_state && typeof s.crisis_sop_state === 'object'
+                    && !Array.isArray(s.crisis_sop_state))
+    ? s.crisis_sop_state : null;
+  const carryFwd = s.crisis_state_carry_forward_pending_write != null
+    && s.crisis_state_carry_forward_pending_write !== undefined;
+  if (crisisInProgress || sopState || carryFwd) {
+    const bits = [];
+    if (crisisInProgress) bits.push('in_progress');
+    if (sopState) {
+      const step = (typeof sopState.current_step === 'number' || typeof sopState.current_step === 'string')
+        ? sopState.current_step : '?';
+      const done = s.crisis_sop_complete === true ? ' (complete)' : '';
+      bits.push(`sop_step=${step}${done}`);
+    }
+    if (carryFwd) bits.push('carry_forward_pending');
+    lines.push(`crisis: ${bits.join(', ')}`);
+  } else {
+    lines.push('crisis: (無)');
+  }
+
+  return lines.join('\n');
+}
+
 // v34 hotfix 4：generateDamonNote 加 export、讓 api/finalize-day.js 共用。
 // 6/7 Vivi — 新增 wasCrisis (default false) → 傳給 generateNotebookPage 切犀利/溫和.
 //   finalize-day.js 用 lib/api/crisis-session-flag.js 從 session_state 算好再傳.
 // 6/8 Vivi — v5.2 errata PR-a: template v5.2 化 (見 buildDamonNoteTemplateV52).
 // 6/8 Vivi — v5.2 errata PR-b: system prompt 改吃 cached prefix (buildDamonNoteSystemArray).
+// 6/8 Vivi — v5.2 errata PR-c: user message 接 derived session_state summary
+//   (buildSessionStateSummary), 給教練 review「今天觸發哪些 signal / 走過哪些 mode /
+//   invoke 哪些 R-series」.
 //   ⚠️ 不動 generateNotebookPage (PR-d 才處理「我看見的」犀利卡).
 //   ⚠️ 不動 3 個 regex-locked header: 【關鍵句】/ 【明天的入口】/【SC 觀察】.
+//   ⚠️ 不動 system prompt / template (PR-c 只動 user message).
 export async function generateDamonNote(sql, sessionId, module, week, day, wasCrisis = false) {
   try {
     const messages = await sql`
@@ -1996,6 +2120,47 @@ export async function generateDamonNote(sql, sessionId, module, week, day, wasCr
       console.warn('[generateDamonNote] loadFeatureFlags failed (default ON):', e?.message || e);
     }
 
+    // ⭐ 6/8 Vivi v5.2 errata PR-c (§5) — read session_state + reframe_invocation_history
+    //   BEFORE the AI call, build derived signals summary for user message review context.
+    //   Fail-open: any read failure / missing migration → empty inputs → "(無)" summary,
+    //   never throws, never blocks note generation.
+    let sessionStateForSummary = null;
+    let studentIdForRhFetch = null;
+    try {
+      const sessRows = await sql`
+        SELECT session_state, student_id FROM sessions WHERE id = ${sessionId} LIMIT 1
+      `;
+      if (sessRows.length > 0) {
+        sessionStateForSummary = sessRows[0].session_state || {};
+        studentIdForRhFetch    = sessRows[0].student_id || null;
+      }
+    } catch (e) {
+      console.warn('[generateDamonNote] session_state fetch failed (fail-open):', e?.message || e);
+    }
+    let reframeHistoryThisSession = [];
+    if (studentIdForRhFetch) {
+      try {
+        const upe = await sql`
+          SELECT reframe_invocation_history FROM user_profile_evolution
+           WHERE student_id = ${studentIdForRhFetch} LIMIT 1
+        `;
+        const history = upe?.[0]?.reframe_invocation_history;
+        if (Array.isArray(history)) {
+          // Filter to entries from THIS session — spec §5 「本場 invoke 哪些 R-series」.
+          reframeHistoryThisSession = history.filter(
+            e => e && typeof e === 'object' && e.session_id === sessionId,
+          );
+        }
+      } catch (e) {
+        // migration 027 not applied OR UPE row missing → graceful empty array.
+        console.warn('[generateDamonNote] reframe_invocation_history fetch failed (fail-open):',
+          e?.message || e);
+      }
+    }
+    const sessionStateSummary = buildSessionStateSummary(
+      sessionStateForSummary, reframeHistoryThisSession,
+    );
+
     const response = await getAnthropic().messages.create({
         model: MODEL,
         max_tokens: 1500,
@@ -2011,7 +2176,17 @@ export async function generateDamonNote(sql, sessionId, module, week, day, wasCr
           // 「第 N 週，第 N 天」 framing is a v4 holdover. Week is still derivable but
           // not surfaced in the daily prompt header — keeps the note's mental
           // model aligned with the new 21-day rhythm.
-          content: `模組：${moduleLabel}，Day ${day}（共 21 天）。\n\n${conversationText}\n\n請寫下今天的教練筆記。`
+          // 6/8 Vivi v5.2 errata PR-c — session_state derived signals summary 插在
+          // header 後、conversationText 前. 標題明確標「derived signals、非學員逐字語料」
+          // 讓 AI 區隔處理 (review context vs 語料).
+          content: `模組：${moduleLabel}，Day ${day}（共 21 天）。
+
+【session 訊號摘要 (derived signals、給教練 review、非學員逐字語料)】
+${sessionStateSummary}
+
+${conversationText}
+
+請寫下今天的教練筆記。`,
         }]
     });
 
