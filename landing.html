@@ -51,7 +51,7 @@
    
    文案：
    - Hero 右卡：「找出你可能的限制性信念」→「探索自己」
-   - Hero hlead：「好問題」加 glow 強調（跟「根據什麼」同色）
+   - Hero hlead：「好問題」加 glow 強調（跟「他/她想要什麼」同色）
    - Founder Story body 字級拉到 clamp(20px,3.6vw,28px)、跟 Hero htag 同級
    - Founder Story 加「甚至——跟你有相近的價值觀」
    - AI 對比第三列：「挖出你背後的動機跟信念」→「挖出你個人獨有的動機跟信念」
@@ -87,7 +87,7 @@
    - 學員彩蛋段
   
   主要新增/重寫：
-   - 全新 Hero（雙 CTA + 新品牌語言「你每天都在做決定…」）
+   - 全新 Hero（雙 CTA + 新品牌語言「你照顧了所有人…」）
    - 一般 AI vs 教練式 AI 新段（顯性差異化）
    - 為什麼有這個產品（信任段+why 段合併重寫成 Founder Story 種子版）
    - 四步驟 reframe（Option C：功能在前→感受是結果）
@@ -493,29 +493,12 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
   <div class="hcore">
     <p class="brandmark">看見自己 · SEE YOURSELF</p>
-    <h1 class="htag">你照顧了所有人。<br>只剩一個人，你還沒問過<br><span class="glow">他／她想要什麼</span>。</h1>
+    <h1 class="htag">你照顧了所有人。<br>只剩一個人，你還沒問過<span class="glow">他/她想要什麼</span>。</h1>
 
     <p class="cta-label">從這裡開始</p>
     <div class="cta-pair">
 
-      <!-- 左卡：PDF only (option=1) — 點擊展開 email -->
-      <div class="cta-card" data-opt="1">
-        <button type="button" class="cta-trigger" onclick="ctaOpen(this)">
-          <p class="cta-t">下載《價值觀挖掘練習》</p>
-          <p class="cta-d">用 15 分鐘看見那些其實一直在影響你、卻很少被說出來的價值觀。</p>
-          <p class="cta-go">免費下載 →</p>
-        </button>
-        <form class="cta-form" onsubmit="ctaSubmit(event, 1)">
-          <button type="button" class="cta-back" onclick="ctaClose(this)" aria-label="返回">← 返回</button>
-          <p class="cta-t cta-t-open">下載《價值觀挖掘練習》</p>
-          <label class="cta-fld">你的 email</label>
-          <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
-          <button type="submit" class="cta-submit">寄給我 →</button>
-          <p class="cta-mini" id="cta-msg-1"></p>
-        </form>
-      </div>
-
-      <!-- 右卡：PDF + Day 1 (option=3) — 點擊展開 3 問題 + email -->
+      <!-- 左卡：PDF + Day 1 (option=3) — 點擊展開 3 問題 + email (6/8 Vivi 左右互換) -->
       <div class="cta-card alt" data-opt="3">
         <button type="button" class="cta-trigger" onclick="ctaOpen(this)">
           <p class="cta-t" id="cta-t-3">下載練習 ＋ 免費體驗 Day 1</p>
@@ -555,6 +538,23 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
           <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
           <button type="submit" class="cta-submit">開始 →</button>
           <p class="cta-mini" id="cta-msg-3"></p>
+        </form>
+      </div>
+
+      <!-- 右卡：PDF only (option=1) — 點擊展開 email (6/8 Vivi 左右互換) -->
+      <div class="cta-card" data-opt="1">
+        <button type="button" class="cta-trigger" onclick="ctaOpen(this)">
+          <p class="cta-t">下載《價值觀挖掘練習》</p>
+          <p class="cta-d">用 15 分鐘看見那些其實一直在影響你、卻很少被說出來的價值觀。</p>
+          <p class="cta-go">免費下載 →</p>
+        </button>
+        <form class="cta-form" onsubmit="ctaSubmit(event, 1)">
+          <button type="button" class="cta-back" onclick="ctaClose(this)" aria-label="返回">← 返回</button>
+          <p class="cta-t cta-t-open">下載《價值觀挖掘練習》</p>
+          <label class="cta-fld">你的 email</label>
+          <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+          <button type="submit" class="cta-submit">寄給我 →</button>
+          <p class="cta-mini" id="cta-msg-1"></p>
         </form>
       </div>
 
