@@ -26,6 +26,27 @@ function escapeText(s) { const d = document.createElement('div'); d.textContent 
 // grid is gone; the Phase Report shelf takes Roman 1..5.
 function roman(n) { return ['I', 'II', 'III', 'IV', 'V'][n - 1] || ''; }
 
+// ⭐ 6/7 Vivi — Day 1 完成日 display helper.
+//   Input: ISO 8601 string (TIMESTAMPTZ from /api/students GET) or null/undefined.
+//   Output: 'YYYY-MM-DD' in Asia/Taipei, or '尚未完成' if not yet finalized.
+//   Pure helper — easy to sync-gate test from the script body.
+function formatDay1CompletedAt(iso) {
+  if (iso === null || iso === undefined || iso === '') return '尚未完成';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '尚未完成';
+  // sv-SE locale gives ISO-style YYYY-MM-DD; pin timezone to Asia/Taipei so the
+  // displayed date matches the Day 1 cohort date Vivi sees in Neon (台北本身
+  // 沒 DST, 但走 Intl 比較 portable).
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(d);
+  const y = parts.find(p => p.type === 'year')?.value  || '';
+  const m = parts.find(p => p.type === 'month')?.value || '';
+  const da = parts.find(p => p.type === 'day')?.value  || '';
+  return `${y}-${m}-${da}`;
+}
+
 // ─── v5.2 active_context category labels (Vivi 6/5) ─────────────
 // 對應 migration 029 + spec §1.3 enum. Server-side label 在 admin shape; 此處 fallback
 // 給 raw /api/students GET 場景 (詳情頁 GET 不經 shapeStudentRow).
@@ -221,22 +242,24 @@ async function renderStudent(sid) {
       preferred_name: stu.preferred_name || '',
       pace:           stu.pace || 'daily',
       is_beta:        !!stu.is_beta,
-      // ⭐ v5.2 第一塊 (Vivi 6/5) — active_context (default 1=事業 per migration 029).
+      // ⭐ 6/7 Vivi — is_blocked checkbox 接 PATCH 教練路徑.
+      is_blocked:     !!stu.is_blocked,
+      // ⭐ v5.2 第一塊 — active_context category (default 1=事業 per migration 029).
+      // 6/7 Vivi: 場景名/說明手動編輯欄拿掉 — onboarding 仍會寫入, 教練不再手調.
       active_context_category:   Number.isInteger(Number(stu.active_context_category))
         ? Number(stu.active_context_category) : 1,
-      active_context_name:       stu.active_context_name || '',
-      active_context_definition: stu.active_context_definition || '',
     };
-    const $name  = document.getElementById('coach-edit-name');
-    const $pace  = document.getElementById('coach-edit-pace');
-    const $beta  = document.getElementById('coach-edit-isbeta');
-    const $save  = document.getElementById('coach-edit-save');
-    const $reset = document.getElementById('coach-edit-reset');
-    const $msg   = document.getElementById('coach-edit-msg');
-    // v5.2 active_context controls.
+    const $name    = document.getElementById('coach-edit-name');
+    const $pace    = document.getElementById('coach-edit-pace');
+    const $beta    = document.getElementById('coach-edit-isbeta');
+    const $blocked = document.getElementById('coach-edit-isblocked');
+    const $save    = document.getElementById('coach-edit-save');
+    const $reset   = document.getElementById('coach-edit-reset');
+    const $msg     = document.getElementById('coach-edit-msg');
+    // v5.2 active_context category (場景名/說明 inputs 已移除 6/7).
     const $ctxCat  = document.getElementById('coach-edit-ctx-category');
-    const $ctxName = document.getElementById('coach-edit-ctx-name');
-    const $ctxDef  = document.getElementById('coach-edit-ctx-definition');
+    // 6/7 Vivi — Day 1 完成日 唯讀顯示.
+    const $day1    = document.getElementById('coach-day1-completed-at');
     // Lazy-populate select options once per render (idempotent).
     if ($ctxCat && $ctxCat.options.length === 0) {
       for (const opt of _COACH_CONTEXT_OPTIONS) {
@@ -248,14 +271,19 @@ async function renderStudent(sid) {
     }
 
     function fillForm(src) {
-      $name.value   = src.preferred_name;
-      $pace.value   = src.pace;
-      $beta.checked = src.is_beta;
-      if ($ctxCat)  $ctxCat.value  = String(src.active_context_category);
-      if ($ctxName) $ctxName.value = src.active_context_name;
-      if ($ctxDef)  $ctxDef.value  = src.active_context_definition;
+      $name.value      = src.preferred_name;
+      $pace.value      = src.pace;
+      $beta.checked    = src.is_beta;
+      if ($blocked) $blocked.checked = src.is_blocked;
+      if ($ctxCat)  $ctxCat.value    = String(src.active_context_category);
     }
     fillForm(original);
+
+    // 6/7 Vivi — Day 1 完成日 render (Asia/Taipei YYYY-MM-DD; null → "尚未完成").
+    // Pure helper, exported on window for sync-gate test reuse.
+    if ($day1) {
+      $day1.textContent = formatDay1CompletedAt(stu.day1_completed_at);
+    }
     // 初始標題：「學員 · 稱呼（A001）」如果已有 preferred_name.
     const titleEl = document.getElementById('coach-student-title');
     if (titleEl && original.preferred_name) {
@@ -268,21 +296,16 @@ async function renderStudent(sid) {
       $msg.textContent = '儲存中…'; $save.disabled = true;
       const body = { studentId: sid };
       const newName = $name.value.trim();
+      const newBlocked = $blocked ? !!$blocked.checked : original.is_blocked;
       if (newName        !== original.preferred_name) body.preferred_name = newName;
       if ($pace.value    !== original.pace)           body.pace           = $pace.value;
       if ($beta.checked  !== original.is_beta)        body.is_beta        = $beta.checked;
-      // ⭐ v5.2 active_context diff. Trim name/definition first.
+      // ⭐ 6/7 Vivi — is_blocked diff (教練後台 only; api/students.js 學員自助路徑擋).
+      if (newBlocked     !== original.is_blocked)     body.is_blocked     = newBlocked;
+      // ⭐ v5.2 active_context category diff. 場景名/說明 inputs 已移除 6/7.
       const newCtxCat  = $ctxCat  ? parseInt($ctxCat.value, 10) : original.active_context_category;
-      const newCtxName = $ctxName ? $ctxName.value.trim() : original.active_context_name;
-      const newCtxDef  = $ctxDef  ? $ctxDef.value.trim()  : original.active_context_definition;
       if (Number.isInteger(newCtxCat) && newCtxCat !== original.active_context_category) {
         body.active_context_category = newCtxCat;
-      }
-      if (newCtxName !== original.active_context_name) {
-        body.active_context_name = newCtxName;
-      }
-      if (newCtxDef !== original.active_context_definition) {
-        body.active_context_definition = newCtxDef;
       }
       if (Object.keys(body).length === 1) {     // 只有 studentId → 沒改
         $msg.textContent = '沒有變動。';
@@ -296,12 +319,25 @@ async function renderStudent(sid) {
           preferred_name: newName,
           pace:           $pace.value,
           is_beta:        $beta.checked,
+          is_blocked:     newBlocked,
           active_context_category:   newCtxCat,
-          active_context_name:       newCtxName,
-          active_context_definition: newCtxDef,
         });
         if (titleEl) {
           titleEl.textContent = newName ? `學員 · ${newName}（${sid}）` : `學員 · ${sid}`;
+        }
+        // 6/7 Vivi — refresh list cache so the "封鎖" pill in the list view
+        // reflects the change next time the coach navigates back.
+        if (_coachStudentsCache) {
+          const idx = _coachStudentsCache.findIndex(s => s.student_id === sid);
+          if (idx >= 0) {
+            _coachStudentsCache[idx] = Object.assign({}, _coachStudentsCache[idx], {
+              preferred_name: newName,
+              pace:           $pace.value,
+              is_beta:        $beta.checked,
+              is_blocked:     newBlocked,
+              active_context_category: newCtxCat,
+            });
+          }
         }
       } catch (e) {
         $msg.textContent = '儲存失敗：' + (e?.message || e);

@@ -129,8 +129,9 @@ export default async function handler(req, res) {
         }
         // Allowlist — 任何「非 preferred_name / pace」 的欄位都拒絕 (防自我提權).
         // v5.2: active_context_* 也歸教練 only (學員不應自改 program-level context).
+        // ⭐ 6/7 Vivi: is_blocked 絕對不在學員自助 allowlist (學員不能自己解封).
         const forbidden = ['plan', 'tier', 'current_module', 'current_week',
-                            'current_day', 'notes', 'is_beta',
+                            'current_day', 'notes', 'is_beta', 'is_blocked',
                             'active_context_category', 'active_context_name',
                             'active_context_definition'];
         for (const k of forbidden) {
@@ -156,6 +157,9 @@ export default async function handler(req, res) {
       const pace = req.body.pace;
       const preferredNameRaw = req.body.preferred_name;
       const isBeta = req.body.is_beta !== undefined ? !!req.body.is_beta : undefined;
+      // ⭐ 6/7 Vivi — 教練後台勾「封鎖(is_blocked)」 → 此處接. 學員自助路徑
+      //    forbidden list 早已擋掉 (見上面), 此處只走教練 path.
+      const isBlocked = req.body.is_blocked !== undefined ? !!req.body.is_blocked : undefined;
 
       // ⭐ v5.2 第一塊 (Vivi 6/5) — active_context_* (category 1-5 / name ≤ 30 /
       //   definition ≤ 200). nullable name/definition、空字串視為清空 → null.
@@ -237,6 +241,7 @@ export default async function handler(req, res) {
           current_day    = COALESCE(${cd ?? null}, current_day),
           pace           = COALESCE(${pace ?? null}, pace),
           is_beta        = COALESCE(${isBeta ?? null}, is_beta),
+          is_blocked     = COALESCE(${isBlocked ?? null}, is_blocked),
           active_context_category = COALESCE(${acCategory ?? null}, active_context_category)
         WHERE student_id = ${studentId}
       `;
@@ -277,10 +282,12 @@ export default async function handler(req, res) {
       // ---------- 單一學員（向後相容） ----------
       // 5/27 Patrick — 教練後台「編輯資料」 需要 pace / preferred_name / is_beta 回填,
       // SELECT 一併帶回 (仍刻意不回 email / notes、v3 安全設計不動).
+      // 6/7 Vivi — 加 is_blocked (checkbox 初值) + day1_completed_at (顯示完成日).
       if (studentId) {
         const rows = await sql`
           SELECT student_id, current_module, current_week, current_day,
-                 plan, tier, pace, preferred_name, is_beta,
+                 plan, tier, pace, preferred_name, is_beta, is_blocked,
+                 day1_completed_at,
                  active_context_category, active_context_name, active_context_definition
           FROM students
           WHERE student_id = ${studentId}
