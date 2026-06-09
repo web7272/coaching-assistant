@@ -255,7 +255,7 @@ a{color:inherit;text-decoration:none}
 .brandmark{font-family:var(--serif);font-size:clamp(13px,2vw,15px);letter-spacing:.32em;color:var(--gold);margin:0 0 20px}
 .htag{font-size:clamp(28px,5.2vw,42px);line-height:1.4;color:var(--ink);font-family:var(--serif);font-weight:400;margin:0 0 28px}
 .htag .glow{color:var(--gold);text-shadow:0 0 22px rgba(198,107,79,.32)}
-.hlead{font-family:var(--serif);font-size:clamp(15.5px,2.5vw,18px);color:var(--ink-soft);line-height:1.85;margin:0 0 50px}
+/* 6/8 v2 third batch (Vivi 看 live 後): hlead 整行廢 → 對應 CSS rule 一併移除 (orphan). */
 .cta-pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;text-align:left;max-width:640px;margin:0 auto}
 .cta-card{display:block;background:var(--card);border:1px solid var(--card-line);border-radius:18px;
   padding:0;text-decoration:none;color:inherit;overflow:hidden;
@@ -321,6 +321,8 @@ a{color:inherit;text-decoration:none}
 
 /* 通用情緒區塊 */
 .scene{padding:70px 0}
+/* 6/8 v2 third batch: 「為什麼有這個產品」上方間距收緊 (hlead 拿掉後 + Vivi 嫌標題離卡片太遠). */
+#story{padding-top:32px}
 .scene.full{min-height:88vh;display:flex;flex-direction:column;justify-content:center}
 .rule{width:42px;height:1px;background:var(--gold-soft);opacity:.6;margin:0 auto 28px}
 h2.lead{font-size:clamp(21px,3.4vw,28px);text-align:center;line-height:1.6}
@@ -579,33 +581,12 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
     </div>
 
-    <p class="hlead">不是另一堂自我成長課，<br>而是被<span class="glow">好問題</span>陪伴的一段旅程。</p>
   </div>
 </header>
 
 
-<!-- ===== 2. 為什麼有這個產品（Founder Story · 種下「未來教練」鉤子但不揭曉） ===== -->
-<section class="scene" id="story">
-  <div class="wrap story-body">
-    <h2 class="story-title">為什麼有這個產品</h2>
-
-    <p>真正幫助人轉變的，從來不只是建議。<br>而是<span class="gold">理解</span>。</p>
-
-    <p>一個好教練之所以有力量，<br>不是因為他知道答案。<br>而是因為他理解：<br>你在乎什麼、你害怕什麼、<br>你總是在什麼地方卡住，<br>又真正想成為什麼樣的人。</p>
-
-    <p>問題是，<br>大多數人負擔不起長期教練。<br>而再好的教練，<br>也不可能每天陪在你身邊。</p>
-
-    <p>於是我開始想：<br>如果有一天，<br>我們可以把一個人最深的<br>價值觀、信念、人生故事，<br>慢慢整理出來，</p>
-
-    <p class="seed">最後長成<br>一位最懂他的教練呢？</p>
-
-    <p class="byline">— Vivi · Life Coach · NLP Practitioner · Yoga Instructor</p>
-
-    <p style="text-align:center;margin-top:38px"><a class="btn ghost" href="javascript:void(0)" onclick="ctaJump()">免費體驗 Day 1 →</a></p>
-  </div>
-</section>
-
-<!-- ===== 3. 一般 AI vs 教練式 AI（差異化定位、用「你問AI的問題就是你看世界的方式」金句） ===== -->
+<!-- ===== 2. 一般 AI vs 教練式 AI（差異化定位、用「你問AI的問題就是你看世界的方式」金句） =====
+     6/8 v2 third batch: Vivi 看 live 後決定先給利益/解答 (vs)、再講故事 (story)，免得被滑走。 -->
 <section class="scene" id="vs">
   <div class="wrap vs-body">
     <div class="rule"></div>
@@ -623,6 +604,27 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
       <div class="vs-row"><div class="vs-l">解決眼前問題</div><div class="vs-r">理解問題背後的模式</div></div>
       <div class="vs-row"><div class="vs-l">用一般大眾的多數標準<br>回答你的問題</div><div class="vs-r">挖出你個人獨有的<br>動機跟信念</div></div>
     </div>
+  </div>
+</section>
+
+<!-- ===== 3. 為什麼有這個產品（Founder Story · 種下「未來教練」鉤子但不揭曉） ===== -->
+<section class="scene" id="story">
+  <div class="wrap story-body">
+    <h2 class="story-title">為什麼有這個產品</h2>
+
+    <p>真正幫助人轉變的，從來不只是建議。<br>而是<span class="gold">理解</span>。</p>
+
+    <p>一個好教練之所以有力量，<br>不是因為他知道答案。<br>而是因為他理解：<br>你在乎什麼、你害怕什麼、<br>你總是在什麼地方卡住，<br>又<span class="gold">真正想成為什麼樣的人</span>。</p>
+
+    <p>問題是，<br>大多數人負擔不起長期教練。<br>而再好的教練，<br>也不可能<span class="gold">每天陪在你身邊</span>。</p>
+
+    <p>於是我開始想：<br>如果有一天，<br>我們可以把一個人最深的<br>價值觀、信念、人生故事，<br>慢慢整理出來，</p>
+
+    <p class="seed">最後長成<br><span class="gold">一位最懂你的教練</span>。</p>
+
+    <p class="byline">— Vivi · Life Coach · NLP Practitioner · Yoga Instructor</p>
+
+    <p style="text-align:center;margin-top:38px"><a class="btn ghost" href="javascript:void(0)" onclick="ctaJump()">立刻領取 →</a></p>
   </div>
 </section>
 
@@ -652,7 +654,7 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
       </figure>
     </div>
 
-    <p style="text-align:center;margin-top:38px"><a class="btn ghost" href="javascript:void(0)" onclick="ctaJump()">免費體驗 Day 1 →</a></p>
+    <p style="text-align:center;margin-top:38px"><a class="btn ghost" href="javascript:void(0)" onclick="ctaJump()">立刻領取 →</a></p>
   </div>
 </section>
 
@@ -672,7 +674,7 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
     <p>因為你已經發出了信號，<br>而我們聽見了。</p>
 
-    <p style="text-align:center;margin-top:38px"><a class="btn ghost" href="javascript:void(0)" onclick="ctaJump()">免費體驗 Day 1 →</a></p>
+    <p style="text-align:center;margin-top:38px"><a class="btn ghost" href="javascript:void(0)" onclick="ctaJump()">立刻領取 →</a></p>
   </div>
 </section>
 
@@ -735,7 +737,7 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
       <p class="reveal-also">而且，<br>你還會拿到一份<span class="gold">深度分析 PDF</span>。<br>21 天裡所有的教練卡、你的對話旅程，<br>那個你慢慢答出來的「你是誰」。<br>一份你可以一直翻回去看的地圖。</p>
 
-      <p style="text-align:center;margin-top:38px"><a class="btn ghost" href="javascript:void(0)" onclick="ctaJump()">免費體驗 Day 1 →</a></p>
+      <p style="text-align:center;margin-top:38px"><a class="btn ghost" href="javascript:void(0)" onclick="ctaJump()">立刻領取 →</a></p>
     </div>
   </div>
 </section>
@@ -832,7 +834,10 @@ window.ctaOpen=function(btn){
   },180);
 };
 
-// 從中段 CTA 按鈕跳回 Hero 右卡並自動展開
+// 從中段 CTA 按鈕跳回 Hero 左卡 (option-3 action card) 並自動展開.
+// 6/8 v2 third batch (Vivi 看 live 後): A-E 已把 option-3 表單從右卡搬到左卡,
+// 右卡變無表單 info panel. 這支 ctaJump 改 (semantically) 指向左卡 action card.
+// 用 [data-opt="3"] 抓 — action card 唯一帶這個 attr, 不依賴左右物理位置.
 window.ctaJump=function(){
   const card=document.querySelector('.cta-card[data-opt="3"]');
   if(!card)return;
