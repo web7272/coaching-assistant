@@ -250,8 +250,15 @@ a{color:inherit;text-decoration:none}
 .cta-card .cta-t{font-family:var(--serif);font-size:clamp(16px,2.6vw,18px);color:var(--ink);font-weight:600;margin:0 0 10px;line-height:1.5}
 .cta-card .cta-d{font-family:var(--serif);font-size:14px;color:var(--ink-soft);line-height:1.75;margin:0 0 14px}
 .cta-card .cta-go{font-family:var(--sans);font-size:13px;letter-spacing:.08em;color:var(--gold);margin:0;font-weight:500}
-/* 6/8 v2 Vivi — 左卡 (option=3) action CTA: 改成明顯的 button 樣式 (背景/padding/圓角). */
-.cta-card .cta-go.cta-go--btn{display:inline-block;background:linear-gradient(180deg,var(--gold),var(--gold-soft));color:#2d1f1a;padding:12px 28px;border-radius:30px;font-size:14.5px;font-weight:600;letter-spacing:.04em;margin-top:6px}
+/* 6/8 設計師最終 CSS (取代既有 .cta-go--btn 金漸層 → 粉色). 元素 #cta-go-3
+   class 由 cta-go cta-go--btn → cta-button; gap:9px 排版 文字 + 箭頭. */
+.cta-button{background:#F3D8CE;color:#7A361F;border:none;border-radius:12px;padding:15px 0;width:100%;
+  font-size:16px;font-weight:500;letter-spacing:.8px;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;gap:9px;transition:background .18s,transform .1s}
+.cta-button:hover{background:#ECCABD}
+.cta-button:active{transform:scale(.98)}
+/* 6/8 設計師 — 按鈕正下方一行小字 (與 #cta-scarcity 共同夾住按鈕). */
+.cta-subline{display:block;margin-top:10px;text-align:center;font-size:12.5px;color:#B08968;letter-spacing:.3px}
 /* 6/8 v2 Vivi — 右卡 (info-only): 不可點, 取消 hover 抬升 + cursor. */
 /* 6/8 設計師 — 首屏卸貨: .cta-card.info / .info-body / .info-copy 廢
    (右資訊面板整塊移除, AI 教練說明已在 #story / 21天段, 1000/100 已在 #status / #reveal). */
@@ -279,7 +286,7 @@ a{color:inherit;text-decoration:none}
 .cta-form .cta-mini.err{color:#a33}
 
 /* 6/8 設計師方案 3 — 止血線 (#cta-scarcity).
-   位置: 左 action 卡內 cta-trigger 裡, 「兩個都要」按鈕正上方. 一行細字、低調.
+   位置: 左 action 卡內 cta-trigger 裡, 「開始看見自己 →」按鈕正上方. 一行細字、低調.
    分支: > threshold → 質性 1000 席文案; 0<r<=threshold → 「只剩 N 個名額」; ≤0 → 「名額已滿」; fetch fail → 留空.
    舊 .cta-quota 樣式廢 (元素 + class 都已重命名 #cta-scarcity / .cta-scarcity). */
 .cta-scarcity{font-family:var(--sans);font-size:12px;letter-spacing:.04em;color:var(--gold);
@@ -510,13 +517,14 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
       <!-- 6/8 設計師方案 — 首屏卸貨: 只剩這張左 action 卡 (唯一動作卡; 素底; CTA 改 button 樣式).
            點擊 → 展開 3 題 + email → ctaSubmit(event,3) 寄 PDF + 發 Day 1 magic-link.
-           止血線 #cta-scarcity 在「兩個都要」按鈕正上方 (一行細字, 推力最大). -->
+           止血線 #cta-scarcity 在按鈕正上方, subline 在按鈕正下方 (兩條都細字, 設計師 6/8). -->
       <div class="cta-card" data-opt="3">
         <button type="button" class="cta-trigger" onclick="ctaOpen(this)">
           <p class="cta-t" id="cta-t-3">立刻領取《價值觀挖掘練習PDF》＋免費解鎖 AI 教練體驗</p>
           <p class="cta-d" id="cta-d-3">想自己來，這份 PDF 15 分鐘就能開始；想輕鬆一點，就讓教練陪你對話——讓它帶著你問到你自己問不出來的地方，把那個你真正想要的人生挖出來。</p>
           <p class="cta-scarcity" id="cta-scarcity" aria-live="polite"></p>
-          <p class="cta-go cta-go--btn" id="cta-go-3">兩個都要</p>
+          <p class="cta-button" id="cta-go-3"><span>開始看見自己</span><span aria-hidden="true">→</span></p>
+          <span class="cta-subline">免費領 PDF ＋ 體驗 Day 1</span>
         </button>
         <form class="cta-form" onsubmit="ctaSubmit(event, 3)">
           <button type="button" class="cta-back" onclick="ctaClose(this)" aria-label="返回">← 返回</button>
@@ -554,7 +562,7 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
       <!-- 6/8 設計師方案 — 首屏卸貨: 右資訊面板整塊移除.
            理由: AI教練說明已在 #story / 21天段; 1000/100 已在 #status / #reveal;
-           首屏不需重複劇透. 名額顯示已搬到左卡內 (#cta-scarcity 在「兩個都要」上方). -->
+           首屏不需重複劇透. 名額顯示已搬到左卡內 (#cta-scarcity 在按鈕上方). -->
 
     </div>
 
