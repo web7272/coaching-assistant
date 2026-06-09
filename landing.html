@@ -320,11 +320,14 @@ a{color:inherit;text-decoration:none}
 
 /* 展開後的 3 問題 */
 .cta-quiz-head{font-family:var(--sans);font-size:12px;letter-spacing:.16em;color:var(--gold-soft);margin:0 0 18px;padding-bottom:10px;border-bottom:1px solid var(--card-line)}
-.cta-quiz-head span{display:block;font-family:var(--serif);letter-spacing:0;color:var(--ink-soft);font-size:13.5px;margin-top:6px}
+/* 6/8 v8 (Vivi): 小標併一行 — block → inline, 前面加「—」分隔讓兩段順. */
+.cta-quiz-head span{display:inline;font-family:var(--serif);letter-spacing:0;color:var(--ink-soft);font-size:13.5px;margin-left:8px}
+.cta-quiz-head span::before{content:"— ";color:var(--card-line)}
 /* 6/8 v6 (Vivi 拍板) — quiz 排 2x2 grid (was 直排 1 欄). 格子等高 (grid 預設 stretch) +
    文字允許折行 (white-space:normal, no nowrap/overflow:hidden — 避免長選項被切). */
 .cta-q{display:grid;grid-template-columns:1fr 1fr;column-gap:6px;row-gap:6px;margin:0 0 22px}
-.cta-q .cta-qt{grid-column:1 / -1;font-family:var(--serif);font-size:14.5px;color:var(--ink);margin:0 0 4px;line-height:1.5;font-weight:500}
+/* 6/8 v8 (Vivi): 問句加低調底色帶 + padding + 圓角, 跟下面 2x2 選項區隔. */
+.cta-q .cta-qt{grid-column:1 / -1;font-family:var(--serif);font-size:14.5px;color:var(--ink);margin:0 0 4px;line-height:1.5;font-weight:500;background:rgba(214,130,106,.10);padding:6px 10px;border-radius:6px}
 .cta-qo{display:block;font-family:var(--serif);font-size:14px;color:var(--ink-soft);line-height:1.6;
   padding:9px 12px;margin:0;border:1px solid var(--card-line);border-radius:9px;cursor:pointer;
   background:rgba(255,255,255,.4);transition:border-color .15s,background .15s;
