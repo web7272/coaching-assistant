@@ -298,14 +298,18 @@ a{color:inherit;text-decoration:none}
 /* 展開後的 3 問題 */
 .cta-quiz-head{font-family:var(--sans);font-size:12px;letter-spacing:.16em;color:var(--gold-soft);margin:0 0 18px;padding-bottom:10px;border-bottom:1px solid var(--card-line)}
 .cta-quiz-head span{display:block;font-family:var(--serif);letter-spacing:0;color:var(--ink-soft);font-size:13.5px;margin-top:6px}
-.cta-q{margin:0 0 22px}
-.cta-q .cta-qt{font-family:var(--serif);font-size:14.5px;color:var(--ink);margin:0 0 10px;line-height:1.5;font-weight:500}
+/* 6/8 v6 (Vivi 拍板) — quiz 排 2x2 grid (was 直排 1 欄). 格子等高 (grid 預設 stretch) +
+   文字允許折行 (white-space:normal, no nowrap/overflow:hidden — 避免長選項被切). */
+.cta-q{display:grid;grid-template-columns:1fr 1fr;column-gap:6px;row-gap:6px;margin:0 0 22px}
+.cta-q .cta-qt{grid-column:1 / -1;font-family:var(--serif);font-size:14.5px;color:var(--ink);margin:0 0 4px;line-height:1.5;font-weight:500}
 .cta-qo{display:block;font-family:var(--serif);font-size:14px;color:var(--ink-soft);line-height:1.6;
-  padding:9px 12px;margin:0 0 6px;border:1px solid var(--card-line);border-radius:9px;cursor:pointer;
-  background:rgba(255,255,255,.4);transition:border-color .15s,background .15s}
+  padding:9px 12px;margin:0;border:1px solid var(--card-line);border-radius:9px;cursor:pointer;
+  background:rgba(255,255,255,.4);transition:border-color .15s,background .15s;
+  white-space:normal;overflow-wrap:break-word}
 .cta-qo:hover{border-color:var(--gold-soft);background:rgba(255,255,255,.7)}
 .cta-qo input{margin-right:8px;accent-color:var(--gold)}
-@media(max-width:600px){.cta-pair{grid-template-columns:1fr}}
+/* 窄螢幕退回單欄 — 比照 .cta-pair 既有 600px 斷點. */
+@media(max-width:600px){.cta-pair,.cta-q{grid-template-columns:1fr}}
 
 /* 通用情緒區塊 */
 .scene{padding:70px 0}
@@ -533,24 +537,24 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
           <div class="cta-q">
             <p class="cta-qt">1. 哪一個最能描述你目前的階段？</p>
-            <label class="cta-qo"><input type="radio" name="q1" data-qkey="現況" value="剛入職場的探索者">剛入職場的探索者</label>
-            <label class="cta-qo"><input type="radio" name="q1" data-qkey="現況" value="追求突破的職場專業人士／小主管">追求突破的職場專業人士／小主管</label>
-            <label class="cta-qo"><input type="radio" name="q1" data-qkey="現況" value="帶領團隊的創業者／高階經理人">帶領團隊的創業者／高階經理人</label>
-            <label class="cta-qo"><input type="radio" name="q1" data-qkey="現況" value="正在尋求人生轉向的自由職業者">正在尋求人生轉向的自由職業者</label>
+            <label class="cta-qo"><input type="radio" name="q1" data-qkey="現況" value="職場探索者">職場探索者</label>
+            <label class="cta-qo"><input type="radio" name="q1" data-qkey="現況" value="專業人士／小主管">專業人士／小主管</label>
+            <label class="cta-qo"><input type="radio" name="q1" data-qkey="現況" value="創業者／高階經理人">創業者／高階經理人</label>
+            <label class="cta-qo"><input type="radio" name="q1" data-qkey="現況" value="轉向中的自由職業者">轉向中的自由職業者</label>
           </div>
           <div class="cta-q">
             <p class="cta-qt">2. 為了得到人生答案，你過去主要透過什麼方式？</p>
-            <label class="cta-qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="看 YouTube／社群或問 AI">主要觀看 YouTube 影片、社群貼文或問 AI</label>
-            <label class="cta-qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="閱讀書籍或下載 PDF 指南">閱讀相關書籍或下載 PDF 指南</label>
-            <label class="cta-qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="線上課程或實體工作坊">參加過線上課程或實體工作坊</label>
-            <label class="cta-qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="預約過 1 對 1 諮商／教練／顧問">預約過 1 對 1 諮商師、教練或顧問</label>
+            <label class="cta-qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="YouTube／社群／問 AI">YouTube／社群／問 AI</label>
+            <label class="cta-qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="書籍／PDF 指南">書籍／PDF 指南</label>
+            <label class="cta-qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="線上課程／工作坊">線上課程／工作坊</label>
+            <label class="cta-qo"><input type="radio" name="q2" data-qkey="過去嘗試" value="1 對 1 諮商／教練">1 對 1 諮商／教練</label>
           </div>
           <div class="cta-q">
             <p class="cta-qt">3. 你覺得過去這些嘗試的「效果」如何？</p>
-            <label class="cta-qo"><input type="radio" name="q3" data-qkey="成效評估" value="有短暫啟發，但很快回到原點">有短暫啟發，但行為很快就回到原點</label>
-            <label class="cta-qo"><input type="radio" name="q3" data-qkey="成效評估" value="學到理論，不知怎麼用在自己身上">學到很多理論，但不知道怎麼應用在自己身上</label>
-            <label class="cta-qo"><input type="radio" name="q3" data-qkey="成效評估" value="被標籤化，找不到自己的地圖">覺得被標籤化了，找不到真正屬於自己的地圖</label>
-            <label class="cta-qo"><input type="radio" name="q3" data-qkey="成效評估" value="還沒找到觸動底層身份的方法">還沒找到能觸動底層身份的方法</label>
+            <label class="cta-qo"><input type="radio" name="q3" data-qkey="成效評估" value="短暫啟發、很快回原點">短暫啟發、很快回原點</label>
+            <label class="cta-qo"><input type="radio" name="q3" data-qkey="成效評估" value="學到理論、不會應用">學到理論、不會應用</label>
+            <label class="cta-qo"><input type="radio" name="q3" data-qkey="成效評估" value="被標籤化、沒有自己的地圖">被標籤化、沒有自己的地圖</label>
+            <label class="cta-qo"><input type="radio" name="q3" data-qkey="成效評估" value="還沒觸動底層身份">還沒觸動底層身份</label>
           </div>
 
           <label class="cta-fld">你的 email</label>
@@ -742,13 +746,11 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
       <div class="item"><p class="qq">看見自己是什麼？</p>
         <p class="aa">一套 21 天的純 App 自我概念教練。每天約 5–10 分鐘的文字對話——它不是陪你聊天的 AI。它問你的每一個問題、都來自一套設計過的系統性教練學，陪你問到你自己想不到的地方。</p></div>
       <div class="item"><p class="qq">這跟我自己找 AI 聊天有什麼不同？</p>
-        <p class="aa">一般 AI 是你問、它答；你不問，它不會帶你去任何地方，更不會記得你是誰。《看見自己》是反過來的——它問你，而且每一個問題都來自一套設計過的教練學，順著一層一層往內走。它記得你昨天說的話，今天從那裡接著問。<br><br>更重要的是——你問 AI 的問題，就是你看世界的方式。如果你只能問 AI 你想得到的問題，你拿回來的答案就永遠在你已知的範圍裡。讓教練問你，你才會走到你沒看過的地方。</p></div>
+        <p class="aa">一般 AI 是你問、它答；你不問，它不會帶你去任何地方。《看見自己》是反過來的——它問你，而且每一個問題都來自一套設計過的教練學，順著一層一層往內走。它記得你昨天說的話，今天從那裡接著問。<br><br>更重要的是——你問 AI 的問題，就是你看世界的方式。如果你只能問 AI 你想得到的問題，你拿回來的答案就永遠在你已知的範圍裡。讓教練問你，你才會走到你沒看過的地方。</p></div>
       <div class="item"><p class="qq">要花多少時間？</p>
         <p class="aa">每天約 5–10 分鐘、共 21 天。每天結束會收到一張當天的教練筆記；第 21 天結業、會拿到一份「結業大禮包」——一份完整的自我深度剖析，加上你接下來可以怎麼走的方向。</p></div>
       <div class="item"><p class="qq">要看影片、或上課嗎？</p>
         <p class="aa">不用。第一階段是純 App、沒有影片、沒有直播——就是每天一段對話。</p></div>
-      <div class="item"><p class="qq">我要先想好要處理什麼主題嗎？</p>
-        <p class="aa">不用。21 天你想問什麼都可以——這套方法的底層是自我概念，從哪裡進來都通。把當下卡住你的事帶來就好。</p></div>
       <div class="item"><p class="qq">它會直接給我建議嗎？</p>
         <p class="aa">不會。它不替你下結論、也不直接給答案——它用提問、陪你自己看見。</p></div>
       <div class="item"><p class="qq">什麼時候開放？我能先做什麼？</p>
