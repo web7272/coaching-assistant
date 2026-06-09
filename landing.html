@@ -247,8 +247,9 @@ a{color:inherit;text-decoration:none}
 .cta-trigger{display:block;width:100%;background:transparent;border:0;text-align:left;color:inherit;
   padding:24px 22px 22px;cursor:pointer;font:inherit}
 .cta-card.open .cta-trigger{display:none}
-/* 6/8 v4 hotfix (Vivi 看 live 又看到): 行一「立刻領取《價值觀挖掘練習PDF》」 在 420px 卡內偶爾仍 wrap → 字級微降 (Patrick spec fallback). */
-.cta-card .cta-t{font-family:var(--serif);font-size:clamp(15px,2.4vw,17px);color:var(--ink);font-weight:600;margin:0 0 10px;line-height:1.5}
+/* 6/8 v4 hotfix (Vivi 看 live 又看到): 行一「立刻領取《價值觀挖掘練習PDF》」 在 420px 卡內偶爾仍 wrap → 字級微降 (Patrick spec fallback).
+   6/8 v7 (Vivi): 標題置中 — 只影響標題, .cta-d 維持左對齊閱讀流. */
+.cta-card .cta-t{font-family:var(--serif);font-size:clamp(15px,2.4vw,17px);color:var(--ink);font-weight:600;margin:0 0 10px;line-height:1.5;text-align:center}
 .cta-card .cta-d{font-family:var(--serif);font-size:14px;color:var(--ink-soft);line-height:1.75;margin:0 0 14px}
 .cta-card .cta-go{font-family:var(--sans);font-size:13px;letter-spacing:.08em;color:var(--gold);margin:0;font-weight:500}
 /* 6/8 設計師最終 CSS (取代既有 .cta-go--btn 金漸層 → 粉色). 元素 #cta-go-3
@@ -526,7 +527,7 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
       <div class="cta-card" data-opt="3">
         <button type="button" class="cta-trigger" onclick="ctaOpen(this)">
           <p class="cta-t" id="cta-t-3">立刻領取《價值觀挖掘練習PDF》<br>＋免費解鎖 AI 教練體驗</p>
-          <p class="cta-d" id="cta-d-3">想像一下,當你不再把能量耗在「或許、好像」上,而是清楚知道自己要去哪裡。當不再什麼都想抓住、什麼都不敢放,而是敢走到自己想要的人生。那個你一直都在。我們陪你找回來。</p>
+          <p class="cta-d" id="cta-d-3">該你了。我們製作了一份PDF 跟一個價值觀AI教練，模擬真實教練對話的方式，幫你把能量對齊，聚焦在你想要的人生。</p>
           <p class="cta-button" id="cta-go-3"><span>開始看見自己</span><span aria-hidden="true">→</span></p>
           <span class="cta-subline">免費《領取PDF ＋ 體驗 Day 1》</span>
         </button>
