@@ -250,7 +250,8 @@ a{color:inherit;text-decoration:none}
 /* 6/8 v4 hotfix (Vivi 看 live 又看到): 行一「立刻領取《價值觀挖掘練習PDF》」 在 420px 卡內偶爾仍 wrap → 字級微降 (Patrick spec fallback).
    6/8 v7 (Vivi): 標題置中 — 只影響標題, .cta-d 維持左對齊閱讀流. */
 .cta-card .cta-t{font-family:var(--serif);font-size:clamp(15px,2.4vw,17px);color:var(--ink);font-weight:600;margin:0 0 10px;line-height:1.5;text-align:center}
-.cta-card .cta-d{font-family:var(--serif);font-size:14px;color:var(--ink-soft);line-height:1.75;margin:0 0 14px}
+/* 6/8 v9 (Vivi): 防尾「生。」孤字 — text-wrap:pretty 自動重分配行 (不支援的舊瀏覽器 fallback 到一般 wrap, 不會壞). */
+.cta-card .cta-d{font-family:var(--serif);font-size:14px;color:var(--ink-soft);line-height:1.75;margin:0 0 14px;text-wrap:pretty}
 .cta-card .cta-go{font-family:var(--sans);font-size:13px;letter-spacing:.08em;color:var(--gold);margin:0;font-weight:500}
 /* 6/8 設計師最終 CSS (取代既有 .cta-go--btn 金漸層 → 粉色). 元素 #cta-go-3
    class 由 cta-go cta-go--btn → cta-button; gap:9px 排版 文字 + 箭頭. */
