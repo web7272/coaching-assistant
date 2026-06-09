@@ -6,7 +6,10 @@ import assert from 'node:assert/strict';
 import handler, {
   _setSqlClient, _resetResponseCache, RESPONSE_TTL_MS, taipeiMonthString,
 } from './day1-quota.js';
-import { _resetQuotaCache, DEFAULT_DAY1_QUOTA } from '../lib/api/day1-quota.js';
+import {
+  _resetQuotaCache, _resetScarcityCache,
+  DEFAULT_DAY1_QUOTA, DEFAULT_SCARCITY_THRESHOLD,
+} from '../lib/api/day1-quota.js';
 
 // ─── Mock helpers ──────────────────────────────────────────────────
 
@@ -37,6 +40,7 @@ beforeEach(() => {
   _setSqlClient(null);
   _resetResponseCache();
   _resetQuotaCache();
+  _resetScarcityCache();
   delete process.env.DAY1_QUOTA;
 });
 
@@ -66,10 +70,11 @@ test('🛑 6/7 endpoint: non-GET → 405', async () => {
 
 // ─── response shape ──────────────────────────────────────────────
 
-test('🛑 6/7 endpoint: shape = {quota, used, remaining, month}', async () => {
+test('🛑 6/7 + 6/8 v3 endpoint: shape = {quota, used, remaining, scarcity_threshold, month}', async () => {
   _setSqlClient(mkSqlByTopic((text) => {
-    if (/app_config/.test(text))      return [{ value: '300' }];
-    if (/COUNT\(DISTINCT/.test(text)) return [{ used: 42 }];
+    if (/monthly_day1_quota/.test(text))            return [{ value: '300' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [{ value: '40' }];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 42 }];
     return [];
   }));
 
@@ -78,13 +83,15 @@ test('🛑 6/7 endpoint: shape = {quota, used, remaining, month}', async () => {
 
   assert.equal(res.statusCode, 200);
   const b = res.payload;
-  assert.equal(typeof b.quota,     'number');
-  assert.equal(typeof b.used,      'number');
-  assert.equal(typeof b.remaining, 'number');
+  assert.equal(typeof b.quota,              'number');
+  assert.equal(typeof b.used,               'number');
+  assert.equal(typeof b.remaining,          'number');
+  assert.equal(typeof b.scarcity_threshold, 'number');
   assert.match (b.month, /^\d{4}-\d{2}$/);
-  assert.equal(b.quota,     300);
-  assert.equal(b.used,      42);
-  assert.equal(b.remaining, 258);
+  assert.equal(b.quota,              300);
+  assert.equal(b.used,               42);
+  assert.equal(b.remaining,          258);
+  assert.equal(b.scarcity_threshold, 40);
 });
 
 // ─── remaining clamping ──────────────────────────────────────────
@@ -93,8 +100,9 @@ test('🛑 6/7 endpoint: remaining clamped to >= 0 even with overage', async () 
   // Soft cap behaviour: used can exceed quota briefly. Public response
   // must never expose a negative number — landing UI would render bad.
   _setSqlClient(mkSqlByTopic((text) => {
-    if (/app_config/.test(text))      return [{ value: '100' }];
-    if (/COUNT\(DISTINCT/.test(text)) return [{ used: 117 }];   // 17 over
+    if (/monthly_day1_quota/.test(text))            return [{ value: '100' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [];                  // → default
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 117 }];   // 17 over
     return [];
   }));
   const { req, res } = mkReqRes();
@@ -109,8 +117,9 @@ test('🛑 6/7 endpoint: remaining clamped to >= 0 even with overage', async () 
 test('🛑 6/7 endpoint: SQL app_config beats env beats default', async () => {
   process.env.DAY1_QUOTA = '999';   // env should LOSE to SQL.
   _setSqlClient(mkSqlByTopic((text) => {
-    if (/app_config/.test(text))      return [{ value: '250' }];   // SQL wins
-    if (/COUNT\(DISTINCT/.test(text)) return [{ used: 10 }];
+    if (/monthly_day1_quota/.test(text))            return [{ value: '250' }];   // SQL wins
+    if (/day1_quota_scarcity_threshold/.test(text)) return [];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 10 }];
     return [];
   }));
   const { req, res } = mkReqRes();
@@ -121,8 +130,9 @@ test('🛑 6/7 endpoint: SQL app_config beats env beats default', async () => {
 test('🛑 6/7 endpoint: no SQL row → env fallback', async () => {
   process.env.DAY1_QUOTA = '777';
   _setSqlClient(mkSqlByTopic((text) => {
-    if (/app_config/.test(text))      return [];                   // missing
-    if (/COUNT\(DISTINCT/.test(text)) return [{ used: 0 }];
+    if (/monthly_day1_quota/.test(text))            return [];                   // missing
+    if (/day1_quota_scarcity_threshold/.test(text)) return [];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 0 }];
     return [];
   }));
   const { req, res } = mkReqRes();
@@ -132,8 +142,9 @@ test('🛑 6/7 endpoint: no SQL row → env fallback', async () => {
 
 test('🛑 6/7 endpoint: no SQL + no env → default 1000', async () => {
   _setSqlClient(mkSqlByTopic((text) => {
-    if (/app_config/.test(text))      return [];
-    if (/COUNT\(DISTINCT/.test(text)) return [{ used: 0 }];
+    if (/monthly_day1_quota/.test(text))            return [];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 0 }];
     return [];
   }));
   const { req, res } = mkReqRes();
@@ -147,7 +158,8 @@ test('🛑 6/7 endpoint: no SQL + no env → default 1000', async () => {
 test('🛑 6/7 endpoint: response cached within TTL (no DB hit on 2nd call)', async () => {
   let countCalls = 0;
   _setSqlClient(mkSqlByTopic((text) => {
-    if (/app_config/.test(text)) return [{ value: '200' }];
+    if (/monthly_day1_quota/.test(text))            return [{ value: '200' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [];
     if (/COUNT\(DISTINCT/.test(text)) { countCalls++; return [{ used: 5 }]; }
     return [];
   }));
@@ -166,16 +178,18 @@ test('🛑 6/7 endpoint: cache TTL is documented 30s', () => {
 
 // ─── fail-open ──────────────────────────────────────────────────
 
-test('🛑 6/7 endpoint: SQL throws → fail-open with defaults (still 200)', async () => {
+test('🛑 6/7 + 6/8 v3 endpoint: SQL throws → fail-open with defaults (still 200, threshold = default)', async () => {
   _setSqlClient(() => Promise.reject(new Error('db down')));
   const { req, res } = mkReqRes();
   await handler(req, res);
 
   // Status 200 — landing card must always render.
   assert.equal(res.statusCode, 200);
-  assert.equal(res.payload.quota,     DEFAULT_DAY1_QUOTA);
-  assert.equal(res.payload.used,      0);
-  assert.equal(res.payload.remaining, DEFAULT_DAY1_QUOTA);
+  assert.equal(res.payload.quota,              DEFAULT_DAY1_QUOTA);
+  assert.equal(res.payload.used,               0);
+  assert.equal(res.payload.remaining,          DEFAULT_DAY1_QUOTA);
+  assert.equal(res.payload.scarcity_threshold, DEFAULT_SCARCITY_THRESHOLD);
+  assert.equal(res.payload.scarcity_threshold, 50);
   assert.match (res.payload.month, /^\d{4}-\d{2}$/);
 });
 
@@ -183,8 +197,9 @@ test('🛑 6/7 endpoint: fail-open response is NOT cached (next call retries DB)
   let phase = 'fail';
   _setSqlClient(mkSqlByTopic((text) => {
     if (phase === 'fail') throw new Error('db down');
-    if (/app_config/.test(text))      return [{ value: '50' }];
-    if (/COUNT\(DISTINCT/.test(text)) return [{ used: 3 }];
+    if (/monthly_day1_quota/.test(text))            return [{ value: '50' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 3 }];
     return [];
   }));
 
@@ -198,14 +213,70 @@ test('🛑 6/7 endpoint: fail-open response is NOT cached (next call retries DB)
 
 // ─── no PII leaked ───────────────────────────────────────────────
 
-test('🛑 6/7 endpoint: response keys are only {quota, used, remaining, month} — no PII', async () => {
+test('🛑 6/7 + 6/8 v3 endpoint: response keys are exactly {quota, used, remaining, scarcity_threshold, month} — no PII', async () => {
   _setSqlClient(mkSqlByTopic((text) => {
-    if (/app_config/.test(text))      return [{ value: '100' }];
-    if (/COUNT\(DISTINCT/.test(text)) return [{ used: 1 }];
+    if (/monthly_day1_quota/.test(text))            return [{ value: '100' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [{ value: '25' }];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 1 }];
     return [];
   }));
   const { req, res } = mkReqRes();
   await handler(req, res);
   const keys = Object.keys(res.payload).sort();
-  assert.deepEqual(keys, ['month', 'quota', 'remaining', 'used']);
+  assert.deepEqual(keys, ['month', 'quota', 'remaining', 'scarcity_threshold', 'used']);
+});
+
+// ─── 6/8 v3 設計師方案 3 — scarcity_threshold source order ────────
+
+test('🛑 6/8 v3: SQL app_config day1_quota_scarcity_threshold value wins', async () => {
+  _setSqlClient(mkSqlByTopic((text) => {
+    if (/monthly_day1_quota/.test(text))            return [{ value: '500' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [{ value: '25' }];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 0 }];
+    return [];
+  }));
+  const { req, res } = mkReqRes();
+  await handler(req, res);
+  assert.equal(res.payload.scarcity_threshold, 25);
+});
+
+test('🛑 6/8 v3: no scarcity SQL row → DEFAULT_SCARCITY_THRESHOLD (code default 50, no env fallback)', async () => {
+  // Spec: 「code default 50, Vivi 之後用 SQL 調」 — 沒有 env 入口.
+  process.env.DAY1_SCARCITY_THRESHOLD = '777';   // (intentionally bogus — must NOT be read)
+  _setSqlClient(mkSqlByTopic((text) => {
+    if (/monthly_day1_quota/.test(text))            return [{ value: '500' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 0 }];
+    return [];
+  }));
+  const { req, res } = mkReqRes();
+  await handler(req, res);
+  assert.equal(res.payload.scarcity_threshold, DEFAULT_SCARCITY_THRESHOLD);
+  assert.equal(res.payload.scarcity_threshold, 50);
+  delete process.env.DAY1_SCARCITY_THRESHOLD;
+});
+
+test('🛑 6/8 v3: scarcity SQL malformed → DEFAULT_SCARCITY_THRESHOLD', async () => {
+  _setSqlClient(mkSqlByTopic((text) => {
+    if (/monthly_day1_quota/.test(text))            return [{ value: '500' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [{ value: 'not-a-number' }];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 0 }];
+    return [];
+  }));
+  const { req, res } = mkReqRes();
+  await handler(req, res);
+  assert.equal(res.payload.scarcity_threshold, DEFAULT_SCARCITY_THRESHOLD);
+});
+
+test('🛑 6/8 v3: scarcity SQL non-negative integer parsed (0 OK — disable scarcity-line; everything goes 質性)', async () => {
+  // remaining > 0 → always falls into "remaining > threshold" 質性 branch.
+  _setSqlClient(mkSqlByTopic((text) => {
+    if (/monthly_day1_quota/.test(text))            return [{ value: '500' }];
+    if (/day1_quota_scarcity_threshold/.test(text)) return [{ value: '0' }];
+    if (/COUNT\(DISTINCT/.test(text))               return [{ used: 0 }];
+    return [];
+  }));
+  const { req, res } = mkReqRes();
+  await handler(req, res);
+  assert.equal(res.payload.scarcity_threshold, 0);
 });
