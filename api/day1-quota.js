@@ -1,14 +1,17 @@
 // api/day1-quota.js
-// GET /api/day1-quota — public quota readout for landing.html Hero 右卡.
-// Patrick 6/7 spec §3.
+// GET /api/day1-quota — public quota readout for landing.html Hero 左卡稀缺線.
+// Patrick 6/7 spec §3 + 6/8 設計師方案 3 (止血線門檻可調).
 //
 // Response shape (no PII, no auth):
-//   { quota: number, used: number, remaining: number, month: 'YYYY-MM' }
+//   { quota, used, remaining, scarcity_threshold, month }
 //   where:
-//     - quota     = current monthly quota (SQL app_config → env → default 1000)
-//     - used      = COUNT DISTINCT students with day1_started_at this month (Asia/Taipei)
-//     - remaining = Math.max(0, quota - used)   ← never negative (soft cap)
-//     - month     = Asia/Taipei current calendar month, e.g. '2026-06'
+//     - quota              = current monthly quota (SQL app_config → env → default 1000)
+//     - used               = COUNT DISTINCT students with day1_started_at this month (Asia/Taipei)
+//     - remaining          = Math.max(0, quota - used)   ← never negative (soft cap)
+//     - scarcity_threshold = 門檻 — landing JS 用來決定顯示質性文案 vs 「只剩 N」
+//                            (SQL app_config day1_quota_scarcity_threshold → default 50).
+//                            Vivi 之後 UPDATE 那個 key 即時生效, 不重部署.
+//     - month              = Asia/Taipei current calendar month, e.g. '2026-06'
 //
 // Caching:
 //   30s in-memory cache of the FULL response. Landing page sees stale data
@@ -25,7 +28,8 @@
 
 import { neon } from '@neondatabase/serverless';
 import {
-  getQuota, countUsedThisMonth, DEFAULT_DAY1_QUOTA,
+  getQuota, countUsedThisMonth, getScarcityThreshold,
+  DEFAULT_DAY1_QUOTA, DEFAULT_SCARCITY_THRESHOLD,
 } from '../lib/api/day1-quota.js';
 
 export const maxDuration = 5;
@@ -84,15 +88,17 @@ export default async function handler(req, res) {
 
   try {
     const sql = getSql();
-    const [quota, used] = await Promise.all([
+    const [quota, used, scarcity_threshold] = await Promise.all([
       getQuota(sql),
       countUsedThisMonth(sql),
+      getScarcityThreshold(sql),
     ]);
     const body = {
       quota,
       used,
-      remaining: Math.max(0, quota - used),
-      month:     taipeiMonthString(),
+      remaining:          Math.max(0, quota - used),
+      scarcity_threshold,
+      month:              taipeiMonthString(),
     };
     _cachedResp = body;
     _cachedAt   = now;
@@ -103,10 +109,11 @@ export default async function handler(req, res) {
     // authoritative; this endpoint's job is purely display.
     console.warn('[day1-quota-endpoint][fail-open]', err?.message || err);
     const fallback = {
-      quota:     DEFAULT_DAY1_QUOTA,
-      used:      0,
-      remaining: DEFAULT_DAY1_QUOTA,
-      month:     taipeiMonthString(),
+      quota:              DEFAULT_DAY1_QUOTA,
+      used:               0,
+      remaining:          DEFAULT_DAY1_QUOTA,
+      scarcity_threshold: DEFAULT_SCARCITY_THRESHOLD,
+      month:              taipeiMonthString(),
     };
     // Don't cache the fallback — next call retries DB.
     return res.status(200).json(fallback);

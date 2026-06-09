@@ -234,7 +234,8 @@ a{color:inherit;text-decoration:none}
 .htag{font-size:clamp(28px,5.2vw,42px);line-height:1.4;color:var(--ink);font-family:var(--serif);font-weight:400;margin:0 0 28px}
 .htag .glow{color:var(--gold);text-shadow:0 0 22px rgba(198,107,79,.32)}
 /* 6/8 v2 third batch (Vivi 看 live 後): hlead 整行廢 → 對應 CSS rule 一併移除 (orphan). */
-.cta-pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;text-align:left;max-width:640px;margin:0 auto}
+/* 6/8 設計師 — 首屏卸貨: 移除右資訊面板, 只剩左 action 卡, 單卡置中 + 收窄 max-width. */
+.cta-pair{display:grid;grid-template-columns:1fr;gap:18px;text-align:left;max-width:420px;margin:0 auto}
 .cta-card{display:block;background:var(--card);border:1px solid var(--card-line);border-radius:18px;
   padding:0;text-decoration:none;color:inherit;overflow:hidden;
   transition:transform .25s, box-shadow .25s, border-color .25s;
@@ -252,10 +253,8 @@ a{color:inherit;text-decoration:none}
 /* 6/8 v2 Vivi — 左卡 (option=3) action CTA: 改成明顯的 button 樣式 (背景/padding/圓角). */
 .cta-card .cta-go.cta-go--btn{display:inline-block;background:linear-gradient(180deg,var(--gold),var(--gold-soft));color:#2d1f1a;padding:12px 28px;border-radius:30px;font-size:14.5px;font-weight:600;letter-spacing:.04em;margin-top:6px}
 /* 6/8 v2 Vivi — 右卡 (info-only): 不可點, 取消 hover 抬升 + cursor. */
-.cta-card.info{cursor:default}
-.cta-card.info:hover{transform:none;border-color:var(--card-line);box-shadow:0 4px 20px rgba(198,107,79,.06)}
-.cta-card.info .info-body{padding:24px 22px 22px}
-.cta-card.info .info-copy{font-family:var(--serif);font-size:14px;color:var(--ink-soft);line-height:1.85;margin:0}
+/* 6/8 設計師 — 首屏卸貨: .cta-card.info / .info-body / .info-copy 廢
+   (右資訊面板整塊移除, AI 教練說明已在 #story / 21天段, 1000/100 已在 #status / #reveal). */
 
 /* 展開後的 form */
 .cta-form{display:none;padding:24px 22px 22px}
@@ -279,11 +278,14 @@ a{color:inherit;text-decoration:none}
 .cta-form .cta-mini.ok{color:var(--gold-soft)}
 .cta-form .cta-mini.err{color:#a33}
 
-/* 6/7 Patrick — Day-1 名額顯示 (6/8 v2: 移到右資訊面板, by #cta-quota-3 id). */
-.cta-quota{font-family:var(--sans);font-size:12.5px;letter-spacing:.06em;color:var(--gold);
-  margin:6px 0 12px;padding:6px 10px;background:rgba(214,130,106,.08);border-radius:6px;display:none}
-.cta-quota.show{display:block}
-.cta-quota.full{color:#a33;background:rgba(170,51,51,.08)}
+/* 6/8 設計師方案 3 — 止血線 (#cta-scarcity).
+   位置: 左 action 卡內 cta-trigger 裡, 「兩個都要」按鈕正上方. 一行細字、低調.
+   分支: > threshold → 質性 1000 席文案; 0<r<=threshold → 「只剩 N 個名額」; ≤0 → 「名額已滿」; fetch fail → 留空.
+   舊 .cta-quota 樣式廢 (元素 + class 都已重命名 #cta-scarcity / .cta-scarcity). */
+.cta-scarcity{font-family:var(--sans);font-size:12px;letter-spacing:.04em;color:var(--gold);
+  margin:14px 0 6px;padding:0;line-height:1.5;display:none;text-align:center}
+.cta-scarcity.show{display:block}
+.cta-scarcity.full{color:#a33}
 
 /* 展開後的 3 問題 */
 .cta-quiz-head{font-family:var(--sans);font-size:12px;letter-spacing:.16em;color:var(--gold-soft);margin:0 0 18px;padding-bottom:10px;border-bottom:1px solid var(--card-line)}
@@ -506,12 +508,14 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
     <div class="cta-pair">
 
-      <!-- 左卡：option=3 action 卡 (Vivi 6/8 v2: 唯一動作卡; 素底; CTA 改 button 樣式).
-           點擊 → 展開 3 題 + email → ctaSubmit(event,3) 寄 PDF + 發 Day 1 magic-link. -->
+      <!-- 6/8 設計師方案 — 首屏卸貨: 只剩這張左 action 卡 (唯一動作卡; 素底; CTA 改 button 樣式).
+           點擊 → 展開 3 題 + email → ctaSubmit(event,3) 寄 PDF + 發 Day 1 magic-link.
+           止血線 #cta-scarcity 在「兩個都要」按鈕正上方 (一行細字, 推力最大). -->
       <div class="cta-card" data-opt="3">
         <button type="button" class="cta-trigger" onclick="ctaOpen(this)">
           <p class="cta-t" id="cta-t-3">立刻領取《價值觀挖掘練習PDF》＋免費解鎖 AI 教練體驗</p>
           <p class="cta-d" id="cta-d-3">想自己來，這份 PDF 15 分鐘就能開始；想輕鬆一點，就讓教練陪你對話——讓它帶著你問到你自己問不出來的地方，把那個你真正想要的人生挖出來。</p>
+          <p class="cta-scarcity" id="cta-scarcity" aria-live="polite"></p>
           <p class="cta-go cta-go--btn" id="cta-go-3">兩個都要</p>
         </button>
         <form class="cta-form" onsubmit="ctaSubmit(event, 3)">
@@ -548,14 +552,9 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
         </form>
       </div>
 
-      <!-- 右卡：資訊/稀缺面板 (Vivi 6/8 v2: 移除 option-1 整套, 純資訊不可點).
-           頂端 #cta-quota-3 名額 bar 由 initDay1Quota IIFE 填字 (id 抓, 不依賴 DOM 位置). -->
-      <div class="cta-card alt info" id="cta-info-panel">
-        <div class="info-body">
-          <p class="cta-quota" id="cta-quota-3" aria-live="polite"></p>
-          <p class="info-copy">我們建立了一個價值觀 AI 教練，模擬真實教練對話的方式，用 21 天對話陪你探索自己。為了確保每位參與者的轉變品質，因算力資源極其有限，我們採取「限量階段性開放」：【第一階段】現正限量招募 1000 位 Day 1 免費體驗員。【正式開賣 · 首批 100 名】這一次，換你把自己放在最前面。走完 Day 1，當最先開始改變自己的那個人。</p>
-        </div>
-      </div>
+      <!-- 6/8 設計師方案 — 首屏卸貨: 右資訊面板整塊移除.
+           理由: AI教練說明已在 #story / 21天段; 1000/100 已在 #status / #reveal;
+           首屏不需重複劇透. 名額顯示已搬到左卡內 (#cta-scarcity 在「兩個都要」上方). -->
 
     </div>
 
@@ -894,20 +893,16 @@ document.querySelectorAll('.faq .qq').forEach(q=>{
 });
 
 // ─────────────────────────────────────────────────────────────────
-// 6/7 Patrick + 6/8 v2 Vivi — Day-1 名額顯示 (現在在右資訊面板, #cta-quota-3 by id).
+// 6/7 Patrick + 6/8 設計師方案 3 — Day-1 名額止血線 (#cta-scarcity, 左 action 卡內).
 //
-// v2 rewire (Vivi 6/8 看 live 後決定):
-//   • landing 上已無 option-1 純下載路徑 (整套移除, 含舊 data-opt 1 卡 + 表單).
-//   • #cta-quota-3 移到右資訊面板頂端 (不再在 .cta-card[data-opt="3"] 內).
-//     JS 改 by-id 抓 (不依賴「在 data-opt=3 卡內」的 DOM 關係 → 未來再
-//     reorder 也不爆).
+// 6/8 第三輪 (設計師): 首屏卸貨 — 右資訊面板移除, 名額元素搬到左卡「兩個
+// 都要」按鈕正上方 (推力最大時刻). 直接顯示原始數的舊邏輯廢, 改門檻判斷.
 //
-// Funnel rules (v2):
-//   • remaining > 0   → 顯示「深度對話剩餘名額：N」(稀缺感).
-//   • remaining <= 0  → 文字改「深度對話名額已滿」, 不再 swap 已不存在的右卡標題.
-//                      左卡「兩個都要」按鈕照舊可送 — 後端 option-3 額滿走
-//                      候補 + 仍寄 PDF (行為不變).
-//   • fetch 失敗 → fail-open: bar 留空, 不擋頁面.
+// 顯示分支 (門檻可調, 從 /api/day1-quota 的 scarcity_threshold 欄拿):
+//   • remaining ≤ 0           → 「名額已滿」 (按鈕仍可送 — 後端走候補 + 仍寄 PDF).
+//   • 0 < remaining ≤ threshold → 「只剩 N 個名額」 (推力最大).
+//   • remaining > threshold    → 質性文案 (1000 席 framing, Patrick 6/8 verbatim).
+//   • fetch 失敗 / 無資料      → 該行留空 (fail-open, 不擋頁、不顯示 0 或錯字).
 //
 // SAFETY: 永不擋表單. JS 只負責 display; 真把關靠 /api/auth/request-link +
 // /api/request-guide 的後端 gate (verdict='waitlist' 時不發 magic-link、
@@ -915,30 +910,35 @@ document.querySelectorAll('.faq .qq').forEach(q=>{
 // ─────────────────────────────────────────────────────────────────
 
 (async function initDay1Quota(){
-  const quotaEl = document.getElementById('cta-quota-3');
-  if(!quotaEl) return;
+  const el = document.getElementById('cta-scarcity');
+  if(!el) return;
 
   try{
     const r = await fetch('/api/day1-quota', {credentials:'omit'});
     if(!r.ok) throw new Error('non-2xx');
     const j = await r.json();
     const remaining = Math.max(0, Number(j && j.remaining) || 0);
+    const threshold = Math.max(0, Number(j && j.scarcity_threshold) || 0);
 
-    if(remaining > 0){
-      // 稀缺感小字.
-      quotaEl.textContent = '深度對話剩餘名額：' + remaining;
-      quotaEl.classList.add('show');
-      quotaEl.classList.remove('full');
+    if(remaining <= 0){
+      // 額滿 — 按鈕仍可送 (後端走候補 + 仍寄 PDF).
+      el.textContent = '名額已滿';
+      el.classList.add('show', 'full');
+    } else if(remaining > threshold){
+      // 質性文案 — 1000 席 framing (Patrick 6/8 verbatim).
+      el.textContent = '第一階段限量 1,000 席,我們正在尋找這 1,000 位認真想看見自己的人。';
+      el.classList.add('show');
+      el.classList.remove('full');
     } else {
-      // 額滿 — bar 文字改, 左卡「兩個都要」按鈕仍可送 (後端走候補 + 仍寄 PDF).
-      quotaEl.textContent = '深度對話名額已滿';
-      quotaEl.classList.add('show', 'full');
+      // 0 < remaining ≤ threshold → 推力最大.
+      el.textContent = '只剩 ' + remaining + ' 個名額';
+      el.classList.add('show');
+      el.classList.remove('full');
     }
   }catch(_err){
-    // Fail-open: bar 留空, 不擋頁面 (後端 gate 仍會把關).
-    // 不 throw、不擋 UI. 唯一可接受的副作用: 不顯示稀缺感.
-    quotaEl.classList.remove('show', 'full');
-    quotaEl.textContent = '';
+    // Fail-open: 留空、不擋頁面 (後端 gate 仍會把關).
+    el.classList.remove('show', 'full');
+    el.textContent = '';
   }
 })();
 </script>
