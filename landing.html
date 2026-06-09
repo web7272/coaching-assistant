@@ -308,11 +308,11 @@ a{color:inherit;text-decoration:none}
 .cta-form .cta-mini.err{color:#a33}
 
 /* 6/8 設計師方案 3 — 止血線 (#cta-scarcity).
-   位置: 左 action 卡內 cta-trigger 裡, 「開始看見自己 →」按鈕正上方. 一行細字、低調.
-   分支: > threshold → 質性 1000 席文案; 0<r<=threshold → 「只剩 N 個名額」; ≤0 → 「名額已滿」; fetch fail → 留空.
-   舊 .cta-quota 樣式廢 (元素 + class 都已重命名 #cta-scarcity / .cta-scarcity). */
+   6/8 v4 (Vivi 看 v3 live 後): 從卡內搬到卡外 (整張動作卡之後、置中, 間距留呼吸).
+   分支: > threshold → 質性「限量體驗 － 只陪真心想看見自己的人」; 0<r<=threshold → 「只剩 N 個名額」;
+         ≤0 → 「名額已滿」; fetch fail → 留空. */
 .cta-scarcity{font-family:var(--sans);font-size:12px;letter-spacing:.04em;color:var(--gold);
-  margin:14px 0 6px;padding:0;line-height:1.5;display:none;text-align:center}
+  margin:20px 0 0;padding:0;line-height:1.5;display:none;text-align:center}
 .cta-scarcity.show{display:block}
 .cta-scarcity.full{color:#a33}
 
@@ -539,14 +539,13 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
       <!-- 6/8 設計師方案 — 首屏卸貨: 只剩這張左 action 卡 (唯一動作卡; 素底; CTA 改 button 樣式).
            點擊 → 展開 3 題 + email → ctaSubmit(event,3) 寄 PDF + 發 Day 1 magic-link.
-           止血線 #cta-scarcity 在按鈕正上方, subline 在按鈕正下方 (兩條都細字, 設計師 6/8). -->
+           6/8 v4 (Vivi 看 v3 live 後): 止血線 #cta-scarcity 從卡內搬到卡外 (整張卡之後、置中). -->
       <div class="cta-card" data-opt="3">
         <button type="button" class="cta-trigger" onclick="ctaOpen(this)">
-          <p class="cta-t" id="cta-t-3">立刻領取《價值觀挖掘練習PDF》＋免費解鎖 AI 教練體驗</p>
-          <p class="cta-d" id="cta-d-3">想自己來，這份 PDF 15 分鐘就能開始；想輕鬆一點，就讓教練陪你對話——讓它帶著你問到你自己問不出來的地方，把那個你真正想要的人生挖出來。</p>
-          <p class="cta-scarcity" id="cta-scarcity" aria-live="polite"></p>
+          <p class="cta-t" id="cta-t-3">立刻領取<br>《價值觀挖掘練習PDF》＋免費解鎖 AI 教練體驗</p>
+          <p class="cta-d" id="cta-d-3">想像一下,當你不再把能量耗在「或許、好像」上,而是清楚知道自己要去哪裡。當不再什麼都想抓住、什麼都不敢放,而是敢走到自己想要的人生。那個你一直都在。我們陪你找回來。</p>
           <p class="cta-button" id="cta-go-3"><span>開始看見自己</span><span aria-hidden="true">→</span></p>
-          <span class="cta-subline">免費領 PDF ＋ 體驗 Day 1</span>
+          <span class="cta-subline">免費《領取PDF ＋ 體驗 Day 1》</span>
         </button>
         <form class="cta-form" onsubmit="ctaSubmit(event, 3)">
           <button type="button" class="cta-back" onclick="ctaClose(this)" aria-label="返回">← 返回</button>
@@ -584,7 +583,13 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
 
       <!-- 6/8 設計師方案 — 首屏卸貨: 右資訊面板整塊移除.
            理由: AI教練說明已在 #story / 21天段; 1000/100 已在 #status / #reveal;
-           首屏不需重複劇透. 名額顯示已搬到左卡內 (#cta-scarcity 在按鈕上方). -->
+           首屏不需重複劇透. -->
+
+      <!-- 6/8 v4 (Vivi 看 v3 live 後): 止血線從卡內 (按鈕正上方) 搬到卡外
+           (整張動作卡之後, 卡片下方置中、一行細字、低調). #cta-scarcity
+           留在 .cta-pair grid 內 (單欄)、寬度跟卡片對齊 (max-width 420px).
+           JS by-id 抓不依賴 DOM 位置, 三分支邏輯 0 改 (僅文案 D4b 改). -->
+      <p class="cta-scarcity" id="cta-scarcity" aria-live="polite"></p>
 
     </div>
 
@@ -923,15 +928,16 @@ document.querySelectorAll('.faq .qq').forEach(q=>{
 });
 
 // ─────────────────────────────────────────────────────────────────
-// 6/7 Patrick + 6/8 設計師方案 3 — Day-1 名額止血線 (#cta-scarcity, 左 action 卡內).
+// 6/7 Patrick + 6/8 設計師方案 3 — Day-1 名額止血線 (#cta-scarcity, 卡外置中).
 //
-// 6/8 第三輪 (設計師): 首屏卸貨 — 右資訊面板移除, 名額元素搬到左卡「兩個
-// 都要」按鈕正上方 (推力最大時刻). 直接顯示原始數的舊邏輯廢, 改門檻判斷.
+// 6/8 v4 (Vivi 看 v3 live 後): #cta-scarcity 從卡內 (按鈕正上方) 搬到卡外
+// (整張動作卡之後、置中、一行細字). 質性文案改短: D4b verbatim.
+// 門檻三分支 + fail-open 留空邏輯 0 改 (僅文案 + DOM 位置).
 //
 // 顯示分支 (門檻可調, 從 /api/day1-quota 的 scarcity_threshold 欄拿):
 //   • remaining ≤ 0           → 「名額已滿」 (按鈕仍可送 — 後端走候補 + 仍寄 PDF).
 //   • 0 < remaining ≤ threshold → 「只剩 N 個名額」 (推力最大).
-//   • remaining > threshold    → 質性文案 (1000 席 framing, Patrick 6/8 verbatim).
+//   • remaining > threshold    → 「限量體驗 － 只陪真心想看見自己的人」 (Patrick 6/8 v4 verbatim).
 //   • fetch 失敗 / 無資料      → 該行留空 (fail-open, 不擋頁、不顯示 0 或錯字).
 //
 // SAFETY: 永不擋表單. JS 只負責 display; 真把關靠 /api/auth/request-link +
@@ -955,8 +961,8 @@ document.querySelectorAll('.faq .qq').forEach(q=>{
       el.textContent = '名額已滿';
       el.classList.add('show', 'full');
     } else if(remaining > threshold){
-      // 質性文案 — 1000 席 framing (Patrick 6/8 verbatim).
-      el.textContent = '第一階段限量 1,000 席,我們正在尋找這 1,000 位認真想看見自己的人。';
+      // 6/8 v4 (Vivi 看 v3 live 後): 質性文案改短 (D4b verbatim).
+      el.textContent = '限量體驗 － 只陪真心想看見自己的人';
       el.classList.add('show');
       el.classList.remove('full');
     } else {
