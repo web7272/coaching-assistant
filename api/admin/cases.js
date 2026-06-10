@@ -9,9 +9,12 @@
 //   GET    /api/admin/cases?[student_id|status|email|case_id]  — list / filter
 //   PATCH  /api/admin/cases?case_id=SY-...         — update status/notes/resolved_at
 //
-// Auth: requireAdmin (x-admin-token header OR ?token= query == ADMIN_TOKEN env).
-//       Daniel client MUST send header `x-admin-token: <ADMIN_TOKEN>`
-//       (NOT `Authorization: Bearer ...`, NOT ADMIN_API_TOKEN env).
+// Auth: requireAdmin (x-admin-token header OR ?token= query == ADMIN_API_TOKEN env).
+//       Daniel client MUST send header `x-admin-token: <ADMIN_API_TOKEN>`
+//       (NOT `Authorization: Bearer ...`).
+//       6/8 Patrick P0 fix: env 統一成 ADMIN_API_TOKEN (was ADMIN_TOKEN 從沒在
+//       Vercel 設過, 連日 401). 跟 students.js 走同一個 env → Daniel 同一把
+//       token 兩條 endpoint 都通.
 //
 // case_id format: SY-YYYYMMDD-NNN (台北時區 daily 流水, see lib/api/case-id.js).
 //

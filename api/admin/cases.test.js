@@ -38,7 +38,9 @@ const ADMIN_TOKEN_OK = { 'x-admin-token': 'test-token-32-bytes-of-entropy-aaaaaa
 
 beforeEach(() => {
   _setSqlClient(null);
-  process.env.ADMIN_TOKEN = 'test-token-32-bytes-of-entropy-aaaaaaaa';
+  // 6/8 Patrick P0 fix: require-admin.js 改讀 ADMIN_API_TOKEN (was ADMIN_TOKEN
+  // 從沒在 Vercel 設過 → cases 連日 401). 跟 students.test.js 一致.
+  process.env.ADMIN_API_TOKEN = 'test-token-32-bytes-of-entropy-aaaaaaaa';
   // ⚠️ getSqlFn() is now deferred past pre-DB validation in the handler, so
   // pure 4xx tests don't instantiate neon(). DATABASE_URL only needs setting
   // for tests that exercise the SQL path (those mock via _setSqlClient anyway).
@@ -61,8 +63,8 @@ test('🛑 cases: wrong token → 401', async () => {
   assert.equal(res.statusCode, 401);
 });
 
-test('🛑 cases: ADMIN_TOKEN env unset → 401 (fail-closed)', async () => {
-  delete process.env.ADMIN_TOKEN;
+test('🛑 cases: ADMIN_API_TOKEN env unset → 401 (fail-closed)', async () => {
+  delete process.env.ADMIN_API_TOKEN;
   const res = mockRes();
   await handler(mockReq({ method: 'POST', headers: ADMIN_TOKEN_OK }), res);
   assert.equal(res.statusCode, 401);
