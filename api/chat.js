@@ -26,6 +26,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CACHED_PREFIX_SECTIONS } from '../lib/prompt-sections/cached/index.js';
 import { DetectorRegistry, skipIfDeviationHandled } from '../lib/detector/registry.js';
 import { ALL_DETECTORS, E2_DETECTOR } from '../lib/detector-handlers/index.js';
+import { deriveTakeawayTerm } from '../lib/detector-handlers/engine-4-mode-aware.js';
 import {
   detectNewSessionDay, buildResetPatch, PHASE_PROGRESS_NEVER_RESET,
   taipeiDateString,
@@ -434,6 +435,195 @@ async function loadOrCreateSession(sql, {
 // ════════════════════════════════════════════════════════════════
 // v5.0 prompt assembly
 // ════════════════════════════════════════════════════════════════
+
+// ────────────────────────────────────────────────────────────────
+// v5.2 七步 PR-4 (Path A) — sc_journey evidence detector + DB helper.
+// ────────────────────────────────────────────────────────────────
+// Patrick 6/11 ruling (grounded mapping; structured signals ONLY,
+//   NO raw user-text phrase match, NO new engine signals):
+//
+//   step_2 longing_surface   — detectorPatch.current_quality_candidate_term 新增
+//   step_3 data_mining       — primary_mode ∈ {elicitation, identity_anchoring}
+//                              AND reframe history delta 含 reframe_id='R3'
+//   step_4 identity_claim    — reframe_id='R2' OR new top1_value OR
+//                              quality_status flipped to 'owned'
+//   step_5 resource_retrieval— conditionalInjects 含 R12 Hero's Welcome
+//                              SYSTEM INJECT header OR reframe_id ∈ {R5,R6}
+//   step_6 sovereignty_reclaim — reframe_id='R1' (R1_VARIANTS 含 R1_E
+//                              「重要的人」延伸; NOT an inject header per
+//                              Patrick 地雷②)
+//   step_7 anchoring         — conditionalInjects 含 Let it Go SYSTEM INJECT
+//                              header OR Care Less List SYSTEM INJECT header
+//                              OR reframe_id='R7'
+//   step_1 pain_surface      — INTENTIONAL gap (no clean structured signal
+//                              today). Per Patrick「品質 > 覆蓋率, 寧可少
+//                              抓不要硬塞」. 16 場 sim coverage 之後再補.
+//
+// Safety: quote source ALWAYS structured term (deriveTakeawayTerm /
+//   current_quality_candidate_term / top1_value), NEVER raw user text.
+//   Final entries pass through a high-risk denylist filter (defence-in-
+//   depth even though structured terms upstream already pass scrubber).
+//
+// PR-4 Path A scope: per-turn ONLY appends evidence; finalize-day write
+//   of sc_journey_step is Path B (deferred to Patrick's signal verify).
+// ────────────────────────────────────────────────────────────────
+
+// Verbatim inject header substrings (verified vs worktree).
+const SC_JOURNEY_INJECT_HEADERS = Object.freeze({
+  HEROS_WELCOME: `[SYSTEM INJECT — R12 Hero's Welcome 4 步驟 SOP`,
+  LET_IT_GO:     `[SYSTEM INJECT — Phase 5 Step 2: Let it Go]`,
+  CARE_LESS:     `[SYSTEM INJECT — Care Less List Optional Exercise`,
+});
+
+// Defence-in-depth denylist applied to quote before append.
+const SC_JOURNEY_HIGH_RISK_PATTERNS = Object.freeze([
+  /自殺/, /想死/, /去死/, /輕生/, /自傷/, /割腕/, /上吊/, /跳樓/, /燒炭/,
+]);
+
+function _isHighRiskQuote(quote) {
+  if (typeof quote !== 'string') return false;
+  return SC_JOURNEY_HIGH_RISK_PATTERNS.some(p => p.test(quote));
+}
+
+/**
+ * v5.2 七步 PR-4 Path A — Detect sc_journey evidence entries for THIS turn.
+ *
+ * Pure function (no DB, no LLM). Reads ONLY structured signals.
+ *
+ * @param {object} args
+ * @param {string|null}  args.primaryMode
+ * @param {object}       args.prevSessionState  state BEFORE this turn's detectors applied
+ * @param {object}       args.detectorPatch     delta produced by this turn's detectors
+ * @param {string[]}     args.conditionalInjects post-filter inject array
+ * @returns {Array<{step:number, type:string, quote:string|null, ai_internal_note?:string}>}
+ */
+export function detectScJourneyEvidenceForTurn({
+  primaryMode = null,
+  prevSessionState = {},
+  detectorPatch = {},
+  conditionalInjects = [],
+} = {}) {
+  const entries = [];
+  const effectiveState = { ...prevSessionState, ...detectorPatch };
+
+  // Reframe delta: new reframe_id hits this turn.
+  const prevHistory = Array.isArray(prevSessionState.reframe_invocation_history_in_session)
+    ? prevSessionState.reframe_invocation_history_in_session : [];
+  const newHistory = Array.isArray(detectorPatch.reframe_invocation_history_in_session)
+    ? detectorPatch.reframe_invocation_history_in_session : prevHistory;
+  const newReframeIds = new Set(
+    newHistory.slice(prevHistory.length).map(e => e && e.reframe_id).filter(Boolean)
+  );
+
+  // step_2 longing_surface — new quality candidate this turn.
+  const newQualityCand = (typeof detectorPatch.current_quality_candidate_term === 'string'
+      && detectorPatch.current_quality_candidate_term.length > 0
+      && detectorPatch.current_quality_candidate_term !== prevSessionState.current_quality_candidate_term)
+    ? detectorPatch.current_quality_candidate_term : null;
+  if (newQualityCand) {
+    entries.push({ step: 2, type: 'longing_surface', quote: newQualityCand });
+  }
+
+  // step_3 data_mining — R3 命中 in elicitation / identity_anchoring mode.
+  if ((primaryMode === 'elicitation' || primaryMode === 'identity_anchoring')
+      && newReframeIds.has('R3')) {
+    entries.push({
+      step: 3, type: 'data_mining',
+      quote: deriveTakeawayTerm(effectiveState),
+      ai_internal_note: 'AI 觀察',
+    });
+  }
+
+  // step_4 identity_claim — R2 命中 OR new top1_value OR new quality_status='owned'.
+  const newTop1 = (typeof detectorPatch.top1_value === 'string'
+      && detectorPatch.top1_value.length > 0
+      && detectorPatch.top1_value !== prevSessionState.top1_value)
+    ? detectorPatch.top1_value : null;
+  const newOwned = detectorPatch.current_quality_status === 'owned'
+    && prevSessionState.current_quality_status !== 'owned';
+  if (newReframeIds.has('R2') || newTop1 || newOwned) {
+    entries.push({
+      step: 4, type: 'identity_claim',
+      quote: newTop1 || deriveTakeawayTerm(effectiveState),
+    });
+  }
+
+  // step_5 resource_retrieval — Hero's Welcome inject OR R5/R6 命中.
+  const heroFired = conditionalInjects.some(inj =>
+    typeof inj === 'string' && inj.includes(SC_JOURNEY_INJECT_HEADERS.HEROS_WELCOME));
+  if (heroFired || newReframeIds.has('R5') || newReframeIds.has('R6')) {
+    entries.push({
+      step: 5, type: 'resource_retrieval',
+      quote: deriveTakeawayTerm(effectiveState),
+      ai_internal_note: 'submodality shift detected',
+    });
+  }
+
+  // step_6 sovereignty_reclaim — R1 命中 (R1_VARIANTS 含 R1_E per Patrick).
+  if (newReframeIds.has('R1')) {
+    entries.push({
+      step: 6, type: 'sovereignty_reclaim',
+      quote: deriveTakeawayTerm(effectiveState),
+      ai_internal_note: 'external→internal shift detected',
+    });
+  }
+
+  // step_7 anchoring — Let it Go / Care Less inject OR R7 命中.
+  const letItGoFired = conditionalInjects.some(inj =>
+    typeof inj === 'string' && inj.includes(SC_JOURNEY_INJECT_HEADERS.LET_IT_GO));
+  const careLessFired = conditionalInjects.some(inj =>
+    typeof inj === 'string' && inj.includes(SC_JOURNEY_INJECT_HEADERS.CARE_LESS));
+  if (letItGoFired || careLessFired || newReframeIds.has('R7')) {
+    entries.push({
+      step: 7, type: 'anchoring',
+      quote: deriveTakeawayTerm(effectiveState),
+      ai_internal_note: 'identity anchored in active_context',
+    });
+  }
+
+  // step_1 pain_surface — INTENTIONAL gap (no clean structured signal). See header.
+
+  // Defence-in-depth: drop entries whose quote tripped high-risk denylist
+  // (e.g. learner surfaced explicit suicide phrasing into a candidate term;
+  // upstream scrubber should catch but PR-4 won't trust transitively).
+  return entries.filter(e => !_isHighRiskQuote(e.quote));
+}
+
+/**
+ * v5.2 七步 PR-4 Path A — Append a single evidence entry to a student's
+ * sc_journey_evidence keyed object. Idempotent at SQL layer; caller wraps
+ * with try/catch (fail-soft, NEVER blocks conversation).
+ *
+ * Migration 037 contract: keyed object {step_1..step_7: []}, default applied
+ * at column level. COALESCE here is defence-in-depth for legacy NULL.
+ *
+ * @param {Function} sql        neon tagged-template
+ * @param {string}   studentId
+ * @param {number}   stepNo     1..7
+ * @param {object}   entry      { type, quote, ai_internal_note? }
+ */
+export async function appendScJourneyEvidence(sql, studentId, stepNo, entry) {
+  if (!Number.isInteger(stepNo) || stepNo < 1 || stepNo > 7) return;
+  if (!entry || typeof entry !== 'object') return;
+  const stepKey = `step_${stepNo}`;
+  // Serialize entry to JSON for the SQL || jsonb append. Drop undefined keys.
+  const cleanEntry = {
+    type: entry.type,
+    quote: entry.quote ?? null,
+    ...(entry.ai_internal_note ? { ai_internal_note: entry.ai_internal_note } : {}),
+  };
+  await sql`
+    UPDATE students
+       SET sc_journey_evidence = jsonb_set(
+         COALESCE(sc_journey_evidence,
+           '{"step_1":[],"step_2":[],"step_3":[],"step_4":[],"step_5":[],"step_6":[],"step_7":[]}'::jsonb),
+         ARRAY[${stepKey}],
+         COALESCE(sc_journey_evidence -> ${stepKey}, '[]'::jsonb)
+           || ${JSON.stringify(cleanEntry)}::jsonb
+       )
+     WHERE student_id = ${studentId}
+  `;
+}
 
 /**
  * Build the {{...}} dynamic runtime block (spec 04 §4 — not cached, recomputed每 turn).
@@ -1393,6 +1583,34 @@ export default async function handler(req, res) {
             consecutive_turns: newSwapCount,
             // 鐵律 #2: no raw user text in log.
           }));
+        }
+      }
+    }
+
+    // ⭐ v5.2 七步 PR-4 Path A — sc_journey evidence append (per-turn).
+    //   MUST NOT block conversation: each append wrapped fail-soft. Per Patrick:
+    //   per-turn ONLY appends evidence; sc_journey_step write deferred to
+    //   finalize-day (Path B). Skipped during onboarding (七步 framing assumes
+    //   active_context already locked — onboarding turns 沒有 step 語意).
+    if (!onboardingTookTurn && studentRow) {
+      const scEvidenceEntries = detectScJourneyEvidenceForTurn({
+        primaryMode: primaryModeForInject,
+        prevSessionState: sessionState,
+        detectorPatch,
+        conditionalInjects,
+      });
+      for (const scEntry of scEvidenceEntries) {
+        try {
+          await appendScJourneyEvidence(sql, studentId, scEntry.step, scEntry);
+          // 鐵律 #2: log step/type marker, NEVER raw quote text.
+          console.info('[v5_2_sc_journey][evidence_append]', JSON.stringify({
+            event: 'sc_journey_evidence_append',
+            step_no: scEntry.step,
+            type: scEntry.type,
+            // quote intentionally NOT logged.
+          }));
+        } catch (e) {
+          console.warn('[v5_2_sc_journey][append_failed]', e?.message || e);
         }
       }
     }

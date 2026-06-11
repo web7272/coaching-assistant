@@ -26,6 +26,8 @@ import {
   buildDamonNoteTemplateV52,   // 6/8 Vivi v5.2 errata PR-b
   buildDamonNoteSystemArray,   // 6/8 Vivi v5.2 errata PR-b
   buildSessionStateSummary,    // 6/8 Vivi v5.2 errata PR-c
+  detectScJourneyEvidenceForTurn,  // 6/11 v5.2 七步 PR-4 Path A
+  appendScJourneyEvidence,         // 6/11 v5.2 七步 PR-4 Path A
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 import { CACHED_PREFIX_SECTIONS } from '../lib/prompt-sections/cached/index.js';
@@ -2214,4 +2216,401 @@ test('🛑 6/8 PR-d: 禁用詞 + 簽名 V + 第二人稱「你」 + 不寫「她
   assert.match(fn, /不假設學員的性別/);
   // preferredName 0-1 次 nameHint.
   assert.match(fn, /整篇 0-1 次自然帶過/);
+});
+
+// ═════════════════════════════════════════════════════════════════
+// 🛑 v5.2 七步 PR-4 Path A — sc_journey evidence detector + DB helper
+// Patrick 6/11 grounded mapping (signal-only, NO raw text match).
+// ═════════════════════════════════════════════════════════════════
+
+// ─── Empty / null inputs → empty result ─────────────────────────
+
+test('🛑 PR-4 detect: empty inputs → no entries', () => {
+  assert.deepEqual(detectScJourneyEvidenceForTurn(), []);
+  assert.deepEqual(detectScJourneyEvidenceForTurn({}), []);
+  assert.deepEqual(detectScJourneyEvidenceForTurn({
+    primaryMode: 'elicitation',
+    prevSessionState: {},
+    detectorPatch: {},
+    conditionalInjects: [],
+  }), []);
+});
+
+// ─── step_2 longing_surface ─────────────────────────────────────
+
+test('🛑 PR-4 detect step_2 longing: new current_quality_candidate_term this turn → entry', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'elicitation',
+    prevSessionState: { current_quality_candidate_term: null },
+    detectorPatch:    { current_quality_candidate_term: '勇敢' },
+    conditionalInjects: [],
+  });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].step, 2);
+  assert.equal(out[0].type, 'longing_surface');
+  assert.equal(out[0].quote, '勇敢',
+    'quote = structured candidate term (NOT raw user text)');
+});
+
+test('🛑 PR-4 detect step_2: same candidate as prev turn → NO entry (delta only)', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'elicitation',
+    prevSessionState: { current_quality_candidate_term: '勇敢' },
+    detectorPatch:    { current_quality_candidate_term: '勇敢' },
+    conditionalInjects: [],
+  });
+  assert.equal(out.length, 0);
+});
+
+// ─── step_3 data_mining ─────────────────────────────────────────
+
+test('🛑 PR-4 detect step_3 data_mining: R3 fired in elicitation mode → entry', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'elicitation',
+    prevSessionState: { reframe_invocation_history_in_session: [], top1_value: '勇敢' },
+    detectorPatch: {
+      reframe_invocation_history_in_session: [{ reframe_id: 'R3', invoked_at_turn: 1 }],
+    },
+    conditionalInjects: [],
+  });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].step, 3);
+  assert.equal(out[0].type, 'data_mining');
+  assert.equal(out[0].ai_internal_note, 'AI 觀察');
+});
+
+test('🛑 PR-4 detect step_3: R3 fired but mode=integration → NO entry (mode gate)', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'integration',
+    prevSessionState: {},
+    detectorPatch: { reframe_invocation_history_in_session: [{ reframe_id: 'R3' }] },
+    conditionalInjects: [],
+  });
+  assert.equal(out.length, 0, 'R3 outside elicitation/identity_anchoring mode does not trigger step_3');
+});
+
+// ─── step_4 identity_claim (3 paths) ────────────────────────────
+
+test('🛑 PR-4 detect step_4: R2 命中 → entry', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'identity_anchoring',
+    prevSessionState: { reframe_invocation_history_in_session: [] },
+    detectorPatch: { reframe_invocation_history_in_session: [{ reframe_id: 'R2' }] },
+    conditionalInjects: [],
+  });
+  const e = out.find(x => x.step === 4);
+  assert.ok(e);
+  assert.equal(e.type, 'identity_claim');
+});
+
+test('🛑 PR-4 detect step_4: new top1_value → entry (quote=top1_value)', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'identity_anchoring',
+    prevSessionState: { top1_value: null },
+    detectorPatch:    { top1_value: '勇敢' },
+    conditionalInjects: [],
+  });
+  const e = out.find(x => x.step === 4);
+  assert.ok(e);
+  assert.equal(e.quote, '勇敢',
+    'quote source preference = newly-set top1_value');
+});
+
+test('🛑 PR-4 detect step_4: quality_status flipped to owned → entry', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'identity_anchoring',
+    prevSessionState: { current_quality_status: 'candidate', top1_value: '勇敢' },
+    detectorPatch:    { current_quality_status: 'owned' },
+    conditionalInjects: [],
+  });
+  const e = out.find(x => x.step === 4);
+  assert.ok(e);
+});
+
+test('🛑 PR-4 detect step_4: quality_status owned but ALREADY owned previously → NO entry (delta only)', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'identity_anchoring',
+    prevSessionState: { current_quality_status: 'owned', top1_value: '勇敢' },
+    detectorPatch:    { current_quality_status: 'owned' },
+    conditionalInjects: [],
+  });
+  assert.equal(out.length, 0);
+});
+
+// ─── step_5 resource_retrieval ──────────────────────────────────
+
+test('🛑 PR-4 detect step_5: Hero\'s Welcome SYSTEM INJECT header in conditionalInjects → entry', () => {
+  const HW = `[SYSTEM INJECT — R12 Hero's Welcome 4 步驟 SOP (Vivi 在地化版)]\nmode: integration.\n...`;
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'integration',
+    prevSessionState: {},
+    detectorPatch: {},
+    conditionalInjects: [HW],
+  });
+  const e = out.find(x => x.step === 5);
+  assert.ok(e);
+  assert.equal(e.type, 'resource_retrieval');
+  assert.equal(e.ai_internal_note, 'submodality shift detected');
+});
+
+test('🛑 PR-4 detect step_5: R5 OR R6 reframe → entry', () => {
+  for (const id of ['R5', 'R6']) {
+    const out = detectScJourneyEvidenceForTurn({
+      primaryMode: 'integration',
+      prevSessionState: { reframe_invocation_history_in_session: [] },
+      detectorPatch: { reframe_invocation_history_in_session: [{ reframe_id: id }] },
+      conditionalInjects: [],
+    });
+    const e = out.find(x => x.step === 5);
+    assert.ok(e, `${id} should fire step_5`);
+  }
+});
+
+// ─── step_6 sovereignty_reclaim ─────────────────────────────────
+
+test('🛑 PR-4 detect step_6: R1 命中 (R1_VARIANTS 含 R1_E) → entry', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'integration',
+    prevSessionState: { reframe_invocation_history_in_session: [] },
+    detectorPatch: { reframe_invocation_history_in_session: [{ reframe_id: 'R1' }] },
+    conditionalInjects: [],
+  });
+  const e = out.find(x => x.step === 6);
+  assert.ok(e);
+  assert.equal(e.type, 'sovereignty_reclaim');
+  assert.equal(e.ai_internal_note, 'external→internal shift detected');
+});
+
+test('🛑 PR-4 anti-regression: step_6 走 reframe_id=R1, 不誤抓 R1_E inject header', () => {
+  // Patrick 地雷②: 沒有 R1_E sub-prompt inject. Detector 必須只看 reframe_id.
+  const fakeR1EHeader = `[SYSTEM INJECT — R1_E 重要的人延伸層]\n...`;
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'integration',
+    prevSessionState: {},
+    detectorPatch: {},
+    conditionalInjects: [fakeR1EHeader],
+  });
+  assert.equal(out.length, 0,
+    'R1_E header substring must NOT trigger step_6 (we route via reframe_id only)');
+});
+
+// ─── step_7 anchoring ───────────────────────────────────────────
+
+test('🛑 PR-4 detect step_7: Let it Go inject header → entry', () => {
+  const letItGo = `[SYSTEM INJECT — Phase 5 Step 2: Let it Go]\nDamon 體系內...`;
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'future_pacing',
+    prevSessionState: {},
+    detectorPatch: {},
+    conditionalInjects: [letItGo],
+  });
+  const e = out.find(x => x.step === 7);
+  assert.ok(e);
+  assert.equal(e.type, 'anchoring');
+});
+
+test('🛑 PR-4 detect step_7: Care Less List inject header → entry', () => {
+  const careLess = `[SYSTEM INJECT — Care Less List Optional Exercise (Vivi 終審版逐字、Mode 5 step 4)]`;
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'future_pacing',
+    prevSessionState: {},
+    detectorPatch: {},
+    conditionalInjects: [careLess],
+  });
+  const e = out.find(x => x.step === 7);
+  assert.ok(e);
+});
+
+test('🛑 PR-4 detect step_7: R7 reframe → entry', () => {
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'future_pacing',
+    prevSessionState: { reframe_invocation_history_in_session: [] },
+    detectorPatch: { reframe_invocation_history_in_session: [{ reframe_id: 'R7' }] },
+    conditionalInjects: [],
+  });
+  const e = out.find(x => x.step === 7);
+  assert.ok(e);
+});
+
+// ─── step_1 intentional gap ─────────────────────────────────────
+
+test('🛑 PR-4 detect step_1 INTENTIONAL gap: elicitation mode + no candidate → NO entry', () => {
+  // Patrick: "step_1 pain_surface — 無乾淨結構化 signal, 容許不 append.
+  //  品質 > 覆蓋率, 16 場 sim coverage 再補."
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'elicitation',
+    prevSessionState: {},
+    detectorPatch: {},
+    conditionalInjects: [],
+  });
+  assert.equal(out.length, 0,
+    'PR-4 intentionally has no step_1 detection; 16 場 sim coverage will inform whether to backfill');
+});
+
+// ─── Reframe history DELTA detection ────────────────────────────
+
+test('🛑 PR-4 detect: only NEW reframe entries this turn fire (not historic)', () => {
+  // Historic R1 (already in prev) + new R2 this turn → only R2 fires.
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'identity_anchoring',
+    prevSessionState: {
+      reframe_invocation_history_in_session: [{ reframe_id: 'R1', invoked_at_turn: 1 }],
+    },
+    detectorPatch: {
+      reframe_invocation_history_in_session: [
+        { reframe_id: 'R1', invoked_at_turn: 1 },  // unchanged prefix
+        { reframe_id: 'R2', invoked_at_turn: 2 },  // new this turn
+      ],
+    },
+    conditionalInjects: [],
+  });
+  // R2 → step_4 entry; R1 should NOT trigger step_6 again (already counted last turn).
+  assert.ok(out.find(x => x.step === 4), 'new R2 fires step_4');
+  assert.equal(out.find(x => x.step === 6), undefined, 'historic R1 must NOT re-fire step_6');
+});
+
+// ─── Quote source = structured (NEVER raw user text) ────────────
+
+test('🛑 PR-4 safety: ALL quote sources are structured terms, NEVER raw user text', () => {
+  // Build a "rich" turn where ALL 6 detectable steps fire (skip step_1 by design).
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'identity_anchoring',
+    prevSessionState: {
+      current_quality_candidate_term: null,
+      top1_value: null,
+      current_quality_status: 'candidate',
+      reframe_invocation_history_in_session: [],
+    },
+    detectorPatch: {
+      current_quality_candidate_term: '勇敢',
+      top1_value: '勇敢',
+      current_quality_status: 'owned',
+      reframe_invocation_history_in_session: [
+        { reframe_id: 'R2' }, { reframe_id: 'R3' },
+        { reframe_id: 'R5' }, { reframe_id: 'R1' }, { reframe_id: 'R7' },
+      ],
+    },
+    conditionalInjects: [],
+  });
+  // Every entry's quote must be one of:
+  //   - null
+  //   - structured candidate term / top1_value
+  //   - deriveTakeawayTerm output (which is itself structured)
+  for (const e of out) {
+    if (e.quote !== null && typeof e.quote === 'string') {
+      // Quote must NOT contain raw conversational markers / pronouns etc.
+      // It must be a concise term (≤ 30 chars typically).
+      assert.ok(e.quote.length <= 50,
+        `step ${e.step} quote should be a short structured term, got: "${e.quote}"`);
+      // No conversational verbose patterns (rough heuristic).
+      assert.equal(/我覺得我|不知道為什麼|想說|其實/.test(e.quote), false,
+        `step ${e.step} quote looks like raw user phrasing: "${e.quote}"`);
+    }
+  }
+});
+
+// ─── Defence-in-depth high-risk denylist ────────────────────────
+
+test('🛑 PR-4 safety: high-risk quote → entry DROPPED (defence-in-depth)', () => {
+  // Hypothetical bad upstream: candidate term somehow contains 自殺 phrasing.
+  // Detector must filter to prevent accidental DB write.
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'elicitation',
+    prevSessionState: { current_quality_candidate_term: null },
+    detectorPatch:    { current_quality_candidate_term: '想自殺' },
+    conditionalInjects: [],
+  });
+  assert.equal(out.length, 0,
+    'high-risk phrasing must trigger drop, even if structured upstream');
+});
+
+test('🛑 PR-4 safety: high-risk only drops the offending entry when quote source is independent', () => {
+  // Mixed batch: tainted candidate (high-risk) WITH an independent clean
+  // top1_value already set (step_4 pulls top1 first, NOT the tainted candidate).
+  // ⚠️ Note: if a high-risk term enters effectiveState as the ONLY quote source,
+  //   ALL derived entries get dropped (defence-in-depth POLLUTION model — see
+  //   companion test above). That's intentional safe behavior.
+  const out = detectScJourneyEvidenceForTurn({
+    primaryMode: 'identity_anchoring',
+    prevSessionState: {
+      current_quality_candidate_term: null,
+      top1_value: '勇敢',                        // already-set clean top1
+      current_quality_status: 'candidate',
+      reframe_invocation_history_in_session: [],
+    },
+    detectorPatch: {
+      current_quality_candidate_term: '想去死',   // high-risk new candidate this turn
+      current_quality_status: 'owned',           // triggers step_4 (independent of candidate)
+      reframe_invocation_history_in_session: [],
+    },
+    conditionalInjects: [],
+  });
+  // step_4 uses top1_value='勇敢' (clean, from prev state) → survives.
+  // step_2 uses the tainted candidate term as its own quote → dropped.
+  const e4 = out.find(x => x.step === 4);
+  assert.ok(e4, 'clean step_4 (top1=勇敢) survives');
+  assert.equal(e4.quote, '勇敢',
+    'step_4 quote = clean top1_value, NOT the tainted candidate');
+  assert.equal(out.find(x => x.step === 2), undefined, 'tainted step_2 dropped');
+});
+
+// ─── appendScJourneyEvidence SQL shape ──────────────────────────
+
+test('🛑 PR-4 append: SQL uses jsonb_set on keyed object, COALESCE for legacy NULL', async () => {
+  const calls = [];
+  const sql = (strings, ...values) => {
+    calls.push({ text: strings.join('?'), values });
+    return Promise.resolve([]);
+  };
+  await appendScJourneyEvidence(sql, 'A001', 4, {
+    type: 'identity_claim',
+    quote: '勇敢',
+  });
+  assert.equal(calls.length, 1);
+  const text = calls[0].text;
+  assert.match(text, /UPDATE students/);
+  assert.match(text, /sc_journey_evidence\s*=\s*jsonb_set/);
+  // Migration 037 default skeleton present (defence-in-depth on legacy NULL).
+  assert.match(text, /COALESCE\(sc_journey_evidence,/);
+  assert.match(text, /\{"step_1":\[\]/);
+  // Step key + entry JSON go via $params, not raw text — verify count.
+  assert.ok(calls[0].values.length >= 3, 'expects step key + entry JSON + studentId params');
+});
+
+test('🛑 PR-4 append: invalid stepNo → no-op (no SQL)', async () => {
+  const calls = [];
+  const sql = (strings) => { calls.push(strings.join('?')); return Promise.resolve([]); };
+  await appendScJourneyEvidence(sql, 'A001', 0, { type: 'x', quote: 'y' });
+  await appendScJourneyEvidence(sql, 'A001', 8, { type: 'x', quote: 'y' });
+  await appendScJourneyEvidence(sql, 'A001', 'not-int', { type: 'x', quote: 'y' });
+  assert.equal(calls.length, 0, 'out-of-range / non-integer step → no SQL fired');
+});
+
+test('🛑 PR-4 append: missing entry / non-object → no-op', async () => {
+  const calls = [];
+  const sql = (strings) => { calls.push(strings.join('?')); return Promise.resolve([]); };
+  await appendScJourneyEvidence(sql, 'A001', 3, null);
+  await appendScJourneyEvidence(sql, 'A001', 3, undefined);
+  await appendScJourneyEvidence(sql, 'A001', 3, 'a-string');
+  assert.equal(calls.length, 0);
+});
+
+test('🛑 PR-4 append: ai_internal_note included when present, omitted when absent', async () => {
+  const calls = [];
+  const sql = (strings, ...values) => { calls.push({ values }); return Promise.resolve([]); };
+  await appendScJourneyEvidence(sql, 'A001', 5, {
+    type: 'resource_retrieval', quote: '某 term',
+    ai_internal_note: 'submodality shift detected',
+  });
+  await appendScJourneyEvidence(sql, 'A001', 4, {
+    type: 'identity_claim', quote: '勇敢',
+  });
+  // First call: entry JSON should contain ai_internal_note.
+  const entryJsonWith = calls[0].values.find(v => typeof v === 'string' && v.startsWith('{'));
+  assert.ok(entryJsonWith);
+  assert.match(entryJsonWith, /ai_internal_note/);
+  // Second call: no ai_internal_note in JSON.
+  const entryJsonWithout = calls[1].values.find(v => typeof v === 'string' && v.startsWith('{'));
+  assert.ok(entryJsonWithout);
+  assert.equal(/ai_internal_note/.test(entryJsonWithout), false);
 });
