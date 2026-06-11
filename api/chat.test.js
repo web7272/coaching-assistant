@@ -29,6 +29,7 @@ import {
   buildSessionStateSummary,    // 6/8 Vivi v5.2 errata PR-c
   detectScJourneyEvidenceForTurn,  // 6/11 v5.2 七步 PR-4 Path A
   appendScJourneyEvidence,         // 6/11 v5.2 七步 PR-4 Path A
+  deriveScEvidenceFocus,           // 6/11 v5.2 七步 PR-5 (Damon Note wire)
 } from './chat.js';
 import { PHASE_PROGRESS_NEVER_RESET, RESET_FIELDS } from '../lib/session/day-boundary.js';
 import { CACHED_PREFIX_SECTIONS } from '../lib/prompt-sections/cached/index.js';
@@ -1436,17 +1437,30 @@ test('🛑 6/8 v5.2 PR-a §8.1: active_context anchor SELECT + 前置注入 (---
     /const fullNote = `\$\{activeContextAnchor\}\\n\$\{scStepPlaceholder\}\\n\$\{bodyMinusAnchors\}`/);
 });
 
-test('🛑 6/8 v5.2 PR-a §9.1: sc_step_when_generated null placeholder (--- 分隔, 含 spec 註解)', () => {
-  // Spec §9.1 verbatim shape:
+test('🛑 6/11 v5.2 七步 PR-5 §9.1: sc_step_when_generated wired (step + evidence_focus 兩值)', () => {
+  // PR-5 wires the previously-null placeholder to real values from DB:
   //   ---
   //   【sc_step_when_generated】
-  //   step: null  # placeholder、七步 errata ship 後實作 logic
-  //   evidence_focus: null  # placeholder、七步 errata ship 後實作 logic
+  //   step: ${scStepValue}              # number or "(未起步)"
+  //   evidence_focus: ${scEvidenceFocusValue}    # "step_N: type" or "(未起步)"
   //   ---
+  // ⚠️ ONLY the 2 value lines change. Header / `---` fences / regex extraction
+  //   (L2466/2470) MUST stay byte-identical (locked headers).
   assert.match(chatJsSrc,
     /const scStepPlaceholder\s*=\s*\n?\s*`---\\n`[\s\S]{0,80}`【sc_step_when_generated】\\n`/);
-  assert.match(chatJsSrc, /step: null  # placeholder、七步 errata ship 後實作 logic/);
-  assert.match(chatJsSrc, /evidence_focus: null  # placeholder、七步 errata ship 後實作 logic/);
+  // New: wired value templates.
+  assert.match(chatJsSrc, /\`step: \$\{scStepValue\}\\n\`/);
+  assert.match(chatJsSrc, /\`evidence_focus: \$\{scEvidenceFocusValue\}\\n\`/);
+  // Anti-regression: old null-placeholder lines (with spec 註解) MUST be gone.
+  assert.equal(/step: null  # placeholder、七步 errata ship 後實作 logic/.test(chatJsSrc), false,
+    'PR-5: old null-placeholder「step:」 line should be replaced by wired value');
+  assert.equal(/evidence_focus: null  # placeholder、七步 errata ship 後實作 logic/.test(chatJsSrc), false,
+    'PR-5: old null-placeholder「evidence_focus:」 line should be replaced by wired value');
+  // ⚠️ Locked header + regex extraction (L2466/2470) MUST remain byte-identical.
+  assert.match(chatJsSrc,
+    /\/\^\\s\*【active_context】\[\\s\\S\]\*\?\(\?=\\n【\(\?!active_context】\|sc_step_when_generated】\)\)\/m/);
+  assert.match(chatJsSrc,
+    /\/\^\\s\*【sc_step_when_generated】\[\\s\\S\]\*\?\(\?=\\n【\(\?!sc_step_when_generated】\)\)\/m/);
 });
 
 test('🛑 6/8 v5.2 PR-a: INSERT damon_notes 帶 template_version=\'v5.2\'', () => {
@@ -2795,4 +2809,119 @@ test('🛑 PR-4 append: ai_internal_note included when present, omitted when abs
   const entryJsonWithout = calls[1].values.find(v => typeof v === 'string' && v.startsWith('{'));
   assert.ok(entryJsonWithout);
   assert.equal(/ai_internal_note/.test(entryJsonWithout), false);
+});
+
+// ═════════════════════════════════════════════════════════════════
+// 🛑 v5.2 七步 PR-5 — deriveScEvidenceFocus (Damon Note wire)
+// ═════════════════════════════════════════════════════════════════
+
+test('🛑 PR-5 deriveScEvidenceFocus: null/empty/wrong-shape → null', () => {
+  assert.equal(deriveScEvidenceFocus(null), null);
+  assert.equal(deriveScEvidenceFocus(undefined), null);
+  assert.equal(deriveScEvidenceFocus({}), null);
+  assert.equal(deriveScEvidenceFocus([]),         null, 'array NOT keyed object → null');
+  assert.equal(deriveScEvidenceFocus('a string'), null, 'string → null');
+  assert.equal(deriveScEvidenceFocus(42),         null, 'number → null');
+  const allEmpty = {
+    step_1: [], step_2: [], step_3: [], step_4: [], step_5: [], step_6: [], step_7: [],
+  };
+  assert.equal(deriveScEvidenceFocus(allEmpty), null);
+});
+
+test('🛑 PR-5 deriveScEvidenceFocus: picks HIGHEST non-empty step', () => {
+  const ev = {
+    step_1: [{ type: 'pain_surface', quote: 'a' }],
+    step_2: [{ type: 'longing_surface', quote: 'b' }],
+    step_3: [{ type: 'data_mining', quote: 'c' }],
+    step_4: [], step_5: [], step_6: [], step_7: [],
+  };
+  assert.equal(deriveScEvidenceFocus(ev), 'step_3: data_mining');
+});
+
+test('🛑 PR-5 deriveScEvidenceFocus: picks LATEST entry of highest step', () => {
+  const ev = {
+    step_1: [], step_2: [], step_3: [], step_4: [],
+    step_5: [
+      { type: 'resource_retrieval', quote: 'first' },
+      { type: 'resource_retrieval', quote: 'middle' },
+      { type: 'resource_retrieval', quote: 'latest' },
+    ],
+    step_6: [], step_7: [],
+  };
+  // Same step throughout — focus uses LATEST entry's type.
+  assert.equal(deriveScEvidenceFocus(ev), 'step_5: resource_retrieval');
+});
+
+test('🛑 PR-5 deriveScEvidenceFocus: returns STRUCTURED marker only, NEVER raw quote', () => {
+  // Even if quote contains arbitrary text, return format is "step_N: type" only.
+  const ev = {
+    step_1: [], step_2: [], step_3: [], step_4: [],
+    step_5: [], step_6: [],
+    step_7: [{ type: 'anchoring', quote: '這是一段很長的學員原話、不應該出現在 focus marker 裡' }],
+  };
+  const focus = deriveScEvidenceFocus(ev);
+  assert.equal(focus, 'step_7: anchoring',
+    'focus marker = "step_N: type" only, NOT containing quote text');
+  // Anti-regression: raw quote MUST NOT leak into focus string.
+  assert.equal(/這是一段很長的學員原話/.test(focus), false,
+    '鐵律 #2: raw quote text MUST NOT leak into evidence_focus marker');
+});
+
+test('🛑 PR-5 deriveScEvidenceFocus: missing/invalid type field → "unknown"', () => {
+  const evNoType = {
+    step_1: [], step_2: [], step_3: [{ quote: 'x' }],  // entry without type
+    step_4: [], step_5: [], step_6: [], step_7: [],
+  };
+  assert.equal(deriveScEvidenceFocus(evNoType), 'step_3: unknown');
+  const evNullType = {
+    step_1: [], step_2: [], step_3: [], step_4: [],
+    step_5: [{ type: null, quote: 'x' }],
+    step_6: [], step_7: [],
+  };
+  assert.equal(deriveScEvidenceFocus(evNullType), 'step_5: unknown');
+});
+
+// ─── PR-5 §9.1 wire shape verification (source-level) ─────────────
+
+test('🛑 PR-5 §9.1 wire: scStepValue ∈ {"1".."7", "(未起步)"}', () => {
+  // Source-level: the value derivation expression must clamp to either
+  // Number.isInteger 1..7 → String() OR fallback to "(未起步)".
+  assert.match(chatJsSrc,
+    /const scStepValue = \(Number\.isInteger\(scJourneyStep\) && scJourneyStep >= 1 && scJourneyStep <= 7\)\s*\n?\s*\? String\(scJourneyStep\)\s*\n?\s*: '\(未起步\)'/);
+});
+
+test('🛑 PR-5 §9.1 wire: scEvidenceFocusValue = deriveScEvidenceFocus(...) || "(未起步)"', () => {
+  assert.match(chatJsSrc,
+    /const scEvidenceFocusValue = deriveScEvidenceFocus\(scJourneyEvidence\) \|\| '\(未起步\)'/);
+});
+
+test('🛑 PR-5 §9.1 wire: student row SELECT extends to include sc_journey_step + sc_journey_evidence', () => {
+  // Belt-and-suspenders: confirm the existing SELECT covers the 2 new cols
+  // so generateDamonNote can populate the wire values per turn.
+  const selectMatch = chatJsSrc.match(
+    /SELECT preferred_name,[\s\S]*?sc_journey_step, sc_journey_evidence[\s\S]*?FROM students/);
+  assert.ok(selectMatch, 'SELECT must include sc_journey_step + sc_journey_evidence cols');
+});
+
+test('🛑 PR-5 §9.1 wire: fail-soft path preserved (scrubber + (未起步) fallback)', () => {
+  // The wire must remain inside the existing try/catch so DB column-missing
+  // (pre-PR-1 deploy) gracefully falls through to '(未起步)' instead of throwing.
+  // Verify by checking the catch handler still exists and the let-vars default null.
+  assert.match(chatJsSrc, /let scJourneyStep = null;/);
+  assert.match(chatJsSrc, /let scJourneyEvidence = null;/);
+  assert.match(chatJsSrc, /\[generateDamonNote\] student row lookup failed/);
+});
+
+// ─── Scrubber guard sanity (PR-5 ship gate prerequisite) ──────────
+
+test('🛑 PR-5 ship-gate: 【sc_step_when_generated】 still in FORBIDDEN_SECTION_MARKERS (no regression)', async () => {
+  // student-note-safe scrubs sc_step header from learner-facing output.
+  // PR-5 wired real values into that section → scrubber MUST still guard it
+  // (otherwise 0-leak ship gate breaks). Source-level locked.
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync('lib/api/student-note-safe.js', 'utf8');
+  assert.match(src, /'【sc_step_when_generated】'/,
+    'FORBIDDEN_SECTION_MARKERS must continue to include 【sc_step_when_generated】');
+  assert.match(src, /'【active_context】'/,
+    'FORBIDDEN_SECTION_MARKERS must continue to include 【active_context】');
 });
