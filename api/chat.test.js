@@ -9,6 +9,7 @@ import {
   INITIAL_PHASE_STATE,
   buildCarryOverState,
   buildDynamicContext,
+  buildScJourneyBlock,           // v5.2 七步 PR-3
   buildSystemPromptArrayV5,
   collectDetectorOutput,
   CLOSURE_MARKERS,
@@ -358,6 +359,187 @@ test('buildSystemPromptArrayV5: conditional injects land in the dynamic block', 
   const dynamic = arr[arr.length - 1].text;
   assert.match(dynamic, /\[INJECT A\]/);
   assert.match(dynamic, /\[INJECT B\]/);
+});
+
+// ─────────────────────────────────────────────────────────
+// 🛑 v5.2 七步 PR-3 — buildScJourneyBlock + dynamic threading
+// ─────────────────────────────────────────────────────────
+
+test('🛑 v5.2 七步 PR-3: buildScJourneyBlock null/undefined input → null (skip pattern)', () => {
+  assert.equal(buildScJourneyBlock(), null);
+  assert.equal(buildScJourneyBlock(undefined), null);
+  assert.equal(buildScJourneyBlock({}), null,
+    'step null + evidence missing → null (graceful skip)');
+  assert.equal(buildScJourneyBlock({ step: null, evidence: {} }), null,
+    'step null + all-empty evidence → null');
+  assert.equal(buildScJourneyBlock({ step: null,
+    evidence: { step_1: [], step_2: [], step_3: [], step_4: [], step_5: [], step_6: [], step_7: [] } }),
+    null,
+    'step null + all-empty keyed evidence → null');
+});
+
+test('🛑 v5.2 七步 PR-3: buildScJourneyBlock invalid step → "not yet started" line', () => {
+  // out-of-range / non-integer / NaN → degrade gracefully to not-started.
+  const out = buildScJourneyBlock({ step: 99, evidence: { step_1: [{ quote: 'a' }] } });
+  assert.ok(out);
+  assert.match(out, /sc_journey_step: not yet started/);
+  const out2 = buildScJourneyBlock({ step: 'foo', evidence: { step_1: [{ quote: 'a' }] } });
+  assert.ok(out2);
+  assert.match(out2, /sc_journey_step: not yet started/);
+  // 1..7 valid.
+  const ok = buildScJourneyBlock({ step: 4, evidence: { step_1: [{ quote: 'a' }] } });
+  assert.match(ok, /sc_journey_step: 4/);
+});
+
+test('🛑 v5.2 七步 PR-3: buildScJourneyBlock formats step + per-step count + 1 truncated quote', () => {
+  const block = buildScJourneyBlock({
+    step: 3,
+    evidence: {
+      step_1: [{ quote: '我覺得我做不到' }, { quote: '我真的好累' }],
+      step_2: [],
+      step_3: [{ quote: '其實我想成為一個更勇敢的人' }],
+      step_4: [],
+      step_5: [],
+      step_6: [],
+      step_7: [],
+    },
+  });
+  assert.ok(block);
+  assert.equal(block.startsWith('[SC Journey State]'), true,
+    'block must start with English internal label (mirrors [Active Context] register)');
+  assert.match(block, /sc_journey_step: 3/);
+  // count + latest quote shown per non-empty step.
+  assert.match(block, /step_1: 2 entries, latest quote: "我真的好累"/,
+    'step_1 should show 2-count + LATEST quote (second one)');
+  assert.match(block, /step_3: 1 entries, latest quote: "其實我想成為一個更勇敢的人"/);
+  // empty steps skipped (no step_2 / step_4-7 lines).
+  assert.equal(/step_2:/.test(block), false, 'empty step_2 must be skipped');
+  assert.equal(/step_4:/.test(block), false, 'empty step_4 must be skipped');
+});
+
+test('🛑 v5.2 七步 PR-3: buildScJourneyBlock truncates single quotes at ~40 chars', () => {
+  // 50+ char quote → must be truncated (cap = 40).
+  const longQuote = '我覺得我永遠都做不到那件事，因為過去每一次嘗試都失敗了，我真的累了，但我還是想要試試看一次最後一次';
+  assert.ok(longQuote.length > 40, 'test fixture must exceed truncation cap');
+  const block = buildScJourneyBlock({
+    step: 1,
+    evidence: { step_1: [{ quote: longQuote }] },
+  });
+  assert.ok(block);
+  // Truncated form: ~40 char prefix + …
+  assert.match(block, /latest quote: "[^"]{20,45}…"/,
+    'long quote must be truncated with ellipsis');
+  // Anti-regression: full quote must NOT appear verbatim.
+  assert.equal(block.includes(longQuote), false,
+    'full long quote must not survive verbatim');
+});
+
+test('🛑 v5.2 七步 PR-3: buildScJourneyBlock hard cap → drops quotes, keeps counts', () => {
+  // 7 steps each with a medium quote → counts-only output if exceeds cap.
+  const mediumQuote = '這是一個中等長度的測試 quote 用來把整體 block 撐爆,'.repeat(2);
+  const evidence = {};
+  for (let s = 1; s <= 7; s++) {
+    evidence[`step_${s}`] = Array.from({ length: 5 }, () => ({ quote: mediumQuote }));
+  }
+  const block = buildScJourneyBlock({ step: 7, evidence });
+  assert.ok(block);
+  // Hard cap kicks in: every step should show counts, no "latest quote:".
+  assert.equal(block.length <= 600, true,
+    `block length ${block.length} must be <= 600 (hard cap)`);
+  assert.equal(/latest quote:/.test(block), false,
+    'over-budget block must DROP quotes entirely (counts-only fallback)');
+  // Still shows counts for all 7 steps.
+  for (let s = 1; s <= 7; s++) {
+    assert.match(block, new RegExp(`step_${s}: 5 entries`));
+  }
+});
+
+test('🛑 v5.2 七步 PR-3: scJourney null → buildSystemPromptArrayV5 dynamic 段 0 sc_journey lines', () => {
+  const arrWith = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0, conditionalInjects: [],
+    cachingEnabled: true,
+    activeContext: { category: 2, name: 'X', definition: 'Y' },
+    scJourney: null,
+  });
+  const dynamic = arrWith[arrWith.length - 1].text;
+  assert.equal(/\[SC Journey State\]/.test(dynamic), false,
+    'scJourney=null → NO block in dynamic');
+  // activeContext still works.
+  assert.match(dynamic, /\[Active Context\]/);
+});
+
+test('🛑 v5.2 七步 PR-3: scJourney with step+evidence → block lands in dynamic, NOT cached', () => {
+  const arr = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0, conditionalInjects: [],
+    cachingEnabled: true,
+    activeContext: { category: 2, name: 'X', definition: 'Y' },
+    scJourney: { step: 4, evidence: { step_4: [{ quote: 'identity claim quote' }] } },
+  });
+  assert.equal(arr.length, 5, '4 cached prefix + 1 dynamic (unchanged)');
+  // Block in dynamic.
+  const dynamic = arr[4].text;
+  assert.match(dynamic, /\[SC Journey State\]/);
+  assert.match(dynamic, /sc_journey_step: 4/);
+  assert.match(dynamic, /step_4: 1 entries/);
+  // Block NOT in any cached section.
+  for (let i = 0; i < 4; i++) {
+    assert.equal(/\[SC Journey State\]/.test(arr[i].text), false,
+      `cached section ${i + 1} must NOT contain SC Journey block`);
+  }
+});
+
+test('🛑 v5.2 七步 PR-3 anti-regression: cached prefix byte-identical regardless of scJourney value', () => {
+  // Build twice — once with scJourney null, once with rich scJourney. Cached
+  // section text must be IDENTICAL byte-for-byte both times (cache invalidation
+  // would defeat caching strategy).
+  const args = { sessionState: {}, userProfile: {}, gapDays: 0,
+    conditionalInjects: [], cachingEnabled: true };
+  const arrA = buildSystemPromptArrayV5({ ...args, scJourney: null });
+  const arrB = buildSystemPromptArrayV5({ ...args,
+    scJourney: { step: 5, evidence: { step_5: [{ quote: '看見資源的瞬間' }] } } });
+  // Cached prefix (sections 0..3) byte-identical.
+  for (let i = 0; i < 4; i++) {
+    assert.equal(arrA[i].text, arrB[i].text,
+      `cached section ${i + 1} must be byte-identical regardless of scJourney`);
+    // Source-of-truth check: matches CACHED_PREFIX_SECTIONS literal content.
+    assert.equal(arrA[i].text, CACHED_PREFIX_SECTIONS[i].content,
+      `cached section ${i + 1} must match source-of-truth content`);
+  }
+});
+
+test('🛑 v5.2 七步 PR-3: SC Journey block placement — after [Active Context], before runtime status line', () => {
+  // Order spec: linesActiveContext → linesScJourney → '━━━ 本場學員狀態' line.
+  const arr = buildSystemPromptArrayV5({
+    sessionState: {}, userProfile: {}, gapDays: 0, conditionalInjects: [],
+    cachingEnabled: true,
+    activeContext: { category: 3, name: 'Career path', definition: 'job pivot' },
+    scJourney: { step: 2, evidence: { step_2: [{ quote: 'a' }] } },
+  });
+  const dynamic = arr[arr.length - 1].text;
+  const ac = dynamic.indexOf('[Active Context]');
+  const sc = dynamic.indexOf('[SC Journey State]');
+  const rt = dynamic.indexOf('━━━ 本場學員狀態');
+  assert.ok(ac >= 0 && sc >= 0 && rt >= 0,
+    'all three sentinels must be present in dynamic');
+  assert.ok(ac < sc, '[Active Context] must come before [SC Journey State]');
+  assert.ok(sc < rt, '[SC Journey State] must come before runtime status line');
+});
+
+test('🛑 v5.2 七步 PR-3 safety: block does not include scrubber-禁列 phrasings', () => {
+  // 對齊 scrubber 禁列: 高危原話 (suicide / self-harm explicit) must never
+  // appear verbatim in the dynamic block. PR-3 trusts upstream (PR-4 writes)
+  // to filter, but this test confirms the block FORMAT itself doesn't echo
+  // banned phrasings when given clean evidence.
+  const block = buildScJourneyBlock({
+    step: 1,
+    evidence: { step_1: [{ quote: '我覺得我卡住了' }] },
+  });
+  assert.ok(block);
+  // Spot-check: no high-risk explicit phrasings in our format scaffolding.
+  assert.equal(/想死|自殺|去死/.test(block), false,
+    'block scaffolding must not include high-risk explicit phrasings');
+  // The clean test quote IS allowed.
+  assert.match(block, /我覺得我卡住了/);
 });
 
 // ─────────────────────────────────────────────────────────
