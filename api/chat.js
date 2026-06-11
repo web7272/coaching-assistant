@@ -965,7 +965,8 @@ export default async function handler(req, res) {
       const pr = await sql`
         SELECT pace, plan, is_blocked, is_beta, created_at,
                active_context_category, active_context_name, active_context_definition,
-               context_onboarded
+               context_onboarded,
+               sc_journey_step, sc_journey_evidence
           FROM students WHERE student_id = ${studentId} LIMIT 1
       `;
       if (pr.length > 0) {
