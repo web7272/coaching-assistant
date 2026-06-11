@@ -436,6 +436,89 @@ async function loadOrCreateSession(sql, {
 // ════════════════════════════════════════════════════════════════
 
 /**
+ * v5.2 七步 PR-3 — Build internal [SC Journey State] block for Sonnet.
+ *
+ * Lives in dynamic block (NOT cached, recomputed per turn). Mirrors
+ * `buildActiveContextBlock` register: English internal awareness label +
+ * structured key-value, learner never sees this (scrubber + cached §3.5
+ * 「不對學員講」 principle protect).
+ *
+ * Behavior:
+ *   - step (null / not 1..7)      → 'not yet started' line.
+ *   - evidence absent / all empty → no evidence subsection.
+ *   - step null + all evidence empty → return null (caller skips, same
+ *     pattern as buildActiveContextBlock returning null).
+ *   - per non-empty step: count + at most 1 latest quote (truncate at
+ *     ~40 chars). Empty steps skipped silently.
+ *   - hard length cap ~600 chars: if exceeded, drop ALL quotes, keep
+ *     counts only.
+ *
+ * Source: v52_seven_steps_errata.md §3.4 + Patrick eval PR-3.
+ * PR-3 only displays; evidence WRITE-side filtering is PR-4's job.
+ *
+ * @param {object} scJourney
+ * @param {number|null} scJourney.step  current step (1..7) or null
+ * @param {object} scJourney.evidence   keyed object { step_1: [...], ..., step_7: [...] }
+ * @returns {string|null}
+ */
+export function buildScJourneyBlock({ step, evidence } = {}) {
+  const QUOTE_TRUNCATE   = 40;    // single quote 截斷上限 (chars)
+  const BLOCK_HARD_LIMIT = 600;   // block 整體上限 — 超過丟 quotes、留 counts
+
+  const stepNum = (typeof step === 'number' && Number.isInteger(step) && step >= 1 && step <= 7)
+    ? step
+    : null;
+  const ev = (evidence && typeof evidence === 'object' && !Array.isArray(evidence))
+    ? evidence
+    : {};
+
+  // Walk steps 1..7, collect non-empty step summaries.
+  const stepLines = [];
+  const stepCounts = [];
+  let anyEvidence = false;
+  for (let s = 1; s <= 7; s++) {
+    const key = `step_${s}`;
+    const arr = Array.isArray(ev[key]) ? ev[key] : [];
+    if (arr.length === 0) continue;
+    anyEvidence = true;
+    stepCounts.push(`  - ${key}: ${arr.length} entries`);
+    const latest = arr[arr.length - 1] || {};
+    const rawQuote = (typeof latest.quote === 'string' && latest.quote.trim().length > 0)
+      ? latest.quote.trim()
+      : null;
+    if (rawQuote) {
+      const truncated = rawQuote.length > QUOTE_TRUNCATE
+        ? rawQuote.slice(0, QUOTE_TRUNCATE) + '…'
+        : rawQuote;
+      stepLines.push(`  - ${key}: ${arr.length} entries, latest quote: "${truncated}"`);
+    } else {
+      stepLines.push(`  - ${key}: ${arr.length} entries`);
+    }
+  }
+
+  // Null step + zero evidence → skip whole block (graceful, matches activeContext null pattern).
+  if (stepNum === null && !anyEvidence) return null;
+
+  const stepLine = stepNum === null
+    ? 'sc_journey_step: not yet started'
+    : `sc_journey_step: ${stepNum}`;
+
+  let block = '[SC Journey State]\n' + stepLine;
+  if (anyEvidence) {
+    block += '\nsc_journey_evidence:\n' + stepLines.join('\n');
+  } else {
+    block += '\nsc_journey_evidence: (none accumulated yet)';
+  }
+
+  // Hard cap: rebuild with counts-only if over budget.
+  if (block.length > BLOCK_HARD_LIMIT) {
+    block = '[SC Journey State]\n' + stepLine
+      + '\nsc_journey_evidence:\n' + stepCounts.join('\n');
+  }
+  return block;
+}
+
+/**
  * Build the {{...}} dynamic runtime block (spec 04 §4 — not cached, recomputed每 turn).
  *
  * @param {object} sessionState
@@ -446,6 +529,12 @@ async function loadOrCreateSession(sql, {
  *   v5.2 第二塊 PR-a — per-student active_context from students table.
  *   When set + valid, prepends [Active Context] block per spec §4.1 (~80 tok).
  *   When null / invalid, omitted (graceful fallback to v5.1 behavior per spec §7.3).
+ * @param {{step:number|null, evidence:object}} [opts.scJourney]
+ *   v5.2 七步 PR-3 — per-student sc_journey state from students table.
+ *   When set + non-empty, appends [SC Journey State] block right after
+ *   activeContext (still in dynamic block, NOT cached).
+ *   When null / step+evidence all empty, omitted (caller-side studentRow
+ *   null → opts.scJourney null; helper returning null also skips).
  * @returns {string}
  */
 export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays = 0, opts = {}) {
@@ -459,11 +548,21 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
     ? [activeContextBlock, '']   // block + blank line separator
     : [];
 
+  // ⭐ v5.2 七步 PR-3 — SC Journey State block. Same dynamic-only positioning
+  //   as activeContext (per-student → MUST NOT enter cached prefix).
+  //   Helper returns null when step is null + evidence all empty → skip.
+  const scJourneyBlock = opts.scJourney
+    ? buildScJourneyBlock(opts.scJourney)
+    : null;
+  const linesScJourney = scJourneyBlock
+    ? [scJourneyBlock, '']
+    : [];
+
   // ⭐ v5.1 Step 4 PR-23s4b — primary_mode 取代 current_phase.
   //   readModeState 走 fallback (legacy router_phase / null state → elicitation).
   const modeRead = readModeState(sessionState);
   const primaryMode = modeRead.primary_mode;
-  const lines = [...linesActiveContext, '━━━ 本場學員狀態（runtime、不快取）━━━'];
+  const lines = [...linesActiveContext, ...linesScJourney, '━━━ 本場學員狀態（runtime、不快取）━━━'];
 
   const top1 = userProfile.top1_value || sessionState.top1_value || null;
   const anchors = Array.isArray(userProfile.anchors) ? userProfile.anchors : [];
@@ -591,8 +690,9 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
 export function buildSystemPromptArrayV5({
   sessionState, userProfile, gapDays = 0, conditionalInjects = [], cachingEnabled = false,
   activeContext = null,   // ⭐ v5.2 第二塊 PR-a — threaded through to dynamic block
+  scJourney = null,       // ⭐ v5.2 七步 PR-3 — same dynamic-only positioning as activeContext
 }) {
-  const dynamicText = buildDynamicContext(sessionState, userProfile, gapDays, { activeContext })
+  const dynamicText = buildDynamicContext(sessionState, userProfile, gapDays, { activeContext, scJourney })
     + (conditionalInjects.length ? '\n\n' + conditionalInjects.join('\n\n') : '');
 
   if (!cachingEnabled) {
@@ -1411,6 +1511,14 @@ export default async function handler(req, res) {
     const activeContext = (onboardingTookTurn || !studentRow)
       ? null
       : pickActiveContext(studentRow);
+    // ⭐ v5.2 七步 PR-3 — sc_journey state from students table (PR-1 SELECT 加欄).
+    //   Pass through whenever studentRow exists; helper itself returns null
+    //   when step + evidence both empty (no display vs no value distinction here).
+    //   ?? null fallback handles the case where PR-1 not yet merged (cols missing).
+    const scJourney = studentRow
+      ? { step: studentRow.sc_journey_step ?? null,
+          evidence: studentRow.sc_journey_evidence ?? {} }
+      : null;
     const systemParam = buildSystemPromptArrayV5({
       sessionState: stateForPrompt,
       userProfile: userProfile || {},
@@ -1418,6 +1526,7 @@ export default async function handler(req, res) {
       conditionalInjects,
       cachingEnabled,
       activeContext,
+      scJourney,
     });
 
     // Step 9 — Anthropic Sonnet call (with 429 backoff + 5xx 1-retry, 6/3 burst protection).
