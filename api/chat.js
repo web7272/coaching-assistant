@@ -590,6 +590,33 @@ export function detectScJourneyEvidenceForTurn({
 }
 
 /**
+ * v5.2 七步 PR-5 — derive evidence_focus marker for Damon Note
+ * 【sc_step_when_generated】 placeholder.
+ *
+ * Picks the HIGHEST non-empty step + that step's LATEST entry's `type`.
+ * Returns a short structured marker "step_N: type" — never raw quote
+ * (鐵律 #2). Returns `null` when evidence absent / all empty.
+ *
+ * Pure function; testable.
+ *
+ * @param {object|null} evidence  keyed object {step_1..step_7: []}
+ * @returns {string|null}         e.g. "step_4: identity_claim", or null
+ */
+export function deriveScEvidenceFocus(evidence) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) return null;
+  for (let n = 7; n >= 1; n--) {
+    const arr = evidence[`step_${n}`];
+    if (Array.isArray(arr) && arr.length > 0) {
+      const latest = arr[arr.length - 1];
+      const type = (latest && typeof latest.type === 'string' && latest.type.length > 0)
+        ? latest.type : 'unknown';
+      return `step_${n}: ${type}`;
+    }
+  }
+  return null;
+}
+
+/**
  * v5.2 七步 PR-4 Path A — Append a single evidence entry to a student's
  * sc_journey_evidence keyed object. Idempotent at SQL layer; caller wraps
  * with try/catch (fail-soft, NEVER blocks conversation).
@@ -2424,10 +2451,18 @@ ${conversationText}
     let activeContextCategory = null;
     let activeContextName = null;
     let activeContextDefinition = null;
+    // ⭐ v5.2 七步 PR-5 — wire 【sc_step_when_generated】 placeholder.
+    //   Read sc_journey_step + sc_journey_evidence from students table.
+    //   Fail-soft: any DB failure → fall through to null defaults (placeholder
+    //   behavior preserved). Per Patrick: only the step: / evidence_focus:
+    //   value lines change — header / fences / extraction regex untouched.
+    let scJourneyStep = null;
+    let scJourneyEvidence = null;
     try {
       const pr = await sql`
         SELECT preferred_name,
-               active_context_category, active_context_name, active_context_definition
+               active_context_category, active_context_name, active_context_definition,
+               sc_journey_step, sc_journey_evidence
           FROM students WHERE student_id = ${studentIdOfSession} LIMIT 1
       `;
       if (pr.length > 0) {
@@ -2435,6 +2470,8 @@ ${conversationText}
         activeContextCategory   = pr[0].active_context_category   ?? null;
         activeContextName       = pr[0].active_context_name       ?? null;
         activeContextDefinition = pr[0].active_context_definition ?? null;
+        scJourneyStep      = pr[0].sc_journey_step     ?? null;
+        scJourneyEvidence  = pr[0].sc_journey_evidence ?? null;
       }
     } catch (e) { console.warn('[generateDamonNote] student row lookup failed:', e.message); }
 
@@ -2453,11 +2490,22 @@ ${conversationText}
       + `name: ${activeContextName ?? '(未設定)'}\n`
       + `definition: ${activeContextDefinition ?? '(未設定)'}\n`
       + `---\n`;
+    // v5.2 七步 PR-5 — wire real values (PR-4 schema + write logic now live).
+    //   step: null DB value (legacy / pre-PR-4 deploy) → '(未起步)' graceful.
+    //   evidence_focus: derive from sc_journey_evidence keyed object;
+    //     null → '(未起步)'. Format = "step_N: type" structured marker,
+    //     NOT raw quote (鐵律 #2).
+    //   Only the 2 value lines change; 【sc_step_when_generated】 header +
+    //   `---` fences byte-identical (regex extraction at L2466/2470 unchanged).
+    const scStepValue = (Number.isInteger(scJourneyStep) && scJourneyStep >= 1 && scJourneyStep <= 7)
+      ? String(scJourneyStep)
+      : '(未起步)';
+    const scEvidenceFocusValue = deriveScEvidenceFocus(scJourneyEvidence) || '(未起步)';
     const scStepPlaceholder =
       `---\n`
       + `【sc_step_when_generated】\n`
-      + `step: null  # placeholder、七步 errata ship 後實作 logic\n`
-      + `evidence_focus: null  # placeholder、七步 errata ship 後實作 logic\n`
+      + `step: ${scStepValue}\n`
+      + `evidence_focus: ${scEvidenceFocusValue}\n`
       + `---\n`;
     // AI body might or might not echo these (prompt told it to skip);
     // strip any echoed prefix to avoid duplicates, then prepend canonical ones.
