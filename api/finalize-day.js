@@ -91,6 +91,96 @@ export function isGraduationDay(sessionDay) {
   return sessionDay === 21;
 }
 
+// ════════════════════════════════════════════════════════════════
+// v5.2 七步 PR-4 Path B — sc_journey_step finalize write.
+// ════════════════════════════════════════════════════════════════
+// Patrick 6/11 ruling:
+//   new_step = max( current_step_from_DB,                         // hold (NEVER drop)
+//                   max{N : sc_journey_evidence[step_N] non-empty} )  // promote on evidence
+//
+// Why finalize-only write (not per-turn):
+//   per-turn evidence appends from N=1..7 concurrent students can race a
+//   simultaneous sc_journey_step UPDATE. Finalize-day is the single point
+//   per (student, session) where we commit the new step. Path A (chat.js)
+//   only appends evidence — never writes step.
+//
+// Why hold-and-promote-only (no 降回):
+//   §3.5 cached framing already instructs AI to never relay "倒退/進度
+//   壓力" regardless of stored step value, so high-water-mark semantics
+//   don't degrade learner experience. PR-4 takes the lowest-risk choice;
+//   合法降 logic (if needed) lands post-PR-5 16 場 sim review.
+
+/**
+ * Pure: compute the new sc_journey_step.
+ *   Hold (never drop) + promote on max-evidenced-step.
+ *
+ * @param {number|null} currentStep   raw students.sc_journey_step value
+ * @param {object|null} evidence      raw students.sc_journey_evidence value
+ *                                    (keyed object {step_1..step_7: []} per migration 037)
+ * @returns {number|null}             1..7, or null if both inputs degenerate
+ */
+export function computeScJourneyStep(currentStep, evidence) {
+  const cur = (Number.isInteger(currentStep) && currentStep >= 1 && currentStep <= 7)
+    ? currentStep : null;
+  let maxEvidenced = null;
+  if (evidence && typeof evidence === 'object' && !Array.isArray(evidence)) {
+    // Walk top-down so we short-circuit at the highest non-empty step.
+    for (let n = 7; n >= 1; n--) {
+      const arr = evidence[`step_${n}`];
+      if (Array.isArray(arr) && arr.length > 0) {
+        maxEvidenced = n;
+        break;
+      }
+    }
+  }
+  if (cur === null && maxEvidenced === null) return null;
+  if (cur === null) return maxEvidenced;
+  if (maxEvidenced === null) return cur;
+  return Math.max(cur, maxEvidenced);
+}
+
+/**
+ * Fail-soft sc_journey_step write. Mirrors day1_completed_at write pattern:
+ *   try { SELECT current+evidence → compute → UPDATE if changed } catch { console.warn }
+ *
+ * Caller ignores return value; the {ok, prev, next} shape exists purely for
+ * unit testability (handler is I/O orchestration, this helper is testable).
+ *
+ * @param {Function} sql        neon tagged-template
+ * @param {string}   studentId
+ * @returns {Promise<{ok:boolean, prev:number|null, next:number|null, reason?:string}>}
+ */
+export async function writeScJourneyStepFailSoft(sql, studentId) {
+  try {
+    const rows = await sql`
+      SELECT sc_journey_step, sc_journey_evidence
+        FROM students
+       WHERE student_id = ${studentId}
+       LIMIT 1
+    `;
+    if (!rows || rows.length === 0) {
+      return { ok: true, prev: null, next: null, reason: 'student_not_found' };
+    }
+    const prev = rows[0].sc_journey_step ?? null;
+    const evidence = rows[0].sc_journey_evidence ?? null;
+    const next = computeScJourneyStep(prev, evidence);
+    // No-op if no promotion possible (next null OR same as prev).
+    if (next !== null && next !== prev) {
+      await sql`
+        UPDATE students
+           SET sc_journey_step = ${next}
+         WHERE student_id = ${studentId}
+      `;
+    }
+    return { ok: true, prev, next };
+  } catch (err) {
+    // 鐵律: fail-soft. Log + suppress so finalize never blocks on metadata write.
+    console.warn('[finalize-day][sc_journey_step-write-failed]',
+      err?.message || err);
+    return { ok: false, prev: null, next: null, reason: 'sql_error' };
+  }
+}
+
 /* PR-4c-green 5/24 cleanup — isWeekBoundary + generateWeekSummary retired.
    產品決策：5 phase reports 取代週報。Day 7/14 不再 fire summary Sonnet 寫
    is_week_summary=true row；is_week_summary 欄位本身留著（schema 用於 daily
@@ -413,6 +503,12 @@ export default async function handler(req, res) {
           day1WriteErr?.message || day1WriteErr);
       }
     }
+
+    // ⭐ v5.2 七步 PR-4 Path B — write sc_journey_step (promote-only, fail-soft).
+    //   Mirrors day1_completed_at fail-soft pattern: never blocks finalize on
+    //   metadata write. Single point of step write (race-safe vs per-turn
+    //   evidence appends in chat.js Path A).
+    await writeScJourneyStepFailSoft(sql, existing.student_id);
 
     // ⭐ 6/7 Vivi — derive wasCrisis from THIS session's session_state.
     //   sessionTouchedCrisis() biases to TRUE on ambiguity (per spec fail-safe).
