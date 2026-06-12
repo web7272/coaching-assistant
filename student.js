@@ -121,7 +121,11 @@ async function hydrateFromCookie() {
 
 // ─── view router ───────────────────────────────────────────────────
 // PR-4c-green 5/24 cleanup — 'week-report' view retired (5 phase reports 取代).
-const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report', 'upgrade', 'blocked'];
+// 6/12 P0 fix — 'storyboard' 補回 (件3 PR-J4 漏更新 → showView('storyboard')
+// 因 VIEWS 不含 'storyboard',view-storyboard 永遠沒被加 active,#/storyboard
+// 整頁空白. 防再犯 test: lib/student/views-coverage.test.js 鎖 VIEWS ↔ index.html
+// view-* id 必須一致).
+const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report', 'upgrade', 'blocked', 'storyboard'];
 
 function showView(name) {
   for (const v of VIEWS) {
