@@ -260,12 +260,13 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
    (3-col snake DayTile + plant illustrations + path + treasure shelf).
    ════════════════════════════════════════════════════════════════ */
 #view-journey { background: var(--bg-mint); }
-.journey-title-wrap { text-align: center; padding-top: 28px; padding-bottom: 4px; }
+/* 6/12 Vivi — 上方留白收緊 (28 → 14). 副標 .journey-sub markup 已移除. */
+.journey-title-wrap { text-align: center; padding-top: 14px; padding-bottom: 4px; }
 .journey-title { font-family: var(--font-serif); font-size: 19px; letter-spacing: 2px; color: var(--green-forest); }
-.journey-sub { margin-top: 8px; font-family: var(--font-serif); font-style: italic; font-size: 12px; letter-spacing: 1px; color: var(--text-secondary); }
 
 /* P2 (PR-4c-green) §5.2 — 3-col snake grid + plant tiles + path + treasure shelf */
-.journey-grid-wrap { padding: 28px 24px 0; display: flex; justify-content: center; }
+/* 6/12 Vivi — 上 padding 收緊 (28 → 14), 整體 grid 上提. 左右 + 下 padding 不動. */
+.journey-grid-wrap { padding: 14px 24px 0; display: flex; justify-content: center; }
 .journey-stage {
   position: relative;
   width: 100%;
@@ -1118,7 +1119,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   align-items: center;
   gap: 10px;
   max-width: 520px;
-  margin: 8px auto 20px;
+  /* 6/12 Vivi — 上下 margin 收緊 (8→4 / 20→14), pill 跟標題+grid 更貼. */
+  margin: 4px auto 14px;
   padding: 10px 16px;
   background: rgba(224, 138, 60, 0.08);
   border: 1px solid rgba(224, 138, 60, 0.2);
