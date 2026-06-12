@@ -656,6 +656,31 @@ async function renderStudent(sid) {
       gradEl.textContent = `【教練見證】\n${g.coachLetter || '—'}\n\n【宣言】\n${g.declaration || '—'}\n\n【21 句詩】\n${poem}\n\n寄信狀態：${g.exportedToEmail ? '已寄' : '未寄'}`;
     }
   } catch (e) { gradEl.textContent = '沒能取回結業：' + e.message; }
+
+  // 6/12 Vivi — 21 天旅程 (頁Y storyboard).
+  //   Coach 唯讀: 故事 collapsible=false (全展開, 不要 toggle button) +
+  //   expandAllSteps=true (7 步塊全展開, 不必複製 student.js 互動 handler).
+  //   走 audience=coach&studentId — 端走 guardCoachOr401, 完全不依賴 student
+  //   cookie (Patrick 紅線). Render 複用 lib/student/storyboard-render.js 同
+  //   一份 module (透過 coach.html <script type="module"> 掛到 window),
+  //   故事單一來源, 0 第 3 份 inline 複製.
+  const sbHost = document.getElementById('coach-storyboard');
+  if (sbHost) {
+    sbHost.innerHTML = '<p class="muted">載入中…</p>';
+    try {
+      const sb = await api(`/api/sc-storyboard?audience=coach&studentId=${encodeURIComponent(sid)}&module=self`);
+      if (window.StoryboardRender && typeof window.StoryboardRender.renderStoryboardBodyHTML === 'function') {
+        sbHost.innerHTML = window.StoryboardRender.renderStoryboardBodyHTML(sb, {
+          collapsible: false,
+          expandAllSteps: true,
+        });
+      } else {
+        sbHost.innerHTML = '<p class="muted">旅程模組未載入。請重新整理頁面。</p>';
+      }
+    } catch (e) {
+      sbHost.innerHTML = `<p class="muted">沒能取回旅程：${escapeText(e.message)}</p>`;
+    }
+  }
 }
 
 // ─── router ────────────────────────────────────────────────────────

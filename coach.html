@@ -122,6 +122,14 @@
       <div id="coach-journey-grid" class="coach-mini-grid"></div>
       <div id="coach-grad-cell" style="max-width:480px;margin-top:6px;"></div>
 
+      <!-- 6/12 Vivi — 教練看「這位學員的 21 天旅程」 (頁Y storyboard).
+           走 /api/sc-storyboard?audience=coach&studentId= (guardCoachOr401);
+           render 走 lib/student/storyboard-render.js 同份 module (學員端故事
+           的單一來源, Patrick: 「絕不可開第 3 份會分歧的故事複製」). 教練端
+           唯讀: 故事直接全展開 + 7 步塊全展開, 不必複製互動 handler. -->
+      <h2 class="coach-h2" style="margin-top:28px;">這位學員的 21 天旅程</h2>
+      <div id="coach-storyboard" class="storyboard-body" style="margin-top:8px;"></div>
+
       <!-- P5 (PR-4c-green): 週報 retired (spec 09 §10). 5 Phase Reports (spec 09
            §5.5 / §8) — coach sees un-sanitized 突破彙整 via audience=coach.
            Vivi 5/25 上架前：教學內容未定 → 標題 + 容器加 hidden、可逆地藏起來.
@@ -156,6 +164,22 @@
   </section>
 </div>
 
+<!-- 6/12 Vivi — 教練版 21 天旅程 render 走 student 端同一份 module
+     (lib/student/storyboard-render.js). 不開第 3 份 inline 複製.
+     Module scripts 默認 deferred → 在 DOMContentLoaded 之前執行完, coach.js
+     的 route() (DCL handler) 跑時 window.StoryboardRender 已就緒.
+     若載入失敗 → window.StoryboardRender = null → coach.js fail-soft 顯示提示. -->
+<script type="module">
+  try {
+    const mod = await import('/lib/student/storyboard-render.js');
+    window.StoryboardRender = {
+      renderStoryboardBodyHTML: mod.renderStoryboardBodyHTML,
+    };
+  } catch (err) {
+    console.warn('[coach] storyboard-render module load failed:', err);
+    window.StoryboardRender = null;
+  }
+</script>
 <script src="/coach.js"></script>
 </body>
 </html>
