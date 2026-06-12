@@ -1062,3 +1062,129 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   .storyboard-step-toggle,
   .storyboard-nav-item { transition: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v5.3 件3 PR-J5 — 3 條串接
+   ① 頁X 頂部 mini-map → 頁 Y (.storyboard-minimap)
+   ② auth.html 5 步預覽 + 七步說明 (.auth-preview)
+   ① 教練卡 連結 沿用 .hint-italic (既有 paper-card 樣式)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── ② 頁X 頂部 mini-map entry ───────────────────────────────── */
+.storyboard-minimap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  margin: 8px auto 20px;
+  padding: 10px 16px;
+  background: rgba(224, 138, 60, 0.08);
+  border: 1px solid rgba(224, 138, 60, 0.2);
+  border-radius: 999px;
+  color: var(--brand, #E08A3C);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.storyboard-minimap:hover,
+.storyboard-minimap:focus {
+  background: rgba(224, 138, 60, 0.14);
+  border-color: rgba(224, 138, 60, 0.4);
+}
+.storyboard-minimap:active { transform: scale(0.98); }
+.storyboard-minimap__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand, #E08A3C);
+}
+.storyboard-minimap__text { flex: 1; }
+.storyboard-minimap__arrow { font-size: 16px; opacity: 0.8; }
+@media (max-width: 640px) {
+  .storyboard-minimap {
+    margin: 6px 12px 14px;
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .storyboard-minimap { transition: none; }
+}
+
+/* ── ③ auth.html 5 步功能預覽 + 七步說明 ──────────────────────── */
+.auth-preview {
+  max-width: 720px;
+  margin: 36px auto 0;
+  padding: 0 16px;
+  text-align: left;
+}
+.auth-preview__intro {
+  text-align: center;
+  font-family: var(--font-serif, Georgia, "Noto Serif TC", serif);
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--text-primary);
+  margin: 0 0 24px;
+  padding: 0 8px;
+}
+.auth-preview__steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+.auth-preview__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+.auth-preview__num {
+  font-family: var(--font-mono, Menlo, monospace);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.auth-preview__frame {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  max-width: 96px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.auth-preview__frame--placeholder {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(0, 0, 0, 0.04),
+    rgba(0, 0, 0, 0.04) 6px,
+    rgba(0, 0, 0, 0.08) 6px,
+    rgba(0, 0, 0, 0.08) 12px
+  );
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+}
+.auth-preview__frame--icon {
+  background: rgba(224, 138, 60, 0.08);
+  border: 1px solid rgba(224, 138, 60, 0.3);
+  color: var(--brand, #E08A3C);
+}
+.auth-preview__label {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+@media (max-width: 640px) {
+  .auth-preview { margin-top: 24px; }
+  .auth-preview__steps {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  .auth-preview__frame { max-width: 64px; }
+  .auth-preview__label { font-size: 12px; }
+  .auth-preview__intro { font-size: 14px; }
+}

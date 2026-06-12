@@ -68,6 +68,24 @@
       <p class="journey-sub">一步一步，走進自己</p>
     </div>
 
+    <!-- v5.3 件3 PR-J5 ② — 頁X 頂部 mini-map → 頁 Y (#/storyboard).
+         Lives OUTSIDE #journey-grid (above .journey-grid-wrap) so it
+         survives renderJourney's innerHTML clear, mirroring the same
+         positional choice as the journey-path SVG. -->
+    <a class="storyboard-minimap" href="#/storyboard" aria-label="打開我的人生旅途">
+      <span class="storyboard-minimap__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+             stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/>
+          <path d="M9 4 V18"/>
+          <path d="M15 6 V20"/>
+        </svg>
+      </span>
+      <span class="storyboard-minimap__text">看看你的人生旅途</span>
+      <span class="storyboard-minimap__arrow" aria-hidden="true">→</span>
+    </a>
+
     <!-- Vivi 5/24: 5 寶藏移到 21 天格子上面、在標題副標之後、grid 之前.
          Vivi 5/25 上架前：寶藏教學內容還沒寫好（之後 Vivi+Damon 來）→ 兩個元素加
          `hidden`、可逆地藏起來. 不要做天數解鎖邏輯（phase-state.js 不動）.
@@ -166,6 +184,11 @@
     <div class="btn-row" id="note-btn-row">
       <button class="paper-btn" data-nav="journey">回到旅程</button>
       <button class="paper-btn" data-nav="journey" id="note-btn-tomorrow">明天見</button>
+    </div>
+    <!-- v5.3 件3 PR-J5 ① — 教練卡 → 頁 Y 入口 (#/storyboard).
+         hint-italic 風格 (沿用「先回旅程」 既有卡內連結樣式). -->
+    <div style="margin-top:16px;text-align:center;">
+      <a href="#/storyboard" class="hint-italic">看看你的人生旅途 →</a>
     </div>
   </section>
 
