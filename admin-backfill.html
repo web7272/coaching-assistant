@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backfill Storyboard · admin</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 24px;
+         max-width: 920px; margin: 0 auto; background: #fff; color: #2d2422; line-height: 1.5; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  h2 { font-size: 14px; margin: 18px 0 6px; color: #6b5c57; }
+  fieldset { border: 1px solid #c66b4f33; padding: 12px 14px; margin: 12px 0; border-radius: 8px; }
+  legend { padding: 0 6px; font-size: 12px; color: #6b5c57; }
+  label { display: block; margin: 8px 0 4px; font-size: 12px; color: #6b5c57; }
+  input[type="text"], input[type="password"] {
+    width: 100%; padding: 8px 10px; border: 1px solid #ccc;
+    border-radius: 4px; font: inherit; font-size: 13px;
+  }
+  .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .row label { display: inline-flex; gap: 4px; align-items: center; margin: 0; }
+  button { padding: 8px 16px; cursor: pointer; font: inherit; font-size: 13px;
+           background: #2d2422; color: #fff; border: none; border-radius: 4px; }
+  button:hover { background: #6b5c57; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.danger { background: #c66b4f; }
+  button.danger:hover { background: #a8553c; }
+  pre { background: #f7ebe5; padding: 10px 12px; overflow: auto;
+        max-height: 600px; white-space: pre-wrap; word-break: break-word;
+        font-size: 12px; border-radius: 4px; margin: 6px 0; }
+  .warn { color: #c66b4f; font-size: 12px; margin: 6px 0; }
+  .muted { color: #9c8c87; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>🔧 Backfill Storyboard <span class="muted">(admin · v5.3 件3)</span></h1>
+
+<p class="muted">
+  舊封測者頁Y 一次性回填. 走核心 lib/api/sc-storyboard-backfill (純函式推導)
+  + lib/api/sc-storyboard-gen J2/J3 (安全 + 個人化紅線). dryRun 預設、commit 才寫.
+</p>
+
+<fieldset>
+  <legend>Auth</legend>
+  <label>Admin token (Vercel env <code>ADMIN_API_TOKEN</code>)</label>
+  <input type="password" id="token" autocomplete="off" placeholder="paste from Vercel dashboard">
+  <p class="warn" style="margin-top:6px;">⚠️ token 走 header (x-admin-token), 不放 URL。</p>
+</fieldset>
+
+<fieldset>
+  <legend>① 單一學員</legend>
+  <label>Student ID</label>
+  <input type="text" id="student" autocomplete="off" placeholder="例如 A003 / A006">
+  <div class="row" style="margin-top:10px;">
+    <label><input type="radio" name="mode" value="dry-run" checked> dry-run <span class="muted">(預設 · 只生 report)</span></label>
+    <label><input type="radio" name="mode" value="commit"> commit <span class="muted">(寫 DB · audit 過才用)</span></label>
+  </div>
+  <button id="run-one" type="button" style="margin-top:12px;">執行</button>
+</fieldset>
+
+<fieldset>
+  <legend>② 全封測 commit <span class="muted">(Vivi: 所有 dry-run Patrick 審過後才按)</span></legend>
+  <p class="warn">⚠️ 對所有 plan_a + is_beta + 非 blocked 學員執行 commit. 不可逆.</p>
+  <button id="load-list" type="button">列出全封測名單</button>
+  <pre id="list-out" style="max-height:160px;">(點上方列出)</pre>
+  <button id="commit-all" type="button" class="danger" disabled>全部 commit (sequential)</button>
+  <pre id="progress" style="max-height:300px;">(commit 進度顯示)</pre>
+</fieldset>
+
+<fieldset>
+  <legend>Report output</legend>
+  <pre id="output">點上方執行 → report 出現在這。</pre>
+</fieldset>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const out      = $('output');
+const progress = $('progress');
+const listOut  = $('list-out');
+
+function tokenOrThrow() {
+  const t = $('token').value.trim();
+  if (!t) throw new Error('admin token 沒填');
+  return t;
+}
+
+async function callBackfill(student, commit) {
+  const url = '/api/admin/backfill-storyboard?student='
+    + encodeURIComponent(student)
+    + (commit ? '&commit=true' : '');
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'x-admin-token': tokenOrThrow() },
+  });
+  const body = await res.json().catch(() => ({}));
+  return { status: res.status, body };
+}
+
+let betaList = [];
+
+// ── ① 單一學員 ──
+$('run-one').addEventListener('click', async () => {
+  const sid = $('student').value.trim();
+  if (!sid) { out.textContent = '⚠️ 學員 ID 沒填'; return; }
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const commit = mode === 'commit';
+  if (commit && !confirm('⚠️ 將對 ' + sid + ' 寫 DB (commit). 不可逆. 確定?')) return;
+  out.textContent = '執行中 ' + sid + ' (' + mode + ') …';
+  $('run-one').disabled = true;
+  try {
+    const { status, body } = await callBackfill(sid, commit);
+    let s = '--- HTTP ' + status + ' ---\n' + JSON.stringify(body, null, 2);
+    if (status === 200 && body.report) {
+      s += '\n\n--- REPORT ---\n' + body.report;
+    }
+    out.textContent = s;
+  } catch (e) {
+    out.textContent = '❌ ' + e.message;
+  } finally {
+    $('run-one').disabled = false;
+  }
+});
+
+// ── ② 全封測 ──
+$('load-list').addEventListener('click', async () => {
+  listOut.textContent = '載入中 …';
+  try {
+    const res = await fetch('/api/admin/backfill-storyboard', {
+      method: 'GET',
+      headers: { 'x-admin-token': tokenOrThrow() },
+    });
+    const body = await res.json();
+    if (res.status !== 200 || !body.ok) {
+      listOut.textContent = '❌ HTTP ' + res.status + '\n' + JSON.stringify(body, null, 2);
+      $('commit-all').disabled = true;
+      return;
+    }
+    betaList = body.students || [];
+    if (betaList.length === 0) {
+      listOut.textContent = '名單為空。';
+      $('commit-all').disabled = true;
+    } else {
+      listOut.textContent = '共 ' + betaList.length + ' 人:\n' + betaList.join('\n');
+      $('commit-all').disabled = false;
+    }
+  } catch (e) {
+    listOut.textContent = '❌ ' + e.message;
+  }
+});
+
+$('commit-all').addEventListener('click', async () => {
+  if (betaList.length === 0) { progress.textContent = '⚠️ 沒名單'; return; }
+  if (!confirm('⚠️ 將對 ' + betaList.length + ' 人 commit. 不可逆. 確定?')) return;
+  $('commit-all').disabled = true;
+  $('load-list').disabled  = true;
+  progress.textContent = '開始 …\n';
+  let ok = 0, fail = 0;
+  for (let i = 0; i < betaList.length; i++) {
+    const sid = betaList[i];
+    progress.textContent += '[' + (i + 1) + '/' + betaList.length + '] ' + sid + ' … ';
+    try {
+      const { status, body } = await callBackfill(sid, true);
+      if (status === 200 && body.ok && body.committed) {
+        progress.textContent += 'OK (step=' + (body.step ?? 'null') + ')\n';
+        ok++;
+      } else {
+        progress.textContent += 'FAIL (' + status + '): '
+          + JSON.stringify(body).slice(0, 120) + '\n';
+        fail++;
+      }
+    } catch (e) {
+      progress.textContent += 'ERR: ' + e.message + '\n';
+      fail++;
+    }
+  }
+  progress.textContent += '\n=== done ===\nOK: ' + ok + ' / FAIL: ' + fail + '\n';
+  $('commit-all').disabled = false;
+  $('load-list').disabled  = false;
+});
+</script>
+</body>
+</html>
