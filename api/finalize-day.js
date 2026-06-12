@@ -26,7 +26,7 @@ import { callAnthropicWithRetry } from '../lib/api/anthropic-retry.js';
 import {
   appendDailyTakeaway, setLastSessionDaySummary, markExportEmailed,
   getUserProfile, setCrisisStateCarryForward,
-  appendActiveContextSummary,
+  appendActiveContextSummary, updateUserProfile,
 } from '../lib/state/state-manager.js';
 import { sendExportEmail } from '../lib/email/brevo.js';
 import {
@@ -900,6 +900,41 @@ export default async function handler(req, res) {
       } catch (e) {
         console.error('[v5_2_active_context_summary] append failed (fail-soft):', e.message);
       }
+    }
+
+    // ⭐ 6/12 Stage 1 — sync session_state values columns → user_profile_evolution.
+    //   values_collected_list / top1_value / values_ranking 在 session 中累積
+    //   (engine-2 append), session close 要把最終值 cascade 到 UPE 才能讓下一
+    //   場 session_state 拿得到 (跨 session 連續性).
+    //   updateUserProfile 用 COALESCE 路徑 (state-manager.js:166-167) — 三個欄
+    //   位的 patch 為 null 時 keep existing, 不會踩到既有 UPE 資料.
+    //   fail-soft — 不阻塞主回應. Stage 1: top1_value / values_ranking 仍是
+    //   null (Stage 2 才寫), 但已先把管子接好.
+    try {
+      const sessState = existing.session_state || {};
+      const upePatch = {};
+      if (Array.isArray(sessState.values_collected_list)) {
+        upePatch.values_collected_list = sessState.values_collected_list;
+      }
+      if (typeof sessState.top1_value === 'string' && sessState.top1_value.trim().length > 0) {
+        upePatch.top1_value = sessState.top1_value;
+      }
+      if (Array.isArray(sessState.values_ranking)) {
+        upePatch.values_ranking = sessState.values_ranking;
+      }
+      if (Object.keys(upePatch).length > 0) {
+        await updateUserProfile(existing.student_id, upePatch);
+        console.info('[upe_values_sync] synced', JSON.stringify({
+          event: 'upe_values_sync',
+          has_list: !!upePatch.values_collected_list,
+          list_size: upePatch.values_collected_list?.length ?? 0,
+          has_top1: !!upePatch.top1_value,
+          has_ranking: !!upePatch.values_ranking,
+          // 鐵律 #2: 不 log 個別 value 內容 (只 enum + count).
+        }));
+      }
+    } catch (e) {
+      console.error('[upe_values_sync] update failed (fail-soft):', e.message);
     }
 
     // ⭐ v5.1 Step 6 PR-6b — crisis_state_carry_forward persistence.
