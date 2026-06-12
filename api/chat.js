@@ -33,6 +33,11 @@ import {
 } from '../lib/session/day-boundary.js';
 // 5/28 Patrick — A006 case fix: 殭屍 session row rollback decision helper.
 import { rollbackSessionIfNeeded } from '../lib/api/chat-rollback.js';
+// 6/12 — concat-aware detectorPatch merger for reframe_invocation_history_in_session.
+//   Two engines in the same turn can both invoke a reframe (e.g. engine-1 R1 +
+//   engine-2 landmine R5). Default shallow-merge would overwrite the history
+//   array; merger concats tails on top of the prevSessionState baseline.
+import { makeDetectorPatchMerger } from '../lib/state/detector-patch-merge.js';
 // 6/3 Patrick (Vivi burst protection) — Anthropic 429 / 5xx 友善 handling + retry.
 //   429 → exponential backoff retry (1s/2s/4s, cap 8s). 全部退到底 → 回 503 overload.
 //   5xx → attempt 0 retry 一次. 仍失敗 → throw.
@@ -1478,10 +1483,19 @@ export default async function handler(req, res) {
       last_3_turns: messages.slice(-6).map(m => m?.content || ''),
       // judges 留空 → detector handlers 用真實 Haiku judge（lib/haiku-judge/*）
       logMiss: (m) => console.warn('[detector miss]', JSON.stringify(m)),
+      // 6/12 — pure-function detectors need ISO timestamp + session id supplied by
+      //   imperative entry point (no Date.now inside pure code). reframe invocation
+      //   tracking (buildInvocationPatch) uses both.
+      session_id: sessionId,
+      now_iso: new Date().toISOString(),
     };
 
     const conditionalInjects = [];
     let detectorPatch = {};
+    // 6/12 — concat-aware merge so two engines' reframe invocations in the
+    // same turn both land in the history array (engine-1 R1 + engine-2 R5 etc.).
+    // Baseline = sessionState's history at START of detector phase.
+    const mergeDetectorPatch = makeDetectorPatchMerger(sessionState);
     // ⭐ §3 patch 6/4 (safety patch #23) — Cross-session counter deltas drained
     //   from detector outputs (currently passive_death_wish_count from E3).
     //   Forwarded to incrementUserProfileCounters at Step 12.
@@ -1513,7 +1527,7 @@ export default async function handler(req, res) {
       if (onbOut.handled) {
         onboardingTookTurn = true;
         if (onbOut.inject) conditionalInjects.push(onbOut.inject);
-        if (onbOut.patch) detectorPatch = { ...detectorPatch, ...onbOut.patch };
+        if (onbOut.patch) detectorPatch = mergeDetectorPatch(detectorPatch, onbOut.patch);
         // Atomic write at COMPLETE step — UPDATE students with all 4 fields in one shot.
         if (onbOut.onboarding_complete_write) {
           const w = onbOut.onboarding_complete_write;
@@ -1554,7 +1568,7 @@ export default async function handler(req, res) {
         const r = await detectorRegistry.dispatch('new_session_day', ctx);
         const out = collectDetectorOutput(r);
         conditionalInjects.push(...out.injects);
-        detectorPatch = { ...detectorPatch, ...out.patch };
+        detectorPatch = mergeDetectorPatch(detectorPatch, out.patch);
         mergeIncrements(out.user_profile_increments);
       } catch (e) {
         console.error('new_session_day dispatch failed:', e.message);
@@ -1605,7 +1619,7 @@ export default async function handler(req, res) {
         const r = await detectorRegistry.dispatch('user_turn', ctx);
         const out = collectDetectorOutput(r);
         conditionalInjects.push(...out.injects);
-        detectorPatch = { ...detectorPatch, ...out.patch };
+        detectorPatch = mergeDetectorPatch(detectorPatch, out.patch);
         mergeIncrements(out.user_profile_increments);
       } catch (e) {
         console.error('user_turn dispatch failed:', e.message);
