@@ -1608,9 +1608,12 @@ function renderStoryboardNode(node) {
       return '<p class="storyboard-quote storyboard-quote--villain">'
         + node.lines.map(escapeHTMLStoryboard).join('<br>') + '</p>';
     case 'step': {
+      // 6/12 fix — href 補零對齊 block id (storyboard-render.js sync).
+      // 可見文字保留單位數 (故事 verbatim 不動).
       const no = String(node.no);
+      const noPad = no.padStart(2, '0');
       return '<h3 class="storyboard-step-heading">'
-        + '<a class="storyboard-step-link" href="#storyboard-step-' + no + '">'
+        + '<a class="storyboard-step-link" href="#storyboard-step-' + noPad + '">'
         + no + '. ' + escapeHTMLStoryboard(node.name_zh) + '</a></h3>';
     }
     case 'villain-intro':
@@ -1705,7 +1708,12 @@ function buildStoryboardBodyHTML(apiResp) {
   const storyHTML = STORYBOARD_STORY_INLINE.map(renderStoryboardNode).join('\n');
   const navHTML = renderStoryboardSideNav(currentStep);
   const stepsHTML = steps.map((step, i) => renderStoryboardStepBlock(step, i === 0)).join('\n');
-  return '<div class="storyboard-story" id="storyboard-story">' + storyHTML + '</div>'
+  // 6/12 Vivi — 故事預設收起 + 「展開更多」 toggle (storyboard-render.js sync).
+  return '<div class="storyboard-story-wrap storyboard-story-wrap--collapsed" id="storyboard-story-wrap">'
+    + '<div class="storyboard-story" id="storyboard-story">' + storyHTML + '</div>'
+    + '<button type="button" class="storyboard-story-toggle" '
+    + 'aria-expanded="false" aria-controls="storyboard-story">展開更多</button>'
+    + '</div>'
     + '<div class="storyboard-layout">'
     + navHTML
     + '<div class="storyboard-steps" id="storyboard-steps">' + stepsHTML + '</div>'
@@ -1741,9 +1749,14 @@ function attachStoryboardToggleHandlers(rootEl) {
     a.addEventListener('click', (e) => {
       const href = a.getAttribute('href') || '';
       if (!href.startsWith('#storyboard-step-')) return;
+      // 6/12 P0 fix — preventDefault 提前: 只要是 #storyboard-step-* 一律
+      // 攔下,絕不讓它落到 SPA router. 之前 target 找不到 (因故事標籤 href
+      // 沒補零) → return-before-preventDefault → location.hash 變
+      // #storyboard-step-1 → router default → 跳 /entry/journey.
+      // 雖然 fix A 補零後 target 一定找得到,但這層防呆永久鎖住 routing 漏洞.
+      e.preventDefault();
       const target = document.querySelector(href);
       if (!target) return;
-      e.preventDefault();
       target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
       // Ensure the destination block is expanded so content is visible.
       const toggle = target.querySelector('.storyboard-step-toggle');
@@ -1754,6 +1767,20 @@ function attachStoryboardToggleHandlers(rootEl) {
       }
     });
   });
+  // 6/12 Vivi — 故事 「展開更多」/「收起」 toggle.
+  // a11y: <button> + aria-expanded + native keyboard (Enter/Space).
+  const storyWrap = rootEl.querySelector('#storyboard-story-wrap');
+  const storyToggle = rootEl.querySelector('.storyboard-story-toggle');
+  if (storyWrap && storyToggle) {
+    storyToggle.addEventListener('click', () => {
+      const expanded = storyToggle.getAttribute('aria-expanded') === 'true';
+      const next = !expanded;
+      storyToggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+      storyToggle.textContent = next ? '收起' : '展開更多';
+      if (next) storyWrap.classList.remove('storyboard-story-wrap--collapsed');
+      else      storyWrap.classList.add('storyboard-story-wrap--collapsed');
+    });
+  }
 }
 
 async function renderStoryboard() {

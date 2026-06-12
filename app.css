@@ -892,6 +892,48 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   letter-spacing: 1px;
 }
 
+/* ── 6/12 Vivi — 故事可展開/收起 ──────────────────────────────
+   預設收起 (~14em, 約 2-3 段); 點 「展開更多」 → 完整故事 + 「收起」.
+   prefers-reduced-motion 關 transition (a11y).
+   故事 verbatim 不動,只是外殼包一層 collapsible 容器. */
+.storyboard-story-wrap {
+  position: relative;
+}
+.storyboard-story-wrap > .storyboard-story {
+  margin-bottom: 16px; /* 收緊與 toggle 的距離 (原 40px 改 16px) */
+  transition: max-height 320ms ease;
+}
+.storyboard-story-wrap--collapsed > .storyboard-story {
+  max-height: 14em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent);
+          mask-image: linear-gradient(to bottom, #000 65%, transparent);
+}
+.storyboard-story-toggle {
+  display: block;
+  margin: 0 auto 40px;
+  background: transparent;
+  border: 1px solid var(--brand, #E08A3C);
+  color: var(--brand, #E08A3C);
+  padding: 8px 22px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 200ms ease;
+}
+.storyboard-story-toggle:hover,
+.storyboard-story-toggle:focus-visible {
+  background: rgba(224, 138, 60, 0.08);
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .storyboard-story-wrap > .storyboard-story,
+  .storyboard-story-toggle {
+    transition: none;
+  }
+}
+
 /* ── Layout: 桌機 左 sticky nav + 右內容 ─────────────────────── */
 .storyboard-layout {
   display: grid;
