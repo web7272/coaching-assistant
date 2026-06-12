@@ -127,11 +127,13 @@ function composeDeps({ sql, anthropic, callAnthropic, dryRun, log, report }) {
        WHERE student_id = ${sid}
     `;
   };
+  // 6/12 — opts spread LAST so caller (backfillOneStudent per-step capture)
+  // can override default log for diagnostic null-reason capture.
   const genBrainState = (opts) => generateBrainState({
-    ...opts, anthropic, callAnthropicWithRetry: callAnthropic, log,
+    anthropic, callAnthropicWithRetry: callAnthropic, log, ...opts,
   });
   const genSovereignAction = (opts) => generateSovereignAction({
-    ...opts, anthropic, callAnthropicWithRetry: callAnthropic, log,
+    anthropic, callAnthropicWithRetry: callAnthropic, log, ...opts,
   });
   return {
     dryRun, log, report,

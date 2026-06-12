@@ -117,16 +117,104 @@ export function composeSignals(studentRow, sessions, upe) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// 6/12 — Reframe IDs 顯示順序 (對齊 REFRAME_STEP_MAP). 加 unmapped 桶
+// 收殘:R8 / R11 等不映射的 (誠實列出, 不藏).
+// ────────────────────────────────────────────────────────────────
+const REFRAME_IDS_FOR_SUMMARY = ['R1', 'R1_E', 'R2', 'R3', 'R5', 'R6', 'R7', 'R12'];
+
+// ────────────────────────────────────────────────────────────────
+// Pure: signal-source summary — 開頭印每個學員的原始訊號數量 (Patrick
+// 6/12 診斷需求). 一眼看出 step 3-7 空是「資料薄」 (reframe 0 筆) 還是
+// 「有訊號沒被吃到」 (reframe N>0 但 evidence 還是空).
+//
+// ⚠️ 鐵律 #2: 只給數字 / reframe_id / 類型 — 絕不貼 raw 對話原文.
+//   surfaced_values 列出 (本就是 quality term, 不是 raw 原文).
+// ────────────────────────────────────────────────────────────────
+export function summarizeSignals(signals) {
+  if (!signals || typeof signals !== 'object') {
+    return '  (signals 缺, 無法摘要)';
+  }
+  const reframeHistory   = Array.isArray(signals.reframeHistory)   ? signals.reframeHistory   : [];
+  const surfacedValues   = Array.isArray(signals.surfacedValues)   ? signals.surfacedValues   : [];
+  const surfacedExamples = Array.isArray(signals.surfacedExamples) ? signals.surfacedExamples : [];
+  const dailyTakeaways   = Array.isArray(signals.dailyTakeaways)   ? signals.dailyTakeaways   : [];
+
+  // Per-reframe_id breakdown.
+  const counts = Object.create(null);
+  let unmappedCount = 0;
+  const unmappedIds = new Set();
+  for (const e of reframeHistory) {
+    if (!e || typeof e !== 'object' || typeof e.reframe_id !== 'string') continue;
+    if (REFRAME_IDS_FOR_SUMMARY.includes(e.reframe_id)) {
+      counts[e.reframe_id] = (counts[e.reframe_id] || 0) + 1;
+    } else {
+      unmappedCount++;
+      unmappedIds.add(e.reframe_id);
+    }
+  }
+  const breakdown = REFRAME_IDS_FOR_SUMMARY
+    .map(id => `${id}×${counts[id] || 0}`).join(' ');
+  const unmappedStr = unmappedCount > 0
+    ? `  unmapped×${unmappedCount} (${[...unmappedIds].sort().join(',')})`
+    : '';
+
+  const lines = [];
+  lines.push(`── signals summary ───────────────`);
+  lines.push(`  reframe entries: ${reframeHistory.length} 筆`);
+  lines.push(`    ${breakdown}${unmappedStr}`);
+  lines.push(`  surfaced_examples: ${surfacedExamples.length} 筆`);
+  // surfaced_values: 列出前 5 個 (它是 quality term, 不是 raw 原文 — 安全 + 診斷有用).
+  const sv = surfacedValues.filter(v => typeof v === 'string' && v.length > 0);
+  const svPreview = sv.slice(0, 5).join(', ');
+  const svMoreStr = sv.length > 5 ? ` ... (+${sv.length - 5})` : '';
+  lines.push(`  surfaced_values:   ${sv.length} 筆${sv.length > 0 ? ` (${svPreview}${svMoreStr})` : ''}`);
+  lines.push(`  daily_takeaways:   ${dailyTakeaways.length} 筆`);
+  return lines.join('\n');
+}
+
+// ────────────────────────────────────────────────────────────────
+// Pure: 從 captured logs 抽出 generate* 的 null 原因.
+//   sc-storyboard-gen.js log lines 都已結構化 (e.g.
+//   "[sc-storyboard-gen][sovereign_action] step N missing self-control declaration → null").
+//   最後一條通常就是 fail-reason. 抓最後一條 + 修剪前綴.
+// ────────────────────────────────────────────────────────────────
+export function summarizeNullReason(logsArray) {
+  if (!Array.isArray(logsArray) || logsArray.length === 0) return null;
+  // Walk from end, find first line that mentions "→ null" or "threw" or "fail".
+  for (let i = logsArray.length - 1; i >= 0; i--) {
+    const line = String(logsArray[i] || '');
+    if (/→\s*null|threw|fail-?soft|fail/.test(line)) {
+      // Strip leading `[sc-storyboard-gen]` / `[sc-storyboard-gen][sovereign_action]` prefix.
+      return line
+        .replace(/^\[sc-storyboard-gen\](\[\w+\])?\s*/, '')
+        .replace(/^step\s+\d+\s+/, '')          // 去掉 redundant "step N " (已在外層顯示)
+        .trim();
+    }
+  }
+  // Fallback: 沒命中 pattern, 回最後一條 (truncate 200 chars 防 raw text 漏入).
+  return String(logsArray[logsArray.length - 1] || '').slice(0, 200);
+}
+
+// ────────────────────────────────────────────────────────────────
 // Pure: format the per-student report block (Patrick reads this).
 //   ⚠️ No raw conversation text — only step/type/quote (came from anchor/
 //   surfaced/takeaway, never raw chat) + LLM-generated (already scrubbed) text.
+//
+//   6/12 diagnostic upgrade: + signals summary (top) + 確切 null 原因
+//   (來自 generate* 已 log 的 reasons map). signals + reasons 都 optional
+//   (向後相容, 沒給就走 generic 版).
 // ────────────────────────────────────────────────────────────────
-export function formatStudentReport({ studentId, derived, generated }) {
+export function formatStudentReport({ studentId, signals, derived, generated, reasons }) {
   const lines = [];
   lines.push(`═══════════════════════════════════════════════════════════════`);
   lines.push(`student: ${studentId}`);
   lines.push(`sc_journey_step: ${derived.step ?? '(null)'}`);
   lines.push('');
+  if (signals) {
+    lines.push(summarizeSignals(signals));
+    lines.push('');
+  }
+  const r = (reasons && typeof reasons === 'object') ? reasons : {};
   for (let n = 1; n <= 7; n++) {
     const entries = derived.evidence[`step_${n}`];
     const gen = generated[`step_${n}`];
@@ -146,12 +234,14 @@ export function formatStudentReport({ studentId, derived, generated }) {
       lines.push(`  brain_state.description: ${gen.brain_state.description}`);
       lines.push(`  brain_state.quote: ${gen.brain_state.quote ?? '(null)'}`);
     } else {
-      lines.push(`  brain_state: (null — LLM fail / scrub-empty / no-safe-quote)`);
+      const bsReason = r[`step_${n}.brain_state`];
+      lines.push(`  brain_state: (null — ${bsReason || 'LLM fail / scrub-empty / no-safe-quote'})`);
     }
     if (gen?.sovereign_action) {
       lines.push(`  sovereign_action: ${gen.sovereign_action}`);
     } else {
-      lines.push(`  sovereign_action: (null — insufficient personalization / rigidity-at-self / no internal-control declaration)`);
+      const saReason = r[`step_${n}.sovereign_action`];
+      lines.push(`  sovereign_action: (null — ${saReason || 'insufficient personalization / rigidity-at-self / no internal-control declaration'})`);
     }
     lines.push('');
   }
@@ -188,17 +278,35 @@ export async function backfillOneStudent(studentId, deps) {
   const derived = deriveScJourneyFromHistory(signals);
 
   // For each populated step, call J2 + J3 (走既有 helper, 不另寫生成).
+  // 6/12 — 每步包 capture-log: 把 generate* 內部 log 的「具體 null 原因」
+  // 攔下塞進 reasons map, 之後給 formatStudentReport 印出 (Patrick 診斷需求).
+  // generate* 仍正常 fail-soft (回 null), 邏輯 0 動.
   const generated = {};
+  const reasons = {};
   for (let n = 1; n <= 7; n++) {
     const entries = derived.evidence[`step_${n}`];
     if (!entries || entries.length === 0) continue;
     let brainState = null;
     let sovereignAction = null;
+
+    const bsLogs = [];
+    const captureBs = (m) => { bsLogs.push(m); log(m); };
     try {
-      brainState = await genBrainState({ stepNo: n, evidenceEntries: entries });
+      brainState = await genBrainState({
+        stepNo: n,
+        evidenceEntries: entries,
+        log: captureBs,  // ← caller-wins log (deps wrapper spread 順序保證)
+      });
     } catch (err) {
-      log(`[${studentId}][step_${n}] brain_state threw: ${err?.message || err}`);
+      const m = `[${studentId}][step_${n}] brain_state threw: ${err?.message || err}`;
+      bsLogs.push(m); log(m);
     }
+    if (brainState === null) {
+      reasons[`step_${n}.brain_state`] = summarizeNullReason(bsLogs);
+    }
+
+    const saLogs = [];
+    const captureSa = (m) => { saLogs.push(m); log(m); };
     try {
       sovereignAction = await genSovereignAction({
         stepNo: n,
@@ -207,10 +315,16 @@ export async function backfillOneStudent(studentId, deps) {
           surfacedValues: signals.surfacedValues,
           stepEvidence:   entries,
         },
+        log: captureSa,  // ← caller-wins log
       });
     } catch (err) {
-      log(`[${studentId}][step_${n}] sovereign_action threw: ${err?.message || err}`);
+      const m = `[${studentId}][step_${n}] sovereign_action threw: ${err?.message || err}`;
+      saLogs.push(m); log(m);
     }
+    if (sovereignAction === null) {
+      reasons[`step_${n}.sovereign_action`] = summarizeNullReason(saLogs);
+    }
+
     generated[`step_${n}`] = {
       brain_state:      brainState,
       sovereign_action: sovereignAction,
@@ -236,7 +350,7 @@ export async function backfillOneStudent(studentId, deps) {
 
   // Output OR commit.
   if (dryRun) {
-    report(formatStudentReport({ studentId, derived, generated }));
+    report(formatStudentReport({ studentId, signals, derived, generated, reasons }));
   } else {
     log(`[${studentId}] writing — sc_journey_step=${derived.step} stepsWithEvidence=${Object.keys(steps).filter(k => steps[k].state === 'filled').length}`);
     await writeBackfill(studentId, {
@@ -396,17 +510,19 @@ function buildCliDeps({ sql, anthropic, args }) {
     `;
   };
 
+  // 6/12 — opts spread LAST so caller-supplied log (per-step capture in
+  // backfillOneStudent) overrides default. Required for diagnostic reasons map.
   const genBrainState = (opts) => generateBrainState({
-    ...opts,
     anthropic,
     callAnthropicWithRetry: callAnthropic,
     log,
+    ...opts,
   });
   const genSovereignAction = (opts) => generateSovereignAction({
-    ...opts,
     anthropic,
     callAnthropicWithRetry: callAnthropic,
     log,
+    ...opts,
   });
 
   return {

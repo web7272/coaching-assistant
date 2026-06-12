@@ -8,6 +8,8 @@ import {
   parseArgs,
   composeSignals,
   formatStudentReport,
+  summarizeSignals,
+  summarizeNullReason,
   backfillOneStudent,
   runBackfill,
 } from './backfill-storyboard.js';
@@ -381,6 +383,261 @@ test('🛑 runBackfill: dry-run loops over listTargets, never writes', async () 
   // 1 leading「mode header」report + 1 per student = 4 blocks.
   assert.equal(reports.length, 4);
   assert.match(reports[0], /mode=DRY-RUN/);
+});
+
+// ═════════════════════════════════════════════════════════
+// 6/12 — summarizeSignals (純函式, 訊號診斷)
+// ═════════════════════════════════════════════════════════
+
+test('🛑 summarizeSignals: 列出 8 個 reframe_id 計數 + 順序固定', () => {
+  const s = summarizeSignals({
+    reframeHistory: [
+      { reframe_id: 'R2' }, { reframe_id: 'R2' },
+      { reframe_id: 'R3' },
+      { reframe_id: 'R7' },
+    ],
+    surfacedValues: ['勇敢'],
+    surfacedExamples: [],
+    dailyTakeaways: [{ day: 1, term: 'x' }],
+  });
+  // 順序固定 (R1 R1_E R2 R3 R5 R6 R7 R12), 計數正確.
+  assert.match(s, /R1×0 R1_E×0 R2×2 R3×1 R5×0 R6×0 R7×1 R12×0/);
+  assert.match(s, /reframe entries: 4 筆/);
+  assert.match(s, /surfaced_examples: 0 筆/);
+  assert.match(s, /surfaced_values:\s*1 筆 \(勇敢\)/);
+  assert.match(s, /daily_takeaways:\s*1 筆/);
+});
+
+test('🛑 summarizeSignals: empty signals → 0 全列出 (不藏)', () => {
+  const s = summarizeSignals({});
+  assert.match(s, /reframe entries: 0 筆/);
+  assert.match(s, /R1×0 R1_E×0 R2×0 R3×0 R5×0 R6×0 R7×0 R12×0/);
+  assert.match(s, /surfaced_examples: 0 筆/);
+  assert.match(s, /surfaced_values:\s*0 筆/);
+  assert.match(s, /daily_takeaways:\s*0 筆/);
+});
+
+test('🛑 summarizeSignals: unmapped reframe_id (R8 / R11) 收進 unmapped 桶 (誠實)', () => {
+  const s = summarizeSignals({
+    reframeHistory: [
+      { reframe_id: 'R2' },
+      { reframe_id: 'R8' },
+      { reframe_id: 'R11' }, { reframe_id: 'R11' },
+    ],
+  });
+  assert.match(s, /reframe entries: 4 筆/);
+  // R2 = 1
+  assert.match(s, /R2×1/);
+  // unmapped 包 R8 + R11.
+  assert.match(s, /unmapped×3 \(R11,R8\)/);
+});
+
+test('🛑 summarizeSignals: surfaced_values 多於 5 → 列前 5 + 計數', () => {
+  const s = summarizeSignals({
+    surfacedValues: ['a','b','c','d','e','f','g'],
+  });
+  assert.match(s, /surfaced_values:\s*7 筆 \(a, b, c, d, e \.\.\. \(\+2\)\)/);
+});
+
+test('🛑 summarizeSignals: null / 非物件 → 安全降級, 不炸', () => {
+  assert.match(summarizeSignals(null), /signals 缺/);
+  assert.match(summarizeSignals(undefined), /signals 缺/);
+  assert.match(summarizeSignals('not obj'), /signals 缺/);
+});
+
+// ═════════════════════════════════════════════════════════
+// 6/12 — summarizeNullReason (純函式, 抽 generate* log 原因)
+// ═════════════════════════════════════════════════════════
+
+test('🛑 summarizeNullReason: 抓最後一條 "→ null" line + strip prefix', () => {
+  const r = summarizeNullReason([
+    '[sc-storyboard-gen][sovereign_action] step 2 insufficient personalization → null',
+  ]);
+  assert.match(r, /insufficient personalization → null/);
+  // Prefix 已 strip.
+  assert.equal(/^\[sc-storyboard-gen\]/.test(r), false);
+  // 「step 2」 也 strip (避免外層已印 step_N 又重複).
+  assert.equal(/^step 2/.test(r), false);
+});
+
+test('🛑 summarizeNullReason: 5 個生成 null path 各驗一次', () => {
+  const cases = [
+    { in: '[sc-storyboard-gen] LLM call returned no text → null',
+      want: /LLM call returned no text/ },
+    { in: '[sc-storyboard-gen] LLM call threw: 404 model not found',
+      want: /LLM call threw: 404/ },
+    { in: '[sc-storyboard-gen] description scrubbed to empty → null',
+      want: /description scrubbed to empty/ },
+    { in: '[sc-storyboard-gen][sovereign_action] step 3 rigidity-at-self detected → null',
+      want: /rigidity-at-self detected/ },
+    { in: '[sc-storyboard-gen][sovereign_action] step 4 missing self-control declaration → null',
+      want: /missing self-control declaration/ },
+  ];
+  for (const c of cases) {
+    const r = summarizeNullReason([c.in]);
+    assert.match(r, c.want, `case "${c.in}" should yield ${c.want}`);
+  }
+});
+
+test('🛑 summarizeNullReason: 多條 logs → 抓最後相關 (不被前面的 noise 騙)', () => {
+  const r = summarizeNullReason([
+    '[sc-storyboard-gen] some neutral noise log',
+    '[sc-storyboard-gen][sovereign_action] step 2 insufficient personalization → null',
+  ]);
+  assert.match(r, /insufficient personalization/);
+});
+
+test('🛑 summarizeNullReason: 空 / 非陣列 → null', () => {
+  assert.equal(summarizeNullReason([]), null);
+  assert.equal(summarizeNullReason(null), null);
+  assert.equal(summarizeNullReason('str'), null);
+});
+
+// ═════════════════════════════════════════════════════════
+// 6/12 — formatStudentReport: signals + reasons 整合
+// ═════════════════════════════════════════════════════════
+
+test('🛑 formatStudentReport: 有 signals → 開頭印 signals summary block', () => {
+  const signals = {
+    reframeHistory: [{ reframe_id: 'R3' }, { reframe_id: 'R2' }],
+    surfacedValues: ['被理解'],
+    surfacedExamples: [{ day: 3, value: 'x', example: 'y' }],
+    dailyTakeaways: [],
+  };
+  const derived = {
+    step: null,
+    evidence: { step_1: [], step_2: [], step_3: [], step_4: [],
+                step_5: [], step_6: [], step_7: [] },
+  };
+  const block = formatStudentReport({ studentId: 'A003', signals, derived, generated: {} });
+  assert.match(block, /signals summary/);
+  assert.match(block, /reframe entries: 2 筆/);
+  assert.match(block, /R2×1 R3×1/);
+  // 在 step blocks 之前 (順序鎖).
+  assert.ok(block.indexOf('signals summary') < block.indexOf('── step_1 ──'),
+    'signals summary must appear before step blocks');
+});
+
+test('🛑 formatStudentReport: 有 reasons → null 行印確切原因 (非 generic 列表)', () => {
+  const derived = {
+    step: 2,
+    evidence: {
+      step_1: [], step_2: [{ type: 'longing_surface', quote: '被理解' }],
+      step_3: [], step_4: [], step_5: [], step_6: [], step_7: [],
+    },
+  };
+  const generated = { step_2: { brain_state: null, sovereign_action: null } };
+  const reasons = {
+    'step_2.brain_state': 'description scrubbed to empty → null',
+    'step_2.sovereign_action': 'missing self-control declaration → null',
+  };
+  const block = formatStudentReport({ studentId: 'A003', derived, generated, reasons });
+  // 應印確切原因 (不再是 generic 列表).
+  assert.match(block, /brain_state: \(null — description scrubbed to empty/);
+  assert.match(block, /sovereign_action: \(null — missing self-control declaration/);
+  // Generic fallback 應消失 (anti-regression).
+  assert.equal(/insufficient personalization \/ rigidity-at-self \/ no internal-control declaration/.test(block), false,
+    'generic fallback must NOT appear when specific reason was provided');
+});
+
+test('🛑 formatStudentReport: 沒 signals / reasons → 走 generic (向後相容)', () => {
+  const derived = {
+    step: 2,
+    evidence: { step_1: [], step_2: [{ type: 'longing_surface', quote: 'x' }],
+                step_3: [], step_4: [], step_5: [], step_6: [], step_7: [] },
+  };
+  const generated = { step_2: { brain_state: null, sovereign_action: null } };
+  // 不傳 signals / reasons.
+  const block = formatStudentReport({ studentId: 'A003', derived, generated });
+  // 沒 signals summary block.
+  assert.equal(/signals summary/.test(block), false);
+  // generic null reasons 回來.
+  assert.match(block, /LLM fail \/ scrub-empty \/ no-safe-quote/);
+  assert.match(block, /insufficient personalization \/ rigidity-at-self/);
+});
+
+// ═════════════════════════════════════════════════════════
+// 6/12 — backfillOneStudent integration: report 內含 signals + reasons
+// ═════════════════════════════════════════════════════════
+
+test('🛑 backfillOneStudent: dry-run report 內含 signals summary + reframe breakdown', async () => {
+  const { deps, reports } = makeDeps({ dryRun: true });
+  await backfillOneStudent('A003', deps);
+  assert.equal(reports.length, 1);
+  const r = reports[0];
+  // signals summary present.
+  assert.match(r, /signals summary/);
+  // A003 fixtures have 3 sessions × 1 reframe each (R3, R2, R1) — counts must match.
+  assert.match(r, /reframe entries: 3 筆/);
+  assert.match(r, /R1×1/);
+  assert.match(r, /R2×1/);
+  assert.match(r, /R3×1/);
+  // surfaced_values printed.
+  assert.match(r, /surfaced_values:\s*2 筆 \(被理解, 自由\)/);
+});
+
+test('🛑 backfillOneStudent: gen 回 null → reasons capture 確切原因, 印在報告', async () => {
+  // Mock gen helpers that USE the supplied log (caller-wins) to emit a structured
+  // reason, then return null. backfillOneStudent must capture + thread into report.
+  const { deps, reports } = makeDeps({
+    dryRun: true,
+    genBrainState: async ({ stepNo, log }) => {
+      if (typeof log === 'function') {
+        log(`[sc-storyboard-gen] description scrubbed to empty → null`);
+      }
+      return null;
+    },
+    genSovereignAction: async ({ stepNo, log }) => {
+      if (typeof log === 'function') {
+        log(`[sc-storyboard-gen][sovereign_action] step ${stepNo} missing self-control declaration → null`);
+      }
+      return null;
+    },
+  });
+  await backfillOneStudent('A003', deps);
+  const r = reports[0];
+  // 確切原因印出來 (非 generic).
+  assert.match(r, /brain_state: \(null — description scrubbed to empty/);
+  assert.match(r, /sovereign_action: \(null — missing self-control declaration/);
+});
+
+test('🛑 backfillOneStudent: per-step log capture 不交叉污染 (step_2 vs step_4)', async () => {
+  // Different reason per step + per pass. Must be threaded to correct step entry.
+  const { deps, reports } = makeDeps({
+    dryRun: true,
+    // genBrainState 對 step_2 報 A 因, step_4 報 B 因; 都 null.
+    genBrainState: async ({ stepNo, log }) => {
+      log(`[sc-storyboard-gen] step ${stepNo} reason-bs-step-${stepNo} → null`);
+      return null;
+    },
+    // genSovereignAction: 對 step_4 報 C 因.
+    genSovereignAction: async ({ stepNo, log }) => {
+      log(`[sc-storyboard-gen][sovereign_action] step ${stepNo} reason-sa-step-${stepNo} → null`);
+      return null;
+    },
+  });
+  await backfillOneStudent('A003', deps);
+  const r = reports[0];
+  // step_2 區塊內應該只看到 reason-bs-step-2 / reason-sa-step-2.
+  const step2Block = r.match(/── step_2 ─[\s\S]*?(?=── step_3 ─)/)[0];
+  assert.match(step2Block, /reason-bs-step-2/);
+  assert.match(step2Block, /reason-sa-step-2/);
+  assert.equal(/reason-bs-step-4|reason-sa-step-4/.test(step2Block), false,
+    'step_2 must NOT contain step_4 reasons (no cross-step contamination)');
+  // 反向也驗.
+  const step4Block = r.match(/── step_4 ─[\s\S]*?(?=── step_5 ─)/)[0];
+  assert.match(step4Block, /reason-bs-step-4/);
+  assert.match(step4Block, /reason-sa-step-4/);
+  assert.equal(/reason-bs-step-2|reason-sa-step-2/.test(step4Block), false);
+});
+
+test('🔴 鐵律 #2: signals summary 0 raw 對話 markers', async () => {
+  const { deps, reports } = makeDeps({ dryRun: true });
+  await backfillOneStudent('A003', deps);
+  const r = reports[0];
+  // 鐵則 #2: 不可有 role: / user: / assistant: markers.
+  assert.equal(/\brole:|\buser:|\bassistant:/i.test(r), false,
+    'report (含 signals summary) MUST NOT contain conversation role markers');
 });
 
 test('🛑 runBackfill: one student error caught, others continue', async () => {
