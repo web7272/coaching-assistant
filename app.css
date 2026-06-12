@@ -1171,6 +1171,14 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   border: 1px solid rgba(224, 138, 60, 0.3);
   color: var(--brand, #E08A3C);
 }
+/* 6/12 — ①-④ real APP webp screenshots (Vivi 6/12 +Patrick 壓 webp ~30KB).
+   <img> inherits frame box (aspect-ratio + max-width); cover crops cleanly
+   so 4 screenshots align same size. Subtle border to preserve frame edge. */
+.auth-preview__frame--photo {
+  object-fit: cover;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
 .auth-preview__label {
   font-size: 13px;
   color: var(--text-primary);
