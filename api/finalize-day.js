@@ -18,7 +18,10 @@ import { neon } from '@neondatabase/serverless';
 import Anthropic from '@anthropic-ai/sdk';
 import { generateDamonNote } from './chat.js';
 // v5.3 件3 PR-J2 — 大腦現狀 (brain_state) incremental generation.
-import { generateBrainState } from '../lib/api/sc-storyboard-gen.js';
+import {
+  generateBrainState,
+  generateSovereignAction,
+} from '../lib/api/sc-storyboard-gen.js';
 import { callAnthropicWithRetry } from '../lib/api/anthropic-retry.js';
 import {
   appendDailyTakeaway, setLastSessionDaySummary, markExportEmailed,
@@ -249,6 +252,114 @@ export async function writeBrainStateFailSoft(sql, studentId, touchedSteps, deps
       generated.push(stepNo);
     } catch (writeErr) {
       console.warn('[finalize-day][brain_state-write-failed]',
+        writeErr?.message || writeErr);
+      skipped.push(stepNo);
+    }
+  }
+  return { ok: true, generated, skipped };
+}
+
+/**
+ * v5.3 件3 PR-J3 — Fail-soft sovereign_action generation + write.
+ *
+ * Companion to writeBrainStateFailSoft. Walks the SAME `touchedSteps` set
+ * (Patrick: 同一個 touched-steps 迴圈),per-step:
+ *   1. Build personalization ctx ({activeContext, surfacedValues, stepEvidence}).
+ *   2. Call generateSovereignAction (個人化紅線:幾乎全空 → null,絕不 generic).
+ *   3. jsonb_set into students.sc_storyboard -> step_N -> sovereign_action.
+ *      Merge with brain_state already written by J2 — DO NOT overwrite.
+ *
+ * 🔴 Safety mirrors J2:
+ *   - Defense 2 scrubber + self-control declaration + rigidity-at-self filter
+ *     all enforced INSIDE generateSovereignAction (returns null on any fail).
+ *   - Logs NEVER include raw sovereign_action text (鐵律 #2).
+ *   - Per-step failure NEVER blocks others / finalize.
+ *
+ * @param {Function} sql
+ * @param {string}   studentId
+ * @param {number[]} touchedSteps
+ * @param {object}   deps
+ * @param {object}   deps.activeContext   { name, definition }
+ * @param {string[]} deps.surfacedValues  surfaced quality terms (cross-session)
+ * @param {object}   deps.anthropic
+ * @param {Function} deps.callAnthropic
+ * @returns {Promise<{ok:boolean, generated:number[], skipped:number[]}>}
+ */
+export async function writeSovereignActionFailSoft(sql, studentId, touchedSteps, deps = {}) {
+  const generated = [];
+  const skipped   = [];
+  if (!Array.isArray(touchedSteps) || touchedSteps.length === 0) {
+    return { ok: true, generated, skipped };
+  }
+  let evidence;
+  try {
+    const rows = await sql`
+      SELECT sc_journey_evidence
+        FROM students
+       WHERE student_id = ${studentId}
+       LIMIT 1
+    `;
+    if (!rows || rows.length === 0) {
+      return { ok: true, generated, skipped: touchedSteps.slice() };
+    }
+    evidence = rows[0].sc_journey_evidence || {};
+  } catch (err) {
+    console.warn('[finalize-day][sovereign_action-evidence-read-failed]',
+      err?.message || err);
+    return { ok: false, generated, skipped: touchedSteps.slice() };
+  }
+
+  const activeContext  = deps.activeContext  || {};
+  const surfacedValues = Array.isArray(deps.surfacedValues) ? deps.surfacedValues : [];
+
+  for (const stepNo of touchedSteps) {
+    if (!Number.isInteger(stepNo) || stepNo < 1 || stepNo > 7) { skipped.push(stepNo); continue; }
+    const stepEvidence = Array.isArray(evidence[`step_${stepNo}`])
+      ? evidence[`step_${stepNo}`] : [];
+    let sovereignAction = null;
+    try {
+      sovereignAction = await generateSovereignAction({
+        stepNo,
+        ctx: { activeContext, surfacedValues, stepEvidence },
+        anthropic: deps.anthropic,
+        callAnthropicWithRetry: deps.callAnthropic,
+        model: deps.model,
+        log: (msg) => console.warn(msg),
+      });
+    } catch (err) {
+      console.warn('[finalize-day][sovereign_action-gen-failed]',
+        JSON.stringify({
+          event: 'sovereign_action_gen_failed',
+          step_no: stepNo,
+          err: err?.message || String(err),
+          // 鐵律 #2: no raw sovereign_action text in log.
+        }));
+    }
+    if (!sovereignAction) { skipped.push(stepNo); continue; }
+    try {
+      const stepKey  = `step_${stepNo}`;
+      const payload  = JSON.stringify({ sovereign_action: sovereignAction });
+      // Merge into sc_storyboard.step_N — preserves brain_state already
+      // written by J2's writeBrainStateFailSoft via the COALESCE pattern.
+      await sql`
+        UPDATE students
+           SET sc_storyboard = jsonb_set(
+             COALESCE(sc_storyboard, '{}'::jsonb),
+             ARRAY[${stepKey}],
+             COALESCE(sc_storyboard -> ${stepKey}, '{}'::jsonb) || ${payload}::jsonb,
+             true
+           )
+         WHERE student_id = ${studentId}
+      `;
+      console.info('[finalize-day][sovereign_action-written]',
+        JSON.stringify({
+          event: 'sovereign_action_written',
+          step_no: stepNo,
+          // 鐵律 #2: sovereign_action text intentionally NOT logged.
+        }));
+      generated.push(stepNo);
+    } catch (writeErr) {
+      console.warn('[finalize-day][sovereign_action-write-failed]',
         writeErr?.message || writeErr);
       skipped.push(stepNo);
     }
@@ -627,16 +738,19 @@ export default async function handler(req, res) {
     //   evidence appends in chat.js Path A).
     await writeScJourneyStepFailSoft(sql, existing.student_id);
 
-    // ⭐ v5.3 件3 PR-J2 — brain_state incremental generation + write.
+    // ⭐ v5.3 件3 PR-J2 + PR-J3 — sc_storyboard incremental generation + write.
     //   Walks session_state.sc_steps_touched_this_session (populated per-turn
-    //   by chat.js Path A hook). For each touched step: pickSafeQuote + LLM
-    //   description + scrubber + jsonb_set into students.sc_storyboard.
-    //   Fail-soft mirror of day1 pattern — LLM throws / scrub-empty / DB
-    //   write errors are all suppressed (logged) and never block finalize.
+    //   by chat.js Path A hook). For each touched step, same loop covers:
+    //     1. brain_state (J2): LLM description + safe quote.
+    //     2. sovereign_action (J3): personalized via active_context + surfaced
+    //        values + step evidence (個人化紅線:幾乎全空 → null, never generic).
+    //   Both helpers are fail-soft — LLM throws / scrub-empty / rigidity / DB
+    //   write errors are all suppressed (logged, never block finalize).
     {
       const touched = Array.isArray(existing.session_state?.sc_steps_touched_this_session)
         ? existing.session_state.sc_steps_touched_this_session : [];
       if (touched.length > 0) {
+        // J2 — brain_state.
         try {
           await writeBrainStateFailSoft(sql, existing.student_id, touched, {
             anthropic: getAnthropic(),
@@ -647,6 +761,51 @@ export default async function handler(req, res) {
           // but in case of unforeseen sync error don't block finalize.
           console.warn('[finalize-day][brain_state-pass-failed]',
             brainErr?.message || brainErr);
+        }
+
+        // J3 — sovereign_action. Fetch active_context + surfaced_values for
+        // personalization (Patrick: 必須餵那位學員自己的素材).
+        try {
+          let activeContextName = null;
+          let activeContextDefinition = null;
+          let activeContextCategory = null;
+          let surfacedValues = [];
+          try {
+            const acRows = await sql`
+              SELECT active_context_name, active_context_definition, active_context_category
+                FROM students WHERE student_id = ${existing.student_id} LIMIT 1
+            `;
+            if (acRows && acRows.length > 0) {
+              activeContextName       = acRows[0].active_context_name       ?? null;
+              activeContextDefinition = acRows[0].active_context_definition ?? null;
+              activeContextCategory   = acRows[0].active_context_category   ?? null;
+            }
+          } catch (acErr) {
+            console.warn('[finalize-day][active_context-read-failed]', acErr?.message || acErr);
+          }
+          if (activeContextCategory !== null) {
+            try {
+              const catKey = String(activeContextCategory);
+              const upeRows = await sql`
+                SELECT active_context_session_summary -> ${catKey} -> 'surfaced_values' AS sv
+                  FROM user_profile_evolution WHERE student_id = ${existing.student_id} LIMIT 1
+              `;
+              if (upeRows && upeRows.length > 0 && Array.isArray(upeRows[0].sv)) {
+                surfacedValues = upeRows[0].sv;
+              }
+            } catch (upeErr) {
+              console.warn('[finalize-day][surfaced_values-read-failed]', upeErr?.message || upeErr);
+            }
+          }
+          await writeSovereignActionFailSoft(sql, existing.student_id, touched, {
+            activeContext: { name: activeContextName, definition: activeContextDefinition },
+            surfacedValues,
+            anthropic: getAnthropic(),
+            callAnthropic: callAnthropicWithRetry,
+          });
+        } catch (sovErr) {
+          console.warn('[finalize-day][sovereign_action-pass-failed]',
+            sovErr?.message || sovErr);
         }
       }
     }

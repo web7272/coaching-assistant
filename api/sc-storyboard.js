@@ -77,21 +77,29 @@ export function buildScStoryboardSteps(evidence, storyboard = null) {
     const arr = Array.isArray(ev[stepKey]) ? ev[stepKey] : [];
     const state = arr.length > 0 ? 'filled' : 'empty';
     // PR-J2 wire: pull pre-computed brain_state from sc_storyboard.
+    // PR-J3 wire: pull pre-computed sovereign_action from sc_storyboard.
     // Only surface for filled steps (empty step → null even if column dirty).
-    let brain_state = null;
+    let brain_state      = null;
+    let sovereign_action = null;
     if (state === 'filled') {
       const stepNode = sb[stepKey];
-      if (stepNode && typeof stepNode === 'object'
-          && stepNode.brain_state && typeof stepNode.brain_state === 'object'
-          && typeof stepNode.brain_state.description === 'string'
-          && stepNode.brain_state.description.length > 0) {
-        // Re-shape to the strict contract: only {description, quote}.
-        brain_state = {
-          description: stepNode.brain_state.description,
-          quote:       (typeof stepNode.brain_state.quote === 'string'
-                        && stepNode.brain_state.quote.length > 0)
-                        ? stepNode.brain_state.quote : null,
-        };
+      if (stepNode && typeof stepNode === 'object') {
+        // J2: brain_state strict shape {description, quote}.
+        if (stepNode.brain_state && typeof stepNode.brain_state === 'object'
+            && typeof stepNode.brain_state.description === 'string'
+            && stepNode.brain_state.description.length > 0) {
+          brain_state = {
+            description: stepNode.brain_state.description,
+            quote:       (typeof stepNode.brain_state.quote === 'string'
+                          && stepNode.brain_state.quote.length > 0)
+                          ? stepNode.brain_state.quote : null,
+          };
+        }
+        // J3: sovereign_action — plain string. Null when not generated yet.
+        if (typeof stepNode.sovereign_action === 'string'
+            && stepNode.sovereign_action.length > 0) {
+          sovereign_action = stepNode.sovereign_action;
+        }
       }
     }
     return {
@@ -100,7 +108,7 @@ export function buildScStoryboardSteps(evidence, storyboard = null) {
       name_en: meta.name_en,
       state,
       brain_state,
-      sovereign_action: null,    // PR-J3 fills
+      sovereign_action,
     };
   });
 }

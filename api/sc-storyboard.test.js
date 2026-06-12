@@ -583,3 +583,115 @@ test('🛑 PR-J2 pure: buildScStoryboardSteps backward-compat with single-arg ca
   assert.equal(out[0].brain_state, null,
     'single-arg call (no storyboard) → brain_state stays null (J1 contract preserved)');
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 v5.3 件3 PR-J3 — sovereign_action wire (read sc_storyboard col)
+// ═════════════════════════════════════════════════════════
+
+test('🛑 PR-J3 endpoint: precomputed sovereign_action surfaces as plain string', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 4,
+    sc_journey_evidence: {
+      step_1: [], step_2: [], step_3: [],
+      step_4: [{ type: 'identity_claim', quote: '勇敢' }],
+      step_5: [], step_6: [], step_7: [],
+    },
+    sc_storyboard: {
+      step_4: {
+        brain_state: { description: '你開始說出我是這樣的人。', quote: '勇敢' },
+        sovereign_action: '針對你的伴侶關係,你拿回主動權。我自己說了算。',
+      },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.steps[3].sovereign_action, '針對你的伴侶關係,你拿回主動權。我自己說了算。');
+  // brain_state should also still be there (J2 wire intact).
+  assert.ok(res.body.steps[3].brain_state);
+  assert.equal(res.body.steps[3].brain_state.quote, '勇敢');
+});
+
+test('🛑 PR-J3 endpoint: 🔴 empty step → sovereign_action null even if storyboard polluted', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: null,
+    sc_journey_evidence: null,
+    sc_storyboard: {
+      step_4: { sovereign_action: 'this should NOT leak' },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.body.steps[3].state, 'empty');
+  assert.equal(res.body.steps[3].sovereign_action, null,
+    '🔴 ship-gate: empty step → sovereign_action null regardless of storyboard');
+});
+
+test('🛑 PR-J3 endpoint: 🔴 個人化驗證 — null preserved when not generated', async () => {
+  // Step IS filled (has evidence), but finalize-day returned null for
+  // sovereign_action (insufficient personalization). Endpoint surfaces null,
+  // NOT a fallback / default / generic string.
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 4,
+    sc_journey_evidence: { step_1: [], step_2: [], step_3: [], step_4: [{ type: 'identity_claim' }], step_5: [], step_6: [], step_7: [] },
+    sc_storyboard: {
+      step_4: {
+        brain_state: { description: 'x', quote: null },
+        // sovereign_action key missing — finalize-day didn't write (null gate).
+      },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.body.steps[3].brain_state.description, 'x');
+  assert.equal(res.body.steps[3].sovereign_action, null,
+    '🔴 ship-gate: missing sovereign_action → null (no generic fallback)');
+});
+
+test('🛑 PR-J3 endpoint: malformed sovereign_action (non-string) → null', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 4,
+    sc_journey_evidence: { step_1: [], step_2: [], step_3: [], step_4: [{ type: 'identity_claim' }], step_5: [], step_6: [], step_7: [] },
+    sc_storyboard: {
+      step_4: { sovereign_action: { unexpected: 'object' } },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.body.steps[3].sovereign_action, null);
+});
+
+test('🛑 PR-J3 endpoint: empty-string sovereign_action → null', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 4,
+    sc_journey_evidence: { step_1: [], step_2: [], step_3: [], step_4: [{ type: 'identity_claim' }], step_5: [], step_6: [], step_7: [] },
+    sc_storyboard: { step_4: { sovereign_action: '' } },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.body.steps[3].sovereign_action, null);
+});
+
+test('🛑 PR-J3 endpoint: contract still strict — brain_state + sovereign_action fields ONLY in step shape', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 4,
+    sc_journey_evidence: { step_1: [], step_2: [], step_3: [], step_4: [{ type: 'identity_claim' }], step_5: [], step_6: [], step_7: [] },
+    sc_storyboard: {
+      step_4: {
+        brain_state: { description: 'd', quote: 'q' },
+        sovereign_action: 'a。我自己說了算。',
+      },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  const step = res.body.steps[3];
+  assert.deepEqual(Object.keys(step).sort(),
+    ['brain_state', 'name_en', 'name_zh', 'no', 'sovereign_action', 'state']);
+});

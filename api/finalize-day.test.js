@@ -16,6 +16,7 @@ import {
   computeScJourneyStep,            // v5.2 七步 PR-4 Path B
   writeScJourneyStepFailSoft,      // v5.2 七步 PR-4 Path B
   writeBrainStateFailSoft,         // v5.3 件3 PR-J2
+  writeSovereignActionFailSoft,    // v5.3 件3 PR-J3
 } from './finalize-day.js';
 
 // ─────────────────────────────────────────────────────────
@@ -917,4 +918,173 @@ test('🛑 PR-J2 writeBrainState: handler integration — call site after Path B
   assert.ok(noteIdx > 0,  'Damon Note anchor');
   assert.ok(day1Idx < pathBIdx && pathBIdx < j2Idx && j2Idx < noteIdx,
     'order: day1 → Path B (sc_journey_step) → J2 (brain_state) → Damon Note');
+});
+
+// ═════════════════════════════════════════════════════════════════
+// 🛑 v5.3 件3 PR-J3 — writeSovereignActionFailSoft (個人化紅線)
+// Patrick safety:
+//   - 素材不夠 → null (絕不掉 generic)
+//   - 結尾必落內控宣告
+//   - log NEVER includes raw sovereign_action text
+//   - per-step UPDATE preserves brain_state (jsonb merge)
+//   - LLM throw / scrub-empty → step skipped
+// ═════════════════════════════════════════════════════════════════
+
+const SUFFICIENT_J3_CTX = {
+  activeContext: { name: '伴侶關係', definition: '我與 A 的婚姻' },
+  surfacedValues: ['誠實的', '勇敢的'],
+};
+
+const J3_EVIDENCE = {
+  step_1: [], step_2: [],
+  step_3: [{ type: 'data_mining', quote: '某 term' }],
+  step_4: [{ type: 'identity_claim', quote: '我是有膽量做決定的人' }],
+  step_5: [], step_6: [], step_7: [],
+};
+
+const GOOD_SOVEREIGN_TEXT = '針對你的伴侶關係,你現在站穩自己的立場。舊標籤過時了,你拿回主動權。我自己說了算。';
+
+test('🛑 PR-J3 writeSovereignAction: empty touchedSteps → no-op, ok:true', async () => {
+  const sql = mkBrainSql();
+  const r = await writeSovereignActionFailSoft(sql, 'A001', [], {
+    ...SUFFICIENT_J3_CTX,
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => ({ ok: true, data: { content: [{ text: GOOD_SOVEREIGN_TEXT }] } }),
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.generated, []);
+  assert.equal(sql.calls.length, 0, 'no SQL fired for empty touched');
+});
+
+test('🛑 PR-J3 writeSovereignAction: happy 2 steps → 1 SELECT + 2 UPDATE', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: J3_EVIDENCE }];
+    return [];
+  });
+  const r = await writeSovereignActionFailSoft(sql, 'A001', [3, 4], {
+    ...SUFFICIENT_J3_CTX,
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => ({ ok: true, data: { content: [{ text: GOOD_SOVEREIGN_TEXT }] } }),
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.generated.sort(), [3, 4]);
+  // 1 SELECT + 2 UPDATEs.
+  assert.equal(sql.calls.length, 3);
+});
+
+test('🛑 PR-J3 writeSovereignAction: 🔴 個人化素材空 → null per step (NOT generic)', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: J3_EVIDENCE }];
+    return [];
+  });
+  // Empty active_context + empty surfaced_values + step evidence has only
+  // pain_surface (which user-msg excludes from personalization features).
+  let llmCalls = 0;
+  const r = await writeSovereignActionFailSoft(sql, 'A001', [3, 4], {
+    activeContext: {},
+    surfacedValues: [],
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => { llmCalls++; return { ok: true, data: { content: [{ text: GOOD_SOVEREIGN_TEXT }] } }; },
+  });
+  assert.equal(llmCalls, 0,
+    '🔴 ship-gate: hasSufficientPersonalization gate fires BEFORE LLM call → 0 calls');
+  assert.deepEqual(r.generated, []);
+});
+
+test('🛑 PR-J3 writeSovereignAction: 🔴 LLM output missing 內控宣告 → step skipped', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: J3_EVIDENCE }];
+    return [];
+  });
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const r = await writeSovereignActionFailSoft(sql, 'A001', [4], {
+      ...SUFFICIENT_J3_CTX,
+      anthropic: mockAnthropic(),
+      callAnthropic: async () => ({
+        ok: true, data: { content: [{ text: '這段話沒有任何主導權的尾巴。' }] },
+      }),
+    });
+    assert.deepEqual(r.generated, [],
+      '🔴 ship-gate: weak ending (no self-control declaration) → step skipped');
+    assert.deepEqual(r.skipped, [4]);
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+test('🛑 PR-J3 writeSovereignAction: 🔴 ship-gate — log NEVER contains raw sovereign_action text', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: J3_EVIDENCE }];
+    return [];
+  });
+  const SECRET_SOV = 'SECRET_SOVEREIGN_XYZ 你現在握住你的選擇。我自己說了算。';
+  const captured = [];
+  const origInfo = console.info;
+  const origWarn = console.warn;
+  console.info = (...args) => captured.push(['info', ...args]);
+  console.warn = (...args) => captured.push(['warn', ...args]);
+  try {
+    await writeSovereignActionFailSoft(sql, 'A001', [4], {
+      ...SUFFICIENT_J3_CTX,
+      anthropic: mockAnthropic(),
+      callAnthropic: async () => ({ ok: true, data: { content: [{ text: SECRET_SOV }] } }),
+    });
+  } finally {
+    console.info = origInfo;
+    console.warn = origWarn;
+  }
+  const flat = JSON.stringify(captured);
+  assert.equal(/SECRET_SOVEREIGN_XYZ/.test(flat), false,
+    '🔴 ship-gate: raw sovereign_action MUST NOT appear in any log');
+});
+
+test('🛑 PR-J3 writeSovereignAction: UPDATE preserves brain_state (jsonb merge, not replace)', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: J3_EVIDENCE }];
+    return [];
+  });
+  const r = await writeSovereignActionFailSoft(sql, 'A001', [4], {
+    ...SUFFICIENT_J3_CTX,
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => ({ ok: true, data: { content: [{ text: GOOD_SOVEREIGN_TEXT }] } }),
+  });
+  assert.equal(r.ok, true);
+  const updateCall = sql.calls.find(c => /UPDATE students/.test(c.text));
+  assert.ok(updateCall);
+  // jsonb merge pattern: || ${payload}::jsonb against COALESCE(...->step_N).
+  assert.match(updateCall.text, /COALESCE\(sc_storyboard -> /,
+    'UPDATE must merge with existing step_N to preserve brain_state from J2');
+});
+
+test('🛑 PR-J3 writeSovereignAction: SELECT throws → ok:false, all skipped', async () => {
+  const sql = mkBrainSql(() => { throw new Error('db down'); });
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const r = await writeSovereignActionFailSoft(sql, 'A001', [3], {
+      ...SUFFICIENT_J3_CTX,
+      anthropic: mockAnthropic(),
+      callAnthropic: async () => ({ ok: true, data: { content: [{ text: GOOD_SOVEREIGN_TEXT }] } }),
+    });
+    assert.equal(r.ok, false);
+    assert.deepEqual(r.skipped, [3]);
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+test('🛑 PR-J3 writeSovereignAction: handler integration — J3 call follows J2 in same finalize block', () => {
+  const j2Idx       = finalizeDaySrc.indexOf('writeBrainStateFailSoft(sql, existing.student_id');
+  const j3Idx       = finalizeDaySrc.indexOf('writeSovereignActionFailSoft(sql, existing.student_id');
+  const acFetchIdx  = finalizeDaySrc.indexOf('active_context_session_summary');
+  const noteIdx     = finalizeDaySrc.indexOf('generateDamonNote(sql, sessionId, module, week, day, wasCrisis)');
+  assert.ok(j2Idx > 0, 'J2 call must exist');
+  assert.ok(j3Idx > 0, 'J3 call must exist');
+  assert.ok(acFetchIdx > 0, 'active_context_session_summary fetch must exist (個人化來源)');
+  assert.ok(j2Idx < j3Idx,
+    'J3 sovereign_action MUST follow J2 brain_state (same touched-steps block)');
+  assert.ok(j3Idx < noteIdx,
+    'J3 sovereign_action runs BEFORE generateDamonNote');
 });
