@@ -199,6 +199,8 @@ async function route() {
     case 'graduation':   showView('graduation');   await renderGraduation(); break;
     case 'upgrade':      showView('upgrade');      renderUpgradeCTA(); break;
     case 'blocked':      showView('blocked');      /* purely static, view-blocked HTML carries copy */ break;
+    // v5.3 件3 PR-J4 — 頁 Y「我的人生旅途」 (七步故事頁).
+    case 'storyboard':   showView('storyboard');   await renderStoryboard(); break;
     default:             location.hash = '#/entry';
   }
 }
@@ -1482,3 +1484,287 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   route();
 });
+
+// ────────────────────────────────────────────────────────────────
+// v5.3 件3 PR-J4 — 頁 Y「我的人生旅途」 (七步故事頁) render.
+//
+// 故事線 verbatim from Vivi 6/11 終審定稿; Patrick 會逐行比.
+// brain_state / sovereign_action 來自 /api/sc-storyboard (J1+J2+J3 契約).
+//
+// ⚠️ 源 of truth = lib/student/storyboard-render.js (ESM, pure, unit-tested).
+//   The story content + helper output are mirrored here verbatim (non-module
+//   SPA shell can't import). Sync-gate test in
+//   lib/student/storyboard-render.test.js asserts byte-identical mirror.
+// ────────────────────────────────────────────────────────────────
+
+const STORYBOARD_STEP_META_INLINE = [
+  { no: '01', name_zh: '發現匱乏',   name_en: 'The Void' },
+  { no: '02', name_zh: '承認渴望',   name_en: 'The Longing' },
+  { no: '03', name_zh: '挖掘數據',   name_en: 'Mining the Database' },
+  { no: '04', name_zh: '認領身份',   name_en: 'Claiming the Identity' },
+  { no: '05', name_zh: '發現資源',   name_en: 'Resource Retrieval' },
+  { no: '06', name_zh: '奪回裁判權', name_en: 'Reclaiming the Sovereignty' },
+  { no: '07', name_zh: '標籤定錨',   name_en: 'Anchoring the Concept' },
+];
+
+// 🔴 VERBATIM — Vivi 6/11 終審逐字 (Patrick 逐行比). DO NOT EDIT.
+const STORYBOARD_STORY_INLINE = [
+  { kind: 'p',     text: '你一直覺得，現在的自己，好像不是全部的自己。' },
+  { kind: 'p',     text: '有時候，是焦慮、煩躁、疲憊；有時候，是明明已經很努力，卻總事與願違達不到目標。有時候，是一直替別人著想，卻不知道什麼時候別人會轉過身替你想。你隱約知道，生命裡有一塊是空的，始終沒有被滿足。' },
+  { kind: 'p',     text: '你開始懷疑：' },
+  { kind: 'quote', lines: ['「是不是我不夠好？」', '「是不是我做得不夠多？」', '「什麼時候會輪到我？」'] },
+  { kind: 'p',     text: '這些說不清的匱乏感與不滿足，推著你往內看。' },
+  { kind: 'p',     text: '於是，你開始：' },
+
+  { kind: 'step',  no: 1, name_zh: '發現匱乏' },
+  { kind: 'p',     text: '你終於慢慢看清，自己真正缺的到底是什麼。也許是被理解、被愛、被重視；也許是自由、成就、認可；也許只是一直以來，都沒有好好照顧過自己。' },
+  { kind: 'p',     text: '但你慢慢明白，匱乏的另一面，其實就是渴望。之所以會覺得缺，不是因為你太貪心，而是因為你的心裡，本來就真的想要。' },
+  { kind: 'p',     text: '看清這件事還不夠。真正難的，是看見，並且承認自己的渴望。' },
+
+  { kind: 'step',  no: 2, name_zh: '承認渴望' },
+  { kind: 'p',     text: '承認「我就是想要這個」，發生在看見原來我是想要這個後面。' },
+  { kind: 'p',     text: '對一個總是把自己放在最後、習慣壓抑需求的人來說，需要很大的勇氣。' },
+  { kind: 'p',     text: '因為你可能早已習慣告訴自己：' },
+  { kind: 'quote', lines: ['「沒關係。」', '「我不需要。」', '「先顧別人比較重要。」'] },
+  { kind: 'p',     text: '甚至，你連自己的渴望到底是什麼，都丟失了。這次，在這裡你決定把它找回來，因為你知道看見了、承認了，你才真正有了起點，才能繼續走下去。' },
+  { kind: 'p',     text: '於是，你開始：' },
+
+  { kind: 'step',  no: 3, name_zh: '挖掘數據' },
+  { kind: 'p',     text: '往自己的過去、情緒、反應與選擇裡挖掘。找出那些一直在默默替你做決定，卻從來沒有被說出口的模式與線索。你想找出證據你值得這個渴望。' },
+  { kind: 'villain-intro', before: '但就在這時，第一個阻力跳了出來——', name: '限制性信念', after: '。' },
+  { kind: 'p',     text: '它在你耳邊低聲說：' },
+  { kind: 'quote-villain', lines: ['「你不配。」', '「你做不到。」', '「你以前沒有以後也不會有。」'] },
+  { kind: 'p',     text: '它想喝止你停下。它試圖把你拉回舒適圈。' },
+  { kind: 'p',     text: '但這次你沒有逗留。' },
+  { kind: 'p',     text: '你跨越了它，開始：' },
+
+  { kind: 'step',  no: 4, name_zh: '認領身份' },
+  { kind: 'p',     text: '你不再用別人的標準定義自己，而是親口說出：' },
+  { kind: 'quote', lines: ['「我是誰。」「我是．．．的人。」'] },
+  { kind: 'p',     text: '當你真正認領自己的身份，你才驚訝地發現，' },
+  { kind: 'p',     text: '原來自己一直都擁有許多被你遺忘的力量。' },
+  { kind: 'p',     text: '你只需要' },
+
+  { kind: 'step',  no: 5, name_zh: '發現資源' },
+  { kind: 'p',     text: '那些你以為自己沒有的能力、特質、天賦與韌性，其實一直都在。' },
+  { kind: 'p',     text: '只是過去的你，不曾允許自己相信，也不敢真正認領。' },
+  { kind: 'p',     text: '故事還沒有結束。' },
+  { kind: 'p',     text: '當你開始慢慢站穩，第二個阻力登場了。' },
+  { kind: 'p',     text: '它比限制性信念更狡猾。因為它不阻止你，它威逼利誘你。' },
+  { kind: 'p',     text: '它告訴你：' },
+  { kind: 'quote-villain', lines: ['「世界不是這樣運作的。」'] },
+  { kind: 'p',     text: '然後，它用不同的聲音，對不同的人說出同一件事。' },
+
+  { kind: 'villain-title', name: '追求外在認可' },
+  { kind: 'temptation', label: '對渴望被肯定的人，它說：', quote: '「別人說你好，你才算好。」' },
+  { kind: 'temptation', label: '對渴望被愛的人，它說：',   quote: '「有人愛你，你才有價值。」' },
+  { kind: 'temptation', label: '對渴望成功的人，它說：',   quote: '「做出成績，你才值得被看見。」' },
+  { kind: 'temptation', label: '對渴望財富的人，它說：',   quote: '「帳戶裡的數字，就是你這個人的分數。」' },
+
+  { kind: 'p',     text: '你慢慢聽懂了。' },
+  { kind: 'p',     text: '它所有的話，其實都在做同一件事——' },
+  { kind: 'p',     text: '偷偷把「我夠不夠好」的裁判權，從你手中拿走，交給別人、交給結果、交給外面的世界。' },
+  { kind: 'p',     text: '但這一次，你看穿了。' },
+  { kind: 'p',     text: '你一把拍開它。' },
+
+  { kind: 'step',  no: 6, name_zh: '奪回裁判權' },
+  { kind: 'p',     text: '我是誰。' },
+  { kind: 'p',     text: '我夠不夠好。' },
+  { kind: 'p',     text: '我值不值得。' },
+  { kind: 'p',     text: '不再由任何人、任何成績、任何眼光來決定。' },
+  { kind: 'p',     text: '而是由我自己定義。' },
+  { kind: 'p',     text: '我的價值不跟任何人、事、物、環境、事件掛勾。' },
+  { kind: 'p',     text: '於是，你走到了最後一步。' },
+
+  { kind: 'step',  no: 7, name_zh: '標籤定錨' },
+  { kind: 'p',     text: '你親手為自己貼上新的標籤。' },
+  { kind: 'p',     text: '把它深深融入心裡，成為自己穩定的座標。' },
+  { kind: 'p',     text: '最初那份自我懷疑的迷惘與不安，慢慢退去。' },
+  { kind: 'p',     text: '因為你終於明白：' },
+  { kind: 'p',     text: '你是誰，從來不是世界告訴你的。' },
+  { kind: 'p',     text: '而是你願意相信，並親自認領的那個自己。' },
+
+  { kind: 'final', text: '你就是你的渴望' },
+];
+
+function escapeHTMLStoryboard(s) {
+  if (typeof s !== 'string') return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderStoryboardNode(node) {
+  if (!node || typeof node !== 'object') return '';
+  switch (node.kind) {
+    case 'p':
+      return '<p class="storyboard-p">' + escapeHTMLStoryboard(node.text) + '</p>';
+    case 'quote':
+      return '<p class="storyboard-quote">' + node.lines.map(escapeHTMLStoryboard).join('<br>') + '</p>';
+    case 'quote-villain':
+      return '<p class="storyboard-quote storyboard-quote--villain">'
+        + node.lines.map(escapeHTMLStoryboard).join('<br>') + '</p>';
+    case 'step': {
+      const no = String(node.no);
+      return '<h3 class="storyboard-step-heading">'
+        + '<a class="storyboard-step-link" href="#storyboard-step-' + no + '">'
+        + no + '. ' + escapeHTMLStoryboard(node.name_zh) + '</a></h3>';
+    }
+    case 'villain-intro':
+      return '<p class="storyboard-p">'
+        + escapeHTMLStoryboard(node.before)
+        + '<span class="storyboard-villain-name">' + escapeHTMLStoryboard(node.name) + '</span>'
+        + escapeHTMLStoryboard(node.after) + '</p>';
+    case 'villain-title':
+      return '<h4 class="storyboard-villain-title">' + escapeHTMLStoryboard(node.name) + '</h4>';
+    case 'temptation':
+      return '<div class="storyboard-temptation">'
+        + '<p class="storyboard-p">' + escapeHTMLStoryboard(node.label) + '</p>'
+        + '<p class="storyboard-quote storyboard-quote--villain">' + escapeHTMLStoryboard(node.quote) + '</p>'
+        + '</div>';
+    case 'final':
+      return '<p class="storyboard-final">' + escapeHTMLStoryboard(node.text) + '</p>';
+    default:
+      return '';
+  }
+}
+
+function renderStoryboardStepBlock(step, isFirst) {
+  const noPad = String(step.no || '01');
+  const expanded = isFirst ? 'true' : 'false';
+  const hiddenAttr = isFirst ? '' : ' hidden';
+  const bsDesc = step.brain_state && typeof step.brain_state.description === 'string'
+    && step.brain_state.description.length > 0;
+  const hasSa = typeof step.sovereign_action === 'string' && step.sovereign_action.length > 0;
+  const isEmpty = step.state !== 'filled' || (!bsDesc && !hasSa);
+  let body;
+  if (isEmpty) {
+    body = '<p class="storyboard-empty-placeholder">這塊土還沒走過</p>';
+  } else {
+    const parts = [];
+    if (bsDesc) {
+      const quoteHTML = (typeof step.brain_state.quote === 'string'
+                        && step.brain_state.quote.length > 0)
+        ? '<blockquote class="storyboard-quote-callout">'
+            + escapeHTMLStoryboard(step.brain_state.quote) + '</blockquote>'
+        : '';
+      parts.push('<section class="storyboard-section storyboard-section--brain">'
+        + '<h5 class="storyboard-section-title">大腦現狀</h5>'
+        + '<p class="storyboard-section-text">' + escapeHTMLStoryboard(step.brain_state.description) + '</p>'
+        + quoteHTML + '</section>');
+    }
+    if (hasSa) {
+      parts.push('<section class="storyboard-section storyboard-section--sovereign">'
+        + '<h5 class="storyboard-section-title">主權建議</h5>'
+        + '<p class="storyboard-section-text">' + escapeHTMLStoryboard(step.sovereign_action) + '</p>'
+        + '</section>');
+    }
+    body = parts.join('\n');
+  }
+  return '<article id="storyboard-step-' + noPad + '" class="storyboard-step-block" data-step="' + noPad + '">'
+    + '<button type="button" class="storyboard-step-toggle" '
+    + 'aria-expanded="' + expanded + '" '
+    + 'aria-controls="storyboard-step-body-' + noPad + '">'
+    + '<span class="storyboard-step-no">' + escapeHTMLStoryboard(noPad) + '</span>'
+    + '<span class="storyboard-step-name-zh">' + escapeHTMLStoryboard(step.name_zh || '') + '</span>'
+    + '<span class="storyboard-step-name-en">' + escapeHTMLStoryboard(step.name_en || '') + '</span>'
+    + '</button>'
+    + '<div id="storyboard-step-body-' + noPad + '" class="storyboard-step-body"' + hiddenAttr + '>'
+    + body
+    + '</div></article>';
+}
+
+function renderStoryboardSideNav(currentStep) {
+  const items = STORYBOARD_STEP_META_INLINE.map((s, i) => {
+    const isCurrent = (currentStep === i + 1);
+    const cls = isCurrent
+      ? 'storyboard-nav-item storyboard-nav-item--current'
+      : 'storyboard-nav-item';
+    return '<a class="' + cls + '" href="#storyboard-step-' + s.no + '" data-step="' + s.no + '">'
+      + '<span class="storyboard-nav-no">' + escapeHTMLStoryboard(s.no) + '</span>'
+      + '<span class="storyboard-nav-name">' + escapeHTMLStoryboard(s.name_zh) + '</span>'
+      + '</a>';
+  }).join('\n');
+  return '<nav class="storyboard-side-nav" aria-label="七步導覽">' + items + '</nav>';
+}
+
+function buildStoryboardBodyHTML(apiResp) {
+  const safe = (apiResp && typeof apiResp === 'object') ? apiResp : {};
+  const steps = Array.isArray(safe.steps) && safe.steps.length === 7
+    ? safe.steps
+    : STORYBOARD_STEP_META_INLINE.map(meta => ({
+        no: meta.no, name_zh: meta.name_zh, name_en: meta.name_en,
+        state: 'empty', brain_state: null, sovereign_action: null,
+      }));
+  const currentStep = Number.isInteger(safe.currentStep)
+    && safe.currentStep >= 1 && safe.currentStep <= 7
+    ? safe.currentStep : null;
+  const storyHTML = STORYBOARD_STORY_INLINE.map(renderStoryboardNode).join('\n');
+  const navHTML = renderStoryboardSideNav(currentStep);
+  const stepsHTML = steps.map((step, i) => renderStoryboardStepBlock(step, i === 0)).join('\n');
+  return '<div class="storyboard-story" id="storyboard-story">' + storyHTML + '</div>'
+    + '<div class="storyboard-layout">'
+    + navHTML
+    + '<div class="storyboard-steps" id="storyboard-steps">' + stepsHTML + '</div>'
+    + '</div>';
+}
+
+function attachStoryboardToggleHandlers(rootEl) {
+  if (!rootEl) return;
+  const reducedMotion = (typeof matchMedia === 'function'
+    && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  rootEl.querySelectorAll('.storyboard-step-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const expanded = btn.getAttribute('aria-expanded') === 'true';
+      const next = !expanded;
+      btn.setAttribute('aria-expanded', next ? 'true' : 'false');
+      const bodyId = btn.getAttribute('aria-controls');
+      const body = bodyId ? rootEl.querySelector('#' + bodyId) : null;
+      if (body) {
+        if (next) body.removeAttribute('hidden');
+        else      body.setAttribute('hidden', '');
+      }
+    });
+    // Enter/空白 keyboard support — buttons handle this natively, but reinforce.
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+  });
+  // Smooth scroll for story → step links (respect reduced-motion).
+  rootEl.querySelectorAll('.storyboard-step-link, .storyboard-nav-item').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const href = a.getAttribute('href') || '';
+      if (!href.startsWith('#storyboard-step-')) return;
+      const target = document.querySelector(href);
+      if (!target) return;
+      e.preventDefault();
+      target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+      // Ensure the destination block is expanded so content is visible.
+      const toggle = target.querySelector('.storyboard-step-toggle');
+      const body = target.querySelector('.storyboard-step-body');
+      if (toggle && body && toggle.getAttribute('aria-expanded') !== 'true') {
+        toggle.setAttribute('aria-expanded', 'true');
+        body.removeAttribute('hidden');
+      }
+    });
+  });
+}
+
+async function renderStoryboard() {
+  const bodyEl = document.getElementById('storyboard-body');
+  if (!bodyEl) return;
+  bodyEl.innerHTML = '<p class="storyboard-loading">載入中…</p>';
+  let apiResp = null;
+  try {
+    const r = await fetch('/api/sc-storyboard?module=self', {
+      credentials: 'include', headers: { 'accept': 'application/json' },
+    });
+    if (r.ok) apiResp = await r.json();
+  } catch (_err) {
+    // fail-soft: empty skeleton rendered below.
+  }
+  bodyEl.innerHTML = buildStoryboardBodyHTML(apiResp);
+  attachStoryboardToggleHandlers(bodyEl);
+}

@@ -780,3 +780,285 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
    ════════════════════════════════════════════════════════════════ */
 .muted   { color: var(--text-faint); }
 .hidden  { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   §5.7  v5.3 件3 PR-J4 — 頁 Y「我的人生旅途」 (七步故事頁)
+   - 桌機: 故事置頂全寬 → 左 7 步 sticky nav + 右內容
+   - 手機 (≤640px): 單欄直列 (story → 7 blocks)
+   - 兩反派 (限制性信念 / 追求外在認可) + 四誘惑暗紅配色 (per Patrick spec)
+   ═══════════════════════════════════════════════════════════════ */
+
+#view-storyboard {
+  padding: 24px 20px 80px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.storyboard-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.storyboard-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand, #E08A3C);
+  margin-bottom: 8px;
+}
+.storyboard-title {
+  font-family: var(--font-serif, Georgia, "Noto Serif TC", serif);
+  font-size: clamp(22px, 4vw, 30px);
+  color: var(--text-primary);
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.storyboard-sub {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.storyboard-body {
+  background: var(--bg-paper, #FBF6EE);
+  border-radius: 12px;
+  padding: 28px clamp(16px, 4vw, 36px);
+}
+
+.storyboard-loading {
+  text-align: center;
+  color: var(--text-faint);
+  font-style: italic;
+  padding: 32px 0;
+}
+
+/* ── Story (全寬置頂) ─────────────────────────────────────────── */
+.storyboard-story {
+  max-width: 640px;
+  margin: 0 auto 40px;
+  font-family: var(--font-serif, Georgia, "Noto Serif TC", serif);
+  font-size: 16px;
+  line-height: 1.95;
+  color: var(--text-primary);
+}
+.storyboard-p { margin: 0 0 18px; }
+.storyboard-quote {
+  margin: 0 0 22px;
+  padding: 10px 16px;
+  background: rgba(224, 138, 60, 0.06);
+  border-left: 3px solid rgba(224, 138, 60, 0.4);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-style: italic;
+}
+.storyboard-quote--villain {
+  background: rgba(160, 38, 51, 0.06);
+  border-left-color: rgba(160, 38, 51, 0.5);
+  color: #6b1f2a;
+}
+.storyboard-step-heading {
+  margin: 28px 0 12px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.storyboard-step-link {
+  color: var(--brand, #E08A3C);
+  text-decoration: none;
+  border-bottom: 2px dotted currentColor;
+  padding-bottom: 2px;
+}
+.storyboard-step-link:hover,
+.storyboard-step-link:focus {
+  color: #b86a25;
+  border-bottom-style: solid;
+}
+.storyboard-villain-name {
+  font-weight: 600;
+  color: #a02633;
+}
+.storyboard-villain-title {
+  margin: 28px 0 12px;
+  font-size: 18px;
+  color: #a02633;
+  font-weight: 600;
+  text-align: center;
+}
+.storyboard-temptation { margin: 0 0 14px; }
+.storyboard-final {
+  margin: 36px 0 8px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--brand, #E08A3C);
+  letter-spacing: 1px;
+}
+
+/* ── Layout: 桌機 左 sticky nav + 右內容 ─────────────────────── */
+.storyboard-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+.storyboard-side-nav {
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 0;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+.storyboard-nav-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.storyboard-nav-item:hover,
+.storyboard-nav-item:focus {
+  background: rgba(224, 138, 60, 0.06);
+  color: var(--text-primary);
+}
+.storyboard-nav-item--current {
+  background: rgba(224, 138, 60, 0.12);
+  color: var(--brand, #E08A3C);
+  font-weight: 600;
+}
+.storyboard-nav-no {
+  font-family: var(--font-mono, Menlo, monospace);
+  font-size: 12px;
+  color: var(--text-faint);
+  min-width: 22px;
+}
+.storyboard-nav-item--current .storyboard-nav-no { color: inherit; }
+
+.storyboard-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Step block (collapsible) ───────────────────────────────── */
+.storyboard-step-block {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.storyboard-step-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text-primary);
+}
+.storyboard-step-toggle:focus-visible {
+  outline: 2px solid var(--brand, #E08A3C);
+  outline-offset: -2px;
+}
+.storyboard-step-no {
+  font-family: var(--font-mono, Menlo, monospace);
+  font-size: 13px;
+  color: var(--text-faint);
+  min-width: 24px;
+}
+.storyboard-step-name-zh {
+  font-family: var(--font-serif, Georgia, "Noto Serif TC", serif);
+  font-size: 17px;
+  font-weight: 600;
+  flex: 1;
+}
+.storyboard-step-name-en {
+  font-size: 12px;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+.storyboard-step-toggle[aria-expanded="true"] {
+  background: rgba(224, 138, 60, 0.05);
+}
+
+.storyboard-step-body {
+  padding: 0 20px 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+.storyboard-step-body[hidden] { display: none; }
+
+.storyboard-section {
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.storyboard-section + .storyboard-section {
+  border-top: 1px dashed rgba(0, 0, 0, 0.06);
+}
+.storyboard-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.storyboard-section-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.storyboard-quote-callout {
+  margin: 10px 0 0;
+  padding: 8px 14px;
+  background: rgba(224, 138, 60, 0.08);
+  border-left: 3px solid var(--brand, #E08A3C);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-style: italic;
+  font-size: 15px;
+}
+
+.storyboard-empty-placeholder {
+  margin: 14px 0 0;
+  padding: 12px 0;
+  text-align: center;
+  color: var(--text-faint);
+  font-style: italic;
+  font-size: 14px;
+}
+
+/* ── 手機 (≤640px): 單欄直列 ──────────────────────────────────── */
+@media (max-width: 640px) {
+  #view-storyboard { padding: 16px 12px 60px; }
+  .storyboard-body { padding: 18px 14px; }
+  .storyboard-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .storyboard-side-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 8px 0 14px;
+  }
+  .storyboard-nav-item {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .storyboard-story { font-size: 15px; }
+}
+
+/* ── prefers-reduced-motion: kill transitions ────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .storyboard-step-toggle,
+  .storyboard-nav-item { transition: none; }
+}

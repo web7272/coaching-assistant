@@ -295,6 +295,35 @@
     </div>
   </section>
 
+  <!-- ─────────── §5.7 (v5.3 件3 PR-J4) — 頁 Y「我的人生旅途」 七步故事頁
+       SPA 入口: #/storyboard ; renderStoryboard() in student.js fetches
+       /api/sc-storyboard (J1+J2+J3 contract) and fills #storyboard-body.
+       Patrick spec: 地圖 icon + 「你的 21 天旅途」 title.
+       ─────────── -->
+  <section id="view-storyboard" class="view paper-page" aria-label="你的 21 天旅途">
+    <header class="storyboard-header">
+      <span class="storyboard-icon" aria-hidden="true">
+        <!-- 地圖 SVG (folded paper map). Stroke-only, currentColor. -->
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none"
+             stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/>
+          <path d="M9 4 V18"/>
+          <path d="M15 6 V20"/>
+        </svg>
+      </span>
+      <h1 class="storyboard-title">你的 21 天旅途</h1>
+      <p class="storyboard-sub">看見你的轉變故事 · 從發現匱乏到標籤定錨</p>
+    </header>
+    <div id="storyboard-body" class="storyboard-body">
+      <!-- renderStoryboard() injects story + side nav + 7 step blocks here. -->
+      <p class="storyboard-loading">載入中…</p>
+    </div>
+    <div class="btn-row">
+      <button class="paper-btn" data-nav="journey">回到旅程</button>
+    </div>
+  </section>
+
 </div>
 
 <script src="/student.js"></script>
