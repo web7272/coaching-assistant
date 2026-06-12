@@ -51,24 +51,55 @@ export const SC_STORYBOARD_STEPS = Object.freeze([
 ]);
 
 /**
- * Build the 7-step skeleton from sc_journey_evidence keyed object.
- * Pure helper (testable). brain_state / sovereign_action always null in PR-J1.
+ * Build the 7-step skeleton.
  *
- * @param {object|null} evidence  students.sc_journey_evidence (keyed {step_1..step_7})
- * @returns {Array<{no:string, name_zh:string, name_en:string, state:'empty'|'filled', brain_state:null, sovereign_action:null}>}
+ * PR-J1: pure skeleton from sc_journey_evidence (state empty/filled).
+ *        brain_state / sovereign_action always null.
+ * PR-J2 (this PR): reads precomputed sc_storyboard column to populate
+ *        per-step `brain_state` = { description, quote|null }. sovereign_action
+ *        still null (PR-J3 fills later). brain_state stays null when:
+ *          - step state='empty' (no evidence yet), OR
+ *          - sc_storyboard[step_N].brain_state missing / null (finalize hasn't
+ *            generated yet, or generation failed fail-soft).
+ *        Endpoint stays PURE READ — writes happen in finalize-day.
+ *
+ * @param {object|null} evidence    students.sc_journey_evidence  ({step_1..step_7: []})
+ * @param {object|null} storyboard  students.sc_storyboard       ({step_N: {brain_state, sovereign_action}})
+ * @returns {Array<{no, name_zh, name_en, state, brain_state, sovereign_action}>}
  */
-export function buildScStoryboardSteps(evidence) {
+export function buildScStoryboardSteps(evidence, storyboard = null) {
   const ev = (evidence && typeof evidence === 'object' && !Array.isArray(evidence))
     ? evidence : {};
+  const sb = (storyboard && typeof storyboard === 'object' && !Array.isArray(storyboard))
+    ? storyboard : {};
   return SC_STORYBOARD_STEPS.map((meta, idx) => {
     const stepKey = `step_${idx + 1}`;
     const arr = Array.isArray(ev[stepKey]) ? ev[stepKey] : [];
+    const state = arr.length > 0 ? 'filled' : 'empty';
+    // PR-J2 wire: pull pre-computed brain_state from sc_storyboard.
+    // Only surface for filled steps (empty step → null even if column dirty).
+    let brain_state = null;
+    if (state === 'filled') {
+      const stepNode = sb[stepKey];
+      if (stepNode && typeof stepNode === 'object'
+          && stepNode.brain_state && typeof stepNode.brain_state === 'object'
+          && typeof stepNode.brain_state.description === 'string'
+          && stepNode.brain_state.description.length > 0) {
+        // Re-shape to the strict contract: only {description, quote}.
+        brain_state = {
+          description: stepNode.brain_state.description,
+          quote:       (typeof stepNode.brain_state.quote === 'string'
+                        && stepNode.brain_state.quote.length > 0)
+                        ? stepNode.brain_state.quote : null,
+        };
+      }
+    }
     return {
       no:      meta.no,
       name_zh: meta.name_zh,
       name_en: meta.name_en,
-      state:   arr.length > 0 ? 'filled' : 'empty',
-      brain_state:      null,    // PR-J2 fills
+      state,
+      brain_state,
       sovereign_action: null,    // PR-J3 fills
     };
   });
@@ -97,13 +128,14 @@ export default async function handler(req, res) {
   try {
     const sql = getSql();
 
-    // Fail-soft read: any failure (col missing pre-PR-1 deploy / connection
+    // Fail-soft read: any failure (col missing pre-PR-1/J2 deploy / connection
     // drop / row absent) → currentStep null + all steps 'empty'.
     let currentStep    = null;
     let evidence       = null;
+    let storyboard     = null;
     try {
       const rows = await sql`
-        SELECT sc_journey_step, sc_journey_evidence
+        SELECT sc_journey_step, sc_journey_evidence, sc_storyboard
           FROM students
          WHERE student_id = ${studentId}
          LIMIT 1
@@ -113,7 +145,8 @@ export default async function handler(req, res) {
         if (Number.isInteger(stepRaw) && stepRaw >= 1 && stepRaw <= 7) {
           currentStep = stepRaw;
         }
-        evidence = rows[0].sc_journey_evidence ?? null;
+        evidence   = rows[0].sc_journey_evidence ?? null;
+        storyboard = rows[0].sc_storyboard       ?? null;
       }
     } catch (e) {
       console.warn('[sc-storyboard] sc_journey lookup failed (fail-soft):',
@@ -123,7 +156,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       module,
       currentStep,
-      steps: buildScStoryboardSteps(evidence),
+      steps: buildScStoryboardSteps(evidence, storyboard),
     });
   } catch (e) {
     console.error('[sc-storyboard] error:', e?.message || e);

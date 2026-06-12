@@ -1741,6 +1741,20 @@ export default async function handler(req, res) {
           console.warn('[v5_2_sc_journey][append_failed]', e?.message || e);
         }
       }
+      // ⭐ v5.3 件3 PR-J2 — track which steps got new evidence this session.
+      //   finalize-day reads this set + only regenerates brain_state for the
+      //   touched steps (incremental gen, controls LLM cost / maxDuration).
+      //   Stored in session_state via detectorPatch so it persists per-turn
+      //   and is naturally scoped to this session (reset on next session).
+      if (scEvidenceEntries.length > 0) {
+        const prev = Array.isArray(sessionState?.sc_steps_touched_this_session)
+          ? sessionState.sc_steps_touched_this_session : [];
+        const next = Array.from(new Set([
+          ...prev,
+          ...scEvidenceEntries.map(e => e.step),
+        ])).sort((a, b) => a - b);
+        detectorPatch.sc_steps_touched_this_session = next;
+      }
     }
 
     // Step 8 — build system prompt array（cached prefix + dynamic）

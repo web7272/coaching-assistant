@@ -17,6 +17,9 @@
 import { neon } from '@neondatabase/serverless';
 import Anthropic from '@anthropic-ai/sdk';
 import { generateDamonNote } from './chat.js';
+// v5.3 件3 PR-J2 — 大腦現狀 (brain_state) incremental generation.
+import { generateBrainState } from '../lib/api/sc-storyboard-gen.js';
+import { callAnthropicWithRetry } from '../lib/api/anthropic-retry.js';
 import {
   appendDailyTakeaway, setLastSessionDaySummary, markExportEmailed,
   getUserProfile, setCrisisStateCarryForward,
@@ -137,6 +140,120 @@ export function computeScJourneyStep(currentStep, evidence) {
   if (cur === null) return maxEvidenced;
   if (maxEvidenced === null) return cur;
   return Math.max(cur, maxEvidenced);
+}
+
+/**
+ * v5.3 件3 PR-J2 — Fail-soft brain_state generation + write.
+ *
+ * Walks `touchedSteps` (steps with NEW evidence this session — supplied via
+ * session_state.sc_steps_touched_this_session by chat.js Path A hook). For
+ * each step:
+ *   1. Read this step's full evidence array from students.sc_journey_evidence.
+ *   2. Generate brain_state via LLM (deferred to PR-J2 helper).
+ *   3. jsonb_set into students.sc_storyboard -> step_N -> brain_state.
+ *
+ * ⚠️ Safety (Patrick command):
+ *   - pickSafeQuote applies defence-in-depth denylist (re-filters PR-4 results).
+ *   - Description goes through scrubber (sanitizeStudentNote, Defense 2).
+ *   - LLM throw / scrub-empty / no safe quote → field stays null (no leak).
+ *   - 鐵律 #2: console.warn log NEVER contains raw quote / description text.
+ *   - All-failed step write skipped (don't pollute sc_storyboard with nulls).
+ *
+ * Race / cost:
+ *   - Per-session: typically 1-2 LLM calls (only changed steps), NOT 7.
+ *   - Each LLM call wrapped in try/catch — one step's failure never blocks
+ *     others, nor finalize itself.
+ *
+ * @param {Function}      sql
+ * @param {string}        studentId
+ * @param {number[]}      touchedSteps  sorted-ascending unique step nos (1..7)
+ * @param {object}        deps   injectable for tests
+ * @param {object}        deps.anthropic
+ * @param {Function}      deps.callAnthropic  callAnthropicWithRetry equivalent
+ * @returns {Promise<{ok:boolean, generated:number[], skipped:number[]}>}
+ */
+export async function writeBrainStateFailSoft(sql, studentId, touchedSteps, deps = {}) {
+  const generated = [];
+  const skipped   = [];
+  if (!Array.isArray(touchedSteps) || touchedSteps.length === 0) {
+    return { ok: true, generated, skipped };
+  }
+  let evidence;
+  try {
+    const rows = await sql`
+      SELECT sc_journey_evidence
+        FROM students
+       WHERE student_id = ${studentId}
+       LIMIT 1
+    `;
+    if (!rows || rows.length === 0) {
+      return { ok: true, generated, skipped: touchedSteps.slice() };
+    }
+    evidence = rows[0].sc_journey_evidence || {};
+  } catch (err) {
+    console.warn('[finalize-day][brain_state-evidence-read-failed]',
+      err?.message || err);
+    return { ok: false, generated, skipped: touchedSteps.slice() };
+  }
+
+  for (const stepNo of touchedSteps) {
+    if (!Number.isInteger(stepNo) || stepNo < 1 || stepNo > 7) { skipped.push(stepNo); continue; }
+    const entries = Array.isArray(evidence[`step_${stepNo}`])
+      ? evidence[`step_${stepNo}`] : [];
+    if (entries.length === 0) { skipped.push(stepNo); continue; }
+    let brainState = null;
+    try {
+      brainState = await generateBrainState({
+        stepNo,
+        evidenceEntries: entries,
+        anthropic: deps.anthropic,
+        callAnthropicWithRetry: deps.callAnthropic,
+        model: deps.model,
+        log: (msg) => console.warn(msg),
+      });
+    } catch (err) {
+      // generateBrainState itself is fail-soft (returns null on throw); this
+      // catch is belt-and-suspenders for unforeseen sync errors.
+      console.warn('[finalize-day][brain_state-gen-failed]',
+        JSON.stringify({
+          event: 'brain_state_gen_failed',
+          step_no: stepNo,
+          err: err?.message || String(err),
+          // 鐵律 #2: no raw quote / description in log.
+        }));
+    }
+    if (!brainState) { skipped.push(stepNo); continue; }
+    // Write fail-soft. Per-step UPDATE isolates failures.
+    try {
+      const stepKey  = `step_${stepNo}`;
+      const payload  = JSON.stringify({ brain_state: brainState });
+      // Merge into sc_storyboard.step_N (preserves sovereign_action if present
+      // from PR-J3 later). Defensive COALESCE for legacy NULL column.
+      await sql`
+        UPDATE students
+           SET sc_storyboard = jsonb_set(
+             COALESCE(sc_storyboard, '{}'::jsonb),
+             ARRAY[${stepKey}],
+             COALESCE(sc_storyboard -> ${stepKey}, '{}'::jsonb) || ${payload}::jsonb,
+             true
+           )
+         WHERE student_id = ${studentId}
+      `;
+      console.info('[finalize-day][brain_state-written]',
+        JSON.stringify({
+          event: 'brain_state_written',
+          step_no: stepNo,
+          quote_present: brainState.quote !== null,
+          // 鐵律 #2: description / quote text intentionally NOT logged.
+        }));
+      generated.push(stepNo);
+    } catch (writeErr) {
+      console.warn('[finalize-day][brain_state-write-failed]',
+        writeErr?.message || writeErr);
+      skipped.push(stepNo);
+    }
+  }
+  return { ok: true, generated, skipped };
 }
 
 /**
@@ -509,6 +626,30 @@ export default async function handler(req, res) {
     //   metadata write. Single point of step write (race-safe vs per-turn
     //   evidence appends in chat.js Path A).
     await writeScJourneyStepFailSoft(sql, existing.student_id);
+
+    // ⭐ v5.3 件3 PR-J2 — brain_state incremental generation + write.
+    //   Walks session_state.sc_steps_touched_this_session (populated per-turn
+    //   by chat.js Path A hook). For each touched step: pickSafeQuote + LLM
+    //   description + scrubber + jsonb_set into students.sc_storyboard.
+    //   Fail-soft mirror of day1 pattern — LLM throws / scrub-empty / DB
+    //   write errors are all suppressed (logged) and never block finalize.
+    {
+      const touched = Array.isArray(existing.session_state?.sc_steps_touched_this_session)
+        ? existing.session_state.sc_steps_touched_this_session : [];
+      if (touched.length > 0) {
+        try {
+          await writeBrainStateFailSoft(sql, existing.student_id, touched, {
+            anthropic: getAnthropic(),
+            callAnthropic: callAnthropicWithRetry,
+          });
+        } catch (brainErr) {
+          // Belt-and-suspenders: writeBrainStateFailSoft already fail-soft,
+          // but in case of unforeseen sync error don't block finalize.
+          console.warn('[finalize-day][brain_state-pass-failed]',
+            brainErr?.message || brainErr);
+        }
+      }
+    }
 
     // ⭐ 6/7 Vivi — derive wasCrisis from THIS session's session_state.
     //   sessionTouchedCrisis() biases to TRUE on ambiguity (per spec fail-safe).

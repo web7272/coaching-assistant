@@ -15,6 +15,7 @@ import {
   parseGraduationResponse,
   computeScJourneyStep,            // v5.2 七步 PR-4 Path B
   writeScJourneyStepFailSoft,      // v5.2 七步 PR-4 Path B
+  writeBrainStateFailSoft,         // v5.3 件3 PR-J2
 } from './finalize-day.js';
 
 // ─────────────────────────────────────────────────────────
@@ -692,4 +693,228 @@ test('🛑 PR-4 Path B handler: writeScJourneyStepFailSoft called after day1 blo
   assert.ok(day1Idx < scIdx, 'sc_journey write must come AFTER day1 block (mirror pattern)');
   assert.ok(scIdx < noteIdx, 'sc_journey write must come BEFORE Damon note (race-safe;'
     + ' Damon picks up the new step via PR-5 wire)');
+});
+
+// ═════════════════════════════════════════════════════════════════
+// 🛑 v5.3 件3 PR-J2 — writeBrainStateFailSoft (incremental gen)
+// Patrick safety 命門:
+//   - LLM throw → step skipped, no leak, no finalize block
+//   - dirty LLM output → scrubbed to null, step skipped
+//   - logs NEVER include raw quote / description text
+//   - per-step UPDATE isolated (one step's fail doesn't block others)
+// ═════════════════════════════════════════════════════════════════
+
+function mkBrainSql(planFn) {
+  const calls = [];
+  const fn = (strings, ...values) => {
+    const text = strings.join('?');
+    calls.push({ text, values });
+    return Promise.resolve(planFn ? planFn(text, calls.length - 1) : []);
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+const HAPPY_EVIDENCE = {
+  step_1: [], step_2: [],
+  step_3: [{ type: 'data_mining', quote: '某 term' }],
+  step_4: [{ type: 'identity_claim', quote: '勇敢' }],
+  step_5: [], step_6: [], step_7: [],
+};
+
+function mockAnthropic() {
+  return { messages: { create: async () => ({ content: [{ text: 'x' }] }) } };
+}
+
+test('🛑 PR-J2 writeBrainState: empty touchedSteps → no-op, ok:true', async () => {
+  const sql = mkBrainSql();
+  const r = await writeBrainStateFailSoft(sql, 'A001', [], {
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => ({ ok: true, data: { content: [{ text: 'desc' }] } }),
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.generated, []);
+  assert.deepEqual(r.skipped, []);
+  assert.equal(sql.calls.length, 0, 'no SQL fired for empty touched');
+});
+
+test('🛑 PR-J2 writeBrainState: happy 2 steps → 1 SELECT + 2 UPDATE', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: HAPPY_EVIDENCE }];
+    return [];
+  });
+  const r = await writeBrainStateFailSoft(sql, 'A001', [3, 4], {
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => ({
+      ok: true, data: { content: [{ text: '那段日子,你看見了。' }] },
+    }),
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.generated.sort(), [3, 4]);
+  assert.deepEqual(r.skipped, []);
+  // 1 SELECT + 2 UPDATE (one per step).
+  assert.equal(sql.calls.length, 3);
+  assert.match(sql.calls[0].text, /SELECT sc_journey_evidence/);
+  assert.match(sql.calls[1].text, /UPDATE students/);
+  assert.match(sql.calls[1].text, /sc_storyboard\s*=\s*jsonb_set/);
+});
+
+test('🛑 PR-J2 writeBrainState: invalid step ranges skipped silently', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: HAPPY_EVIDENCE }];
+    return [];
+  });
+  const r = await writeBrainStateFailSoft(sql, 'A001', [0, 8, 4, 'foo'], {
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => ({ ok: true, data: { content: [{ text: 'ok' }] } }),
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.generated, [4],   'only step 4 generates (others out-of-range)');
+  assert.ok(r.skipped.length >= 3, 'invalid step nos in skipped');
+});
+
+test('🛑 PR-J2 writeBrainState: step with empty evidence → skipped (no LLM call)', async () => {
+  let llmCalls = 0;
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) {
+      return [{ sc_journey_evidence: {
+        step_1: [], step_2: [], step_3: [], step_4: [], step_5: [], step_6: [], step_7: [],
+      } }];
+    }
+    return [];
+  });
+  const r = await writeBrainStateFailSoft(sql, 'A001', [3, 4], {
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => { llmCalls++; return { ok: true, data: { content: [{ text: 'x' }] } }; },
+  });
+  assert.equal(llmCalls, 0, 'no LLM call when step evidence empty');
+  assert.deepEqual(r.generated, []);
+});
+
+test('🛑 PR-J2 writeBrainState: SELECT throws → ok:false, all skipped, no UPDATE', async () => {
+  const sql = mkBrainSql(() => { throw new Error('db down'); });
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const r = await writeBrainStateFailSoft(sql, 'A001', [3], {
+      anthropic: mockAnthropic(),
+      callAnthropic: async () => ({ ok: true, data: { content: [{ text: 'x' }] } }),
+    });
+    assert.equal(r.ok, false);
+    assert.deepEqual(r.skipped, [3]);
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+test('🛑 PR-J2 writeBrainState: LLM call throws → step skipped, no UPDATE for that step', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: HAPPY_EVIDENCE }];
+    return [];
+  });
+  let stepCalls = 0;
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const r = await writeBrainStateFailSoft(sql, 'A001', [3, 4], {
+      anthropic: mockAnthropic(),
+      callAnthropic: async () => {
+        stepCalls++;
+        if (stepCalls === 1) throw new Error('llm timeout');
+        return { ok: true, data: { content: [{ text: '描述。' }] } };
+      },
+    });
+    assert.equal(r.ok, true, 'overall still ok (fail-soft per step)');
+    assert.deepEqual(r.generated, [4], 'step 3 failed, step 4 succeeded');
+    assert.deepEqual(r.skipped, [3]);
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+test('🛑 PR-J2 writeBrainState: 🔴 ship-gate — dirty LLM output → scrubbed → step skipped', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: HAPPY_EVIDENCE }];
+    return [];
+  });
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const r = await writeBrainStateFailSoft(sql, 'A001', [3], {
+      anthropic: mockAnthropic(),
+      // LLM returns 自殺 — Defense 2 scrubber kills it → null → step skipped.
+      callAnthropic: async () => ({ ok: true, data: { content: [{ text: '你想自殺' }] } }),
+    });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.generated, [], '🔴 dirty LLM output MUST NOT write to DB');
+    assert.deepEqual(r.skipped, [3]);
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+test('🛑 PR-J2 writeBrainState: 🔴 ship-gate — log NEVER contains raw quote / description', async () => {
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) {
+      return [{ sc_journey_evidence: {
+        step_1: [], step_2: [], step_3: [], step_4: [{ type: 'identity_claim', quote: 'SECRET_QUOTE_XYZ' }],
+        step_5: [], step_6: [], step_7: [],
+      } }];
+    }
+    return [];
+  });
+  const SECRET_DESC = 'SECRET_DESCRIPTION_LMN 那段日子。';
+  const captured = [];
+  const origInfo = console.info;
+  const origWarn = console.warn;
+  console.info = (...args) => captured.push(['info', ...args]);
+  console.warn = (...args) => captured.push(['warn', ...args]);
+  try {
+    await writeBrainStateFailSoft(sql, 'A001', [4], {
+      anthropic: mockAnthropic(),
+      callAnthropic: async () => ({ ok: true, data: { content: [{ text: SECRET_DESC }] } }),
+    });
+  } finally {
+    console.info = origInfo;
+    console.warn = origWarn;
+  }
+  const flat = JSON.stringify(captured);
+  assert.equal(/SECRET_DESCRIPTION_LMN/.test(flat), false,
+    '🔴 ship-gate: raw description MUST NOT appear in any log');
+  assert.equal(/SECRET_QUOTE_XYZ/.test(flat),       false,
+    '🔴 ship-gate: raw quote MUST NOT appear in any log');
+});
+
+test('🛑 PR-J2 writeBrainState: UPDATE preserves sovereign_action (jsonb merge, not replace)', async () => {
+  // sovereign_action is a PR-J3 concern; UPDATE for brain_state must NOT
+  // overwrite a sibling sovereign_action key. Pattern verification:
+  // payload || ${...}::jsonb merges, doesn't replace step_N entirely.
+  const sql = mkBrainSql((text) => {
+    if (/SELECT sc_journey_evidence/.test(text)) return [{ sc_journey_evidence: HAPPY_EVIDENCE }];
+    return [];
+  });
+  const r = await writeBrainStateFailSoft(sql, 'A001', [4], {
+    anthropic: mockAnthropic(),
+    callAnthropic: async () => ({ ok: true, data: { content: [{ text: 'ok' }] } }),
+  });
+  assert.equal(r.ok, true);
+  const updateCall = sql.calls.find(c => /UPDATE students/.test(c.text));
+  assert.ok(updateCall);
+  // The SQL must use `|| ${payload}::jsonb` merge against existing step_N.
+  assert.match(updateCall.text, /COALESCE\(sc_storyboard -> /,
+    'UPDATE must COALESCE existing step_N to preserve sovereign_action');
+});
+
+test('🛑 PR-J2 writeBrainState: handler integration — call site after Path B, before Damon note', async () => {
+  // Source-level verify hook placement.
+  const day1Idx  = finalizeDaySrc.indexOf('day1_completed_at-write-failed');
+  const pathBIdx = finalizeDaySrc.indexOf('writeScJourneyStepFailSoft(sql, existing.student_id)');
+  const j2Idx    = finalizeDaySrc.indexOf('writeBrainStateFailSoft(sql, existing.student_id');
+  const noteIdx  = finalizeDaySrc.indexOf('generateDamonNote(sql, sessionId, module, week, day, wasCrisis)');
+  assert.ok(day1Idx > 0,  'day1 anchor');
+  assert.ok(pathBIdx > 0, 'Path B anchor');
+  assert.ok(j2Idx > 0,    'J2 brain_state call must exist');
+  assert.ok(noteIdx > 0,  'Damon Note anchor');
+  assert.ok(day1Idx < pathBIdx && pathBIdx < j2Idx && j2Idx < noteIdx,
+    'order: day1 → Path B (sc_journey_step) → J2 (brain_state) → Damon Note');
 });

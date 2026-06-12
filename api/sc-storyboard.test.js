@@ -390,3 +390,196 @@ test('🛑 PR-J1 ship-gate: handler source contains NO UPDATE/INSERT (pure read)
   assert.equal(/\bINSERT\s+INTO/i.test(src),     false,
     'PR-J1 is pure read — must not insert');
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 v5.3 件3 PR-J2 — brain_state wire (read sc_storyboard col)
+// ═════════════════════════════════════════════════════════
+
+test('🛑 PR-J2 endpoint: SELECT pulls sc_storyboard column', async () => {
+  const calls = [];
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient((strings, ...values) => {
+    const text = strings.join('?');
+    calls.push({ text, values });
+    return Promise.resolve([{
+      sc_journey_step: null, sc_journey_evidence: null, sc_storyboard: null,
+    }]);
+  });
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 200);
+  assert.match(calls[0].text, /SELECT sc_journey_step, sc_journey_evidence, sc_storyboard/);
+});
+
+test('🛑 PR-J2 endpoint: precomputed brain_state in DB → surfaced in response', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 4,
+    sc_journey_evidence: {
+      step_1: [], step_2: [],
+      step_3: [{ type: 'data_mining', quote: '某 term' }],
+      step_4: [{ type: 'identity_claim', quote: '勇敢' }],
+      step_5: [], step_6: [], step_7: [],
+    },
+    sc_storyboard: {
+      step_3: {
+        brain_state: {
+          description: '那段日子,你開始翻找過去的微小證據。',
+          quote: '某 term',
+        },
+        sovereign_action: null,
+      },
+      step_4: {
+        brain_state: {
+          description: '你開始說出「我是這樣的人」。',
+          quote: '勇敢',
+        },
+        sovereign_action: null,
+      },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 200);
+  // step_3 (idx 2) has brain_state wired.
+  assert.ok(res.body.steps[2].brain_state);
+  assert.equal(res.body.steps[2].brain_state.description, '那段日子,你開始翻找過去的微小證據。');
+  assert.equal(res.body.steps[2].brain_state.quote, '某 term');
+  // step_4 (idx 3) has brain_state wired.
+  assert.ok(res.body.steps[3].brain_state);
+  assert.match(res.body.steps[3].brain_state.description, /我是這樣的人/);
+  assert.equal(res.body.steps[3].brain_state.quote, '勇敢');
+  // step_5..7 still null (no evidence + no storyboard).
+  assert.equal(res.body.steps[4].brain_state, null);
+});
+
+test('🛑 PR-J2 endpoint: empty step → brain_state null even if sc_storyboard has dirty data', async () => {
+  // Defense-in-depth: if storyboard column got polluted (e.g. test fixture or
+  // back-fill), empty steps must NOT surface brain_state.
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: null,
+    sc_journey_evidence: null,
+    sc_storyboard: {
+      step_3: { brain_state: { description: 'leaked', quote: 'x' } },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  // step_3 (idx 2) is empty (no evidence) → brain_state stays null.
+  assert.equal(res.body.steps[2].state, 'empty');
+  assert.equal(res.body.steps[2].brain_state, null,
+    '🔴 ship-gate: empty step → brain_state null regardless of storyboard contents');
+});
+
+test('🛑 PR-J2 endpoint: brain_state contract = {description, quote} ONLY', async () => {
+  // PR-J3 will add sovereign_action — but brain_state's own shape stays
+  // strict {description, quote}. Reject any extra fields polluting the column.
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 4,
+    sc_journey_evidence: { step_1: [], step_2: [], step_3: [], step_4: [{ type: 'identity_claim' }], step_5: [], step_6: [], step_7: [] },
+    sc_storyboard: {
+      step_4: {
+        brain_state: {
+          description: '描述。',
+          quote: '某 quote',
+          extra_field: 'should not leak',
+          safety_flag: 'green',
+          internal_metadata: { whatever: 1 },
+        },
+      },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  const bs = res.body.steps[3].brain_state;
+  assert.ok(bs);
+  // Strict key set — only description + quote.
+  assert.deepEqual(Object.keys(bs).sort(), ['description', 'quote']);
+  // No safety_flag leak.
+  assert.equal('safety_flag'      in bs, false);
+  assert.equal('extra_field'      in bs, false);
+  assert.equal('internal_metadata' in bs, false);
+});
+
+test('🛑 PR-J2 endpoint: malformed brain_state in DB (missing description) → null', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 4,
+    sc_journey_evidence: { step_1: [], step_2: [], step_3: [], step_4: [{ type: 'identity_claim' }], step_5: [], step_6: [], step_7: [] },
+    sc_storyboard: {
+      step_4: { brain_state: { quote: '只有 quote 沒 description' } },  // malformed
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.body.steps[3].brain_state, null,
+    'missing description → fall back to null (don\'t surface partial)');
+});
+
+test('🛑 PR-J2 endpoint: quote=null preserved (留白 — 無安全句)', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  _setSqlClient(() => Promise.resolve([{
+    sc_journey_step: 1,
+    sc_journey_evidence: { step_1: [{ type: 'pain_surface' }], step_2: [], step_3: [], step_4: [], step_5: [], step_6: [], step_7: [] },
+    sc_storyboard: {
+      step_1: {
+        brain_state: {
+          description: '那段日子,你心裡空了一塊。',
+          quote: null,  // pickSafeQuote returned null (all high-risk filtered)
+        },
+      },
+    },
+  }]));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  const bs = res.body.steps[0].brain_state;
+  assert.ok(bs);
+  assert.match(bs.description, /那段日子/);
+  assert.equal(bs.quote, null,
+    'quote=null preserved when no safe quote was available (留白)');
+});
+
+test('🛑 PR-J2 endpoint: sc_storyboard null / missing → still 200 + brain_state null', async () => {
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
+  // Pre-PR-J2-deploy: column doesn't exist. SQL throws → fail-soft kicks in.
+  _setSqlClient(() => Promise.reject(new Error('column sc_storyboard does not exist')));
+  const res = mockRes();
+  await handler(mockReq(), res);
+  assert.equal(res.statusCode, 200);
+  for (const step of res.body.steps) {
+    assert.equal(step.brain_state, null);
+    assert.equal(step.state, 'empty');
+  }
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 PR-J2 pure: buildScStoryboardSteps with storyboard param
+// ═════════════════════════════════════════════════════════
+
+test('🛑 PR-J2 pure: buildScStoryboardSteps(evidence, storyboard) wires brain_state', async () => {
+  const { buildScStoryboardSteps } = await import('./sc-storyboard.js');
+  const evidence = {
+    step_1: [], step_2: [{ type: 'longing_surface', quote: 'x' }],
+    step_3: [], step_4: [], step_5: [], step_6: [], step_7: [],
+  };
+  const storyboard = {
+    step_2: { brain_state: { description: 'desc', quote: 'q' } },
+  };
+  const out = buildScStoryboardSteps(evidence, storyboard);
+  assert.equal(out[0].brain_state, null,  'step_1 empty + no storyboard → null');
+  assert.deepEqual(out[1].brain_state, { description: 'desc', quote: 'q' });
+  assert.equal(out[2].brain_state, null);
+});
+
+test('🛑 PR-J2 pure: buildScStoryboardSteps backward-compat with single-arg call', async () => {
+  // J1 callers (any) that don't pass storyboard must still work.
+  const { buildScStoryboardSteps } = await import('./sc-storyboard.js');
+  const out = buildScStoryboardSteps({
+    step_1: [{ type: 'pain_surface' }], step_2: [], step_3: [], step_4: [], step_5: [], step_6: [], step_7: [],
+  });
+  assert.equal(out[0].state, 'filled');
+  assert.equal(out[0].brain_state, null,
+    'single-arg call (no storyboard) → brain_state stays null (J1 contract preserved)');
+});
