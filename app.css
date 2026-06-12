@@ -896,9 +896,18 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 /* ── 6/12 Vivi — 故事可展開/收起 ──────────────────────────────
    預設收起 (~14em, 約 2-3 段); 點 「展開更多」 → 完整故事 + 「收起」.
    prefers-reduced-motion 關 transition (a11y).
-   故事 verbatim 不動,只是外殼包一層 collapsible 容器. */
+   故事 verbatim 不動,只是外殼包一層 collapsible 容器.
+
+   6/12 Vivi UI — 卡片化: 細邊框 + 圓角 + 內距 + 淺紙底 (對齊 .paper-card /
+   .coach-list__row 既有元件 token: --paper-card + --border-line, 不引新 token).
+   margin-bottom 32 → 跟下面 .storyboard-layout (7 步區) 清楚分隔. */
 .storyboard-story-wrap {
   position: relative;
+  background: var(--paper-card);
+  border: 1px solid var(--border-line);
+  border-radius: 16px;
+  padding: 24px 26px;
+  margin-bottom: 32px;
 }
 .storyboard-story-wrap > .storyboard-story {
   margin-bottom: 16px; /* 收緊與 toggle 的距離 (原 40px 改 16px) */
@@ -907,12 +916,14 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .storyboard-story-wrap--collapsed > .storyboard-story {
   max-height: 14em;
   overflow: hidden;
+  /* mask fades into card 的 cream 底 (--paper-card), 自然漸隱在卡片內、不溢出. */
   -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent);
           mask-image: linear-gradient(to bottom, #000 65%, transparent);
 }
 .storyboard-story-toggle {
   display: block;
-  margin: 0 auto 40px;
+  /* 6/12 UI — toggle 留在卡片內 (原 40px bottom 推出卡片), 由卡片 padding 收口. */
+  margin: 8px auto 0;
   background: transparent;
   border: 1px solid var(--brand, #E08A3C);
   color: var(--brand, #E08A3C);
@@ -1081,6 +1092,11 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 @media (max-width: 640px) {
   #view-storyboard { padding: 16px 12px 60px; }
   .storyboard-body { padding: 18px 14px; }
+  /* 6/12 UI — 卡片在手機 padding 收小, 邊框 + 分隔感維持. */
+  .storyboard-story-wrap {
+    padding: 20px;
+    margin-bottom: 24px;
+  }
   .storyboard-layout {
     grid-template-columns: 1fr;
     gap: 16px;
