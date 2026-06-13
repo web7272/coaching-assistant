@@ -32,7 +32,9 @@ Each fixture = 1 JSON file under `lib/observer-eval/fixtures/`.
     "crisis_sop_turn_zero_extraction": true,  // A006 — turns marked is_crisis_sop_turn must skip
     "noise_zero_extraction":          true,   // A009 — turns marked is_noise_turn must skip
     "substance_step_4_to_7_required": true,   // A005 — substance steps must NOT be empty
-    "fabrication_zero":               true    // 近空白 — values近空 / top1 null / owned 空
+    "fabrication_zero":               true,   // 近空白 — values近空 / top1 null / owned 空
+    "owned_must_include_one_of":      ["照顧", "有愛的能力", "會幫"],   // A006 — owned MUST have ≥1
+    "owned_must_not_include":         ["被需要", "被選擇", "被認同"]   // A006 — owned MUST NOT have any (Damon tier-1 reject)
   },
 
   // Soft metric thresholds (defaults: recall ≥75%, precision ≥80%).
