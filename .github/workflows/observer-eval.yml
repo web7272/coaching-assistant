@@ -1,0 +1,174 @@
+# .github/workflows/observer-eval.yml
+# v5.3 Stage A (6/12) — Observer eval manual run from prod DB (read-only).
+#
+# Trigger: workflow_dispatch (manual button in Actions tab).
+# Pulls verbatim turns from prod DB (in-memory only) via observer-eval.js
+# --from-db, runs Haiku observer judge per turn, produces postScrub'd report,
+# uploads as artifact for Patrick to download + review.
+#
+# 🔴 Safety design:
+#   1. Secrets stay in CI (GitHub auto-masks DATABASE_URL / ANTHROPIC_API_KEY
+#      in logs). Never echoed.
+#   2. Verbatim turns: in-memory only. observer-eval.js does NOT write fixture
+#      files (pullTurnsFromDb sets fixture.turns runtime, doesn't persist).
+#   3. Report: passes through postScrubObservation + a second-layer grep
+#      defence-in-depth here. If any high-risk substring leaks, the file is
+#      DELETED before artifact upload and the workflow FAILS.
+#   4. DB role expected to be READ-ONLY (Patrick configures the secret).
+#   5. Concurrency: queued (one at a time) to avoid duplicate API spend.
+
+name: observer-eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      fixture:
+        description: 'Single fixture filename (e.g. A006-deident.json). Empty = all 5.'
+        required: false
+        type: string
+        default: ''
+      mapping:
+        description: 'fixture→student_id map (CSV: name=id,name=id). For near-empty.json default A010.'
+        required: false
+        type: string
+        default: 'near-empty.json=A010'
+      module:
+        description: "Module to pull from (default 'self')."
+        required: false
+        type: string
+        default: 'self'
+      verbose:
+        description: 'Per-turn observation table (sanitized; no raw text leaks).'
+        required: false
+        type: boolean
+        default: true
+
+# Workflow only reads repo source; never writes back.
+permissions:
+  contents: read
+
+# Queue overlapping triggers — prevents duplicate API spend if button is
+# double-clicked. Doesn't cancel in-flight runs (we want them to finish).
+concurrency:
+  group: observer-eval
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    # 2h cap — eval estimated 30-60min by cost model; 2h headroom for slow days.
+    # GitHub-hosted runners allow up to 6h by default, but cap here for sanity.
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout (latest main of triggering ref)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --loglevel=warn
+
+      - name: Syntax smoke test (observer module + harness)
+        run: |
+          node --check lib/haiku-judge/sc-observer.js
+          node --check scripts/observer-eval.js
+
+      - name: Run observer-eval --from-db
+        id: eval
+        env:
+          # 🔴 Secrets — GitHub auto-masks in logs. Never `echo $SECRET`.
+          DATABASE_URL:       ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          # Workflow inputs.
+          FIXTURE:            ${{ inputs.fixture }}
+          MAPPING:            ${{ inputs.mapping }}
+          MODULE:             ${{ inputs.module }}
+          VERBOSE:            ${{ inputs.verbose }}
+        run: |
+          set +e   # don't exit on non-zero — capture for the leak check + final fail step
+
+          # 🔴 Refuse to start if secrets missing (clearer error than driver throw).
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret not set. Configure in repo Settings → Secrets and variables → Actions."
+            echo "exit_code=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret not set."
+            echo "exit_code=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERBOSE_FLAG=""
+          [ "$VERBOSE" = "true" ] && VERBOSE_FLAG="--verbose"
+
+          FIXTURE_FLAG=""
+          [ -n "$FIXTURE" ] && FIXTURE_FLAG="--fixture $FIXTURE"
+
+          MAP_FLAG=""
+          [ -n "$MAPPING" ] && MAP_FLAG="--map $MAPPING"
+
+          echo "[workflow] starting observer-eval (module=$MODULE, fixture=${FIXTURE:-all}, mapping=${MAPPING:-none})"
+
+          # ⚠️ Quotes around $MODULE intentional (could contain shell metachars).
+          # Other flags pre-validated by parseArgs.
+          node scripts/observer-eval.js \
+            --from-db \
+            $VERBOSE_FLAG \
+            $FIXTURE_FLAG \
+            $MAP_FLAG \
+            --module "$MODULE" \
+            --out observer-eval-report.txt
+
+          EVAL_CODE=$?
+          echo "exit_code=$EVAL_CODE" >> "$GITHUB_OUTPUT"
+          echo "[workflow] eval exit code = $EVAL_CODE (continuing to leak check + artifact)"
+          exit 0
+
+      - name: 🔴 Defence-in-depth — verify report 0 high-risk leak (post-scrub double-check)
+        # ALWAYS runs (even if eval crashed). If file missing → just warn.
+        # If leak → DELETE file + fail step (artifact step still runs but file is gone).
+        if: always()
+        run: |
+          set -e
+          if [ ! -f observer-eval-report.txt ]; then
+            echo "::warning::no observer-eval-report.txt — eval may have crashed pre-write"
+            exit 0
+          fi
+
+          # 🔴 Single-source regex = SC_STORYBOARD_HIGH_RISK_PATTERNS (lib/api/sc-storyboard-gen.js).
+          # Update both together if list changes.
+          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念' observer-eval-report.txt; then
+            echo "::error::🔴🔴 Report contains high-risk substring — postScrubObservation defence-in-depth FAILED. Report DELETED before upload."
+            # Don't echo the offending lines — would also leak in the workflow log.
+            rm -f observer-eval-report.txt
+            exit 1
+          fi
+          echo "✓ Defence-in-depth: 0 high-risk substring in report"
+
+      - name: Upload report artifact
+        # always() — upload even if eval failed (clean report is still useful);
+        # if leak check deleted the file, this gets "no-files-found warn" + continues.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observer-eval-report-${{ github.run_id }}
+          path: observer-eval-report.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Fail workflow if eval exit code != 0
+        # Hard gate red OR config error → workflow conclusion = failure.
+        if: always()
+        run: |
+          EXIT="${{ steps.eval.outputs.exit_code }}"
+          if [ -z "$EXIT" ]; then EXIT="1"; fi
+          if [ "$EXIT" != "0" ]; then
+            echo "::error::observer-eval exit code: $EXIT (any hard gate fail OR config error → Stage B BLOCKED per spec §紅線)"
+            exit 1
+          fi
+          echo "🟢 observer-eval all green — safe to wire (Stage B can open)"
