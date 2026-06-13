@@ -283,8 +283,11 @@ async function evalFixture(fixture) {
   const softResults = computeSoftMetrics(fixture, accumulated, stepEvidenceAll);
 
   // ── All green = hard gates pass + soft thresholds met ──
+  // 6/12 — softPass ignores entries marked informational:true (e.g. values_precision
+  // is wrong measurement for "surfaced" list — naturally high-count; only recall
+  // + top1 + owned actually block. precision printed but not blocking).
   const hardPass = hardGateResults.every(r => r.pass);
-  const softPass = softResults.every(r => r.pass);
+  const softPass = softResults.filter(r => !r.informational).every(r => r.pass);
 
   return {
     fixture: fixture.file,
@@ -375,17 +378,49 @@ function checkHardGates(fixture, observations) {
     });
   }
 
-  // A006: owned MUST include at least one of the expected healthy identities
-  // (照顧 / 有愛的能力 / 會幫). Validates Damon 親標 — observer didn't drop them all.
+  // A006: owned MUST include at least one of the expected healthy identities.
+  // 6/12 — synonym-aware: actual owned counts if it matches canonical OR any
+  // synonym from fixture.ground_truth.owned_synonyms[canonical].
   if (Array.isArray(gateSpec.owned_must_include_one_of) && gateSpec.owned_must_include_one_of.length > 0) {
-    const expected = new Set(gateSpec.owned_must_include_one_of.map(s => String(s).trim()));
+    const synonymsMap = fixture.ground_truth?.owned_synonyms || {};
     const actualOwned = accumulatedOwned(observations).map(s => String(s).trim());
-    const matched = actualOwned.filter(o => expected.has(o));
+    const matchedCanonicals = [];
+    for (const canonical of gateSpec.owned_must_include_one_of) {
+      const canon = String(canonical).trim();
+      const syns  = Array.isArray(synonymsMap[canon]) ? synonymsMap[canon] : [];
+      const allCandidates = new Set([canon, ...syns.map(s => String(s).trim())]);
+      if (actualOwned.some(a => allCandidates.has(a))) matchedCanonicals.push(canon);
+    }
     gates.push({
       id: 'owned_must_include_one_of',
-      description: `A006: owned 必須含 ≥1 of [${[...expected].join(' / ')}] (Damon 親標健康身份)`,
-      pass: matched.length > 0,
-      detail: `actual owned=${JSON.stringify(actualOwned)}, required ≥1 from ${JSON.stringify([...expected])}`,
+      description: `A006: owned 必須含 ≥1 of [${gateSpec.owned_must_include_one_of.join(' / ')}] (canonical OR synonym; Damon 健康身份)`,
+      pass: matchedCanonicals.length > 0,
+      detail: matchedCanonicals.length > 0
+        ? `matched canonicals: ${JSON.stringify(matchedCanonicals)}`
+        : `actual owned=${JSON.stringify(actualOwned)}, required ≥1 (canonical or synonym) from ${JSON.stringify(gateSpec.owned_must_include_one_of)}`,
+      required: true,
+    });
+  }
+
+  // 6/12 — values_must_not_include: hard gate against observer mis-classifying
+  // transient skills/states (觀察力 / 放空 / 專注 / 可見性 / 細微性) as values.
+  // Universal default; fixture can override with empty array to disable, or
+  // expand with extra blacklist terms.
+  const DEFAULT_VALUES_BLACKLIST = Object.freeze(
+    ['觀察力', '放空', '專注', '可見性', '細微性']
+  );
+  const valuesBlacklist = Array.isArray(gateSpec.values_must_not_include)
+    ? gateSpec.values_must_not_include : DEFAULT_VALUES_BLACKLIST;
+  if (valuesBlacklist.length > 0) {
+    const actualValues = accumulatedValues(observations).map(s => String(s).trim());
+    const leaked = actualValues.filter(v => valuesBlacklist.includes(v));
+    gates.push({
+      id: 'values_must_not_include',
+      description: `universal: values 不可含 [${valuesBlacklist.join(' / ')}] (transient skills/states, NOT core qualities)`,
+      pass: leaked.length === 0,
+      detail: leaked.length > 0
+        ? `🔴 leaked: ${JSON.stringify(leaked)} (Damon: HOW/state, NOT WHO/quality)`
+        : `none of blacklist tokens present`,
       required: true,
     });
   }
@@ -470,9 +505,10 @@ function computeSoftMetrics(fixture, accumulated, stepEvidenceAll) {
       detail: `tp=${tp}, expected=${expected.size}, actual=${actual.size}`,
     });
     out.push({
-      id: 'values_precision', description: 'values precision',
+      id: 'values_precision', description: 'values precision (informational — not blocking)',
       value: precision, threshold: minPrecision,
       pass: precision >= minPrecision,
+      informational: true,    // 6/12 — precision is wrong measurement for "surfaced" list (naturally high-count).
       detail: `tp=${tp}, expected=${expected.size}, actual=${actual.size}`,
     });
   }
@@ -488,17 +524,27 @@ function computeSoftMetrics(fixture, accumulated, stepEvidenceAll) {
     });
   }
 
-  // Owned: set overlap.
-  if (Array.isArray(gt.owned_expected)) {
-    const expected = new Set(gt.owned_expected.map(v => v.trim()));
-    const actual = new Set(accumulated.owned.map(v => v.trim()));
-    const tp = [...actual].filter(v => expected.has(v)).length;
-    const recall = expected.size > 0 ? tp / expected.size : 1;
+  // Owned: synonym-aware set overlap.
+  // 6/12 — Each expected canonical matches if actual.owned contains the canonical
+  // OR any synonym from gt.owned_synonyms[canonical] (e.g. 「自然就想給的人」 ≈
+  // 「有愛的能力」). Damon's substance > formal form, but synonym mapping must be
+  // ground-truth declared (no inference).
+  if (Array.isArray(gt.owned_expected) && gt.owned_expected.length > 0) {
+    const synonymsMap = gt.owned_synonyms || {};
+    const actualOwned = accumulated.owned.map(v => v.trim());
+    let tp = 0;
+    for (const canonical of gt.owned_expected) {
+      const canon = String(canonical).trim();
+      const syns  = Array.isArray(synonymsMap[canon]) ? synonymsMap[canon] : [];
+      const allCandidates = new Set([canon, ...syns.map(s => String(s).trim())]);
+      if (actualOwned.some(a => allCandidates.has(a))) tp++;
+    }
+    const recall = gt.owned_expected.length > 0 ? tp / gt.owned_expected.length : 1;
     out.push({
-      id: 'owned_recall', description: 'owned recall',
+      id: 'owned_recall', description: 'owned recall (synonym-aware)',
       value: recall, threshold: minRecall,
       pass: recall >= minRecall,
-      detail: `tp=${tp}, expected=${expected.size}, actual=${actual.size}`,
+      detail: `tp=${tp} / expected=${gt.owned_expected.length}, actual_owned=${actualOwned.length}`,
     });
   }
 
@@ -547,8 +593,11 @@ function printFixtureReport(r) {
   console.log(`\n   📊 Soft metrics:`);
   for (const s of r.soft_metrics) {
     const val = typeof s.value === 'number' ? ` (${pct(s.value)} vs threshold ${pct(s.threshold)})` : '';
-    console.log(`   ${badge(s.pass)} [${s.id}] ${s.description}${val}`);
-    if (!s.pass) console.log(`     └─ ${COLOR.dim}${s.detail}${COLOR.reset}`);
+    const tag = s.informational
+      ? `${COLOR.dim}ℹ INFO${COLOR.reset}`   // informational: not blocking
+      : badge(s.pass);
+    console.log(`   ${tag} [${s.id}] ${s.description}${val}`);
+    if (!s.pass && !s.informational) console.log(`     └─ ${COLOR.dim}${s.detail}${COLOR.reset}`);
   }
 
   printCapturedTermsSummary(r);

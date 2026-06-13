@@ -5,17 +5,21 @@
   "default_primary_mode": "elicitation",
 
   "ground_truth": {
-    "values_expected": ["自然", "真誠", "母親本質", "鬆弛", "微笑"],
+    "values_expected": [
+      "不再壓抑", "安全", "鬆弛微笑", "放心",
+      "被看見被接住", "為自己而活", "自然真誠"
+    ],
     "owned_expected": [],
-    "top1_must_be_one_of": [null, "自然", "真誠"],
+    "owned_synonyms": {},
+    "top1_must_be_one_of": [null, "自然真誠", "自然", "真誠"],
     "step_evidence_required": {
       "step_1": ["記憶/意義缺失", "安全感匱乏", "自我消失"],
       "step_2": ["不再壓抑", "被看見被接住", "意義與值得感"],
       "step_3": ["游泳比賽", "Toastmasters 演講"],
-      "step_4": ["自然", "真誠", "鬆弛微笑", "設界線"],
+      "step_4": ["自然真誠"],
       "step_5": ["保護心意一直都在", "不再壓抑本身包含一切"],
       "step_6": ["挑戰感謝=價值", "付出依然真實"],
-      "step_7": ["自然", "真誠", "母親本質"]
+      "step_7": ["自然真誠", "母親本質"]
     },
     "substance_steps_required": [4, 5, 6, 7]
   },

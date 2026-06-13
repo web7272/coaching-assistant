@@ -5,8 +5,11 @@
   "default_primary_mode": "elicitation",
 
   "ground_truth": {
-    "values_expected": ["自由", "解脫", "直接", "肯定", "成就感"],
+    "values_expected": ["自由", "解脫", "直接", "肯定", "成就感", "全新的人"],
     "owned_expected": ["成就感"],
+    "owned_synonyms": {
+      "成就感": ["有成就感", "感到成就", "成就感是我的", "有成就感的人"]
+    },
     "top1_must_be_one_of": ["成就感", "自由"],
     "step_evidence_required": {
       "step_1": ["不自由現狀", "決策權喪失", "自我價值匱乏", "錢少=我差"],
