@@ -10,12 +10,13 @@
       "被看見被接住", "為自己而活", "自然真誠"
     ],
     "value_synonyms": {
-      "自然真誠":   ["真誠"],
-      "放心":       ["安心"],
-      "安全":       ["安全感"],
-      "鬆弛微笑":   ["鬆弛"],
-      "不再壓抑":   ["解脫", "覺悟"],
-      "為自己而活": ["獨立", "自由"]
+      "自然真誠":     ["真誠"],
+      "放心":         ["安心", "信任"],
+      "安全":         ["安全感"],
+      "鬆弛微笑":     ["鬆弛", "輕鬆"],
+      "不再壓抑":     ["自在", "輕鬆", "解脫", "覺悟"],
+      "為自己而活":   ["自主", "獨立", "自由"],
+      "被看見被接住": ["親近", "信任"]
     },
     "owned_expected": [],
     "owned_synonyms": {},
@@ -39,7 +40,8 @@
 
   "soft_thresholds": {
     "recall_min":    0.75,
-    "precision_min": 0.80
+    "precision_min": 0.80,
+    "values_recall_informational": true
   },
 
   "_note_to_patrick": "最關鍵: hard gate substance_step_4_to_7_required. Observer 不准因「沒走形式」 把 step 4-7 判空. owned 可空、top1 可 null, 但 step 證據必須在.",

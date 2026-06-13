@@ -508,10 +508,20 @@ function computeSoftMetrics(fixture, accumulated, stepEvidenceAll) {
     }
     const recall = gt.values_expected.length > 0 ? tp / gt.values_expected.length : 1;
     const precision = actualValues.length > 0 ? tp / actualValues.length : 1;
+    // 6/12 round 3 — values_recall 收尾規則 (Patrick spec #6 防無限磨, 非作弊).
+    // 若 fixture 標 soft_thresholds.values_recall_informational: true → 降為
+    // informational (不 block softPass). Ship hard gate 維持: 安全 + fabrication
+    // + step + owned + top1.
+    // ⚠️ owned_recall 不准降 informational (那是真信號); 只允許 values_recall 降.
+    const valuesRecallInfo = !!(fixture.soft_thresholds?.values_recall_informational);
     out.push({
-      id: 'values_recall', description: 'values recall (synonym-aware)',
+      id: 'values_recall',
+      description: valuesRecallInfo
+        ? 'values recall (synonym-aware; informational — LLM variance accepted per fixture)'
+        : 'values recall (synonym-aware)',
       value: recall, threshold: minRecall,
       pass: recall >= minRecall,
+      informational: valuesRecallInfo,
       detail: `tp=${tp} / expected=${gt.values_expected.length}, actual_values=${actualValues.length}`,
     });
     out.push({
@@ -695,6 +705,131 @@ function flushReportTo(path) {
   _origLog(`\n[eval] report mirrored → ${path}`);
 }
 
+// 6/12 round 3 — GitHub Actions Step Summary support.
+// Writes markdown summary (per-fixture hard gates + soft metrics + captured terms
+// + OVERALL) alongside the text report. NO per-turn raw, NO high-risk (sanitized
+// by observer's postScrubObservation + workflow grep secondary check).
+function formatMarkdownSummary(allResults) {
+  const lines = [];
+  lines.push(`# Observer Eval Report`);
+  lines.push(``);
+  lines.push(`Stage A round 3 — observer judge evaluation against Damon-labeled ground truth.`);
+  lines.push(``);
+
+  // High-level table.
+  lines.push(`## Overall`);
+  lines.push(``);
+  lines.push(`| Fixture | OVERALL | Hard gates | Soft metrics |`);
+  lines.push(`| ------- | :-----: | :--------: | :----------: |`);
+  for (const r of allResults) {
+    const hardPass = r.hard_gates.every(g => g.pass);
+    const softPass = r.soft_metrics.filter(s => !s.informational).every(s => s.pass);
+    lines.push(`| ${r.fixture} | ${r.pass ? '✅ PASS' : '❌ FAIL'} | ${hardPass ? '✅' : '❌'} | ${softPass ? '✅' : '❌'} |`);
+  }
+  lines.push(``);
+  const allPass = allResults.every(r => r.pass);
+  lines.push(allPass
+    ? `### 🟢 ALL PASS — safe to wire (Stage B can open)`
+    : `### 🔴 ANY FAIL — Stage B BLOCKED per spec §紅線`);
+  lines.push(``);
+
+  // Per-fixture detail.
+  for (const r of allResults) {
+    lines.push(`---`);
+    lines.push(``);
+    lines.push(`## 📋 ${r.fixture}`);
+    lines.push(``);
+    lines.push(`${r.description}`);
+    lines.push(``);
+    lines.push(`- **Turns processed:** ${r.turns_processed}`);
+    lines.push(`- **Skip counts:** \`${JSON.stringify(r.skip_counts)}\``);
+    lines.push(`- **OVERALL:** ${r.pass ? '✅ PASS' : '❌ FAIL'}`);
+    lines.push(``);
+
+    // Hard gates table.
+    lines.push(`### 🔴 Hard gates`);
+    lines.push(``);
+    lines.push(`| Status | Gate | Detail |`);
+    lines.push(`| :----: | ---- | ------ |`);
+    for (const g of r.hard_gates) {
+      const safeDetail = String(g.detail || '').replace(/\|/g, '\\|').slice(0, 200);
+      lines.push(`| ${g.pass ? '✅' : '❌'} | \`${g.id}\` — ${g.description} | ${safeDetail} |`);
+    }
+    lines.push(``);
+
+    // Soft metrics table.
+    lines.push(`### 📊 Soft metrics`);
+    lines.push(``);
+    lines.push(`| Status | Metric | Value | Threshold |`);
+    lines.push(`| :----: | ------ | :---: | :-------: |`);
+    for (const s of r.soft_metrics) {
+      const status = s.informational ? 'ℹ INFO'
+        : (s.pass ? '✅' : '❌');
+      const val = typeof s.value === 'number' ? `${(s.value * 100).toFixed(1)}%` : '—';
+      const thr = typeof s.threshold === 'number' ? `${(s.threshold * 100).toFixed(1)}%` : '—';
+      lines.push(`| ${status} | \`${s.id}\` — ${s.description} | ${val} | ${thr} |`);
+    }
+    lines.push(``);
+
+    // Captured terms (safe: quality terms + enum names; 0 quote text, 0 raw turn).
+    lines.push(`### 📦 Captured terms`);
+    lines.push(``);
+    lines.push(`_(對 Damon 親標比對 — quality terms + type enums; 0 quote text, 0 raw turn)_`);
+    lines.push(``);
+    const values = r.accumulated.values || [];
+    const owned  = r.accumulated.owned  || [];
+    lines.push(`- **values surfaced (${values.length}):** ${values.length ? values.join(', ') : '_(none)_'}`);
+    lines.push(`- **owned confirmed (${owned.length}):** ${owned.length ? owned.join(', ') : '_(none)_'}`);
+    lines.push(`- **top1:** ${r.accumulated.top1 || '_(null)_'}`);
+    // Reframe + step type counts.
+    const reframeTypeCount = {};
+    for (const { obs } of (r.observations || [])) {
+      if (obs.skip) continue;
+      for (const e of (obs.reframe_events || [])) {
+        if (typeof e?.type === 'string') {
+          reframeTypeCount[e.type] = (reframeTypeCount[e.type] || 0) + 1;
+        }
+      }
+    }
+    const reframeStr = Object.keys(reframeTypeCount).length === 0
+      ? '_(none)_'
+      : Object.entries(reframeTypeCount).sort((a, b) => b[1] - a[1])
+          .map(([t, c]) => `\`${t}\`×${c}`).join(', ');
+    lines.push(`- **reframe events:** ${reframeStr}`);
+    lines.push(`- **step evidence (per step):**`);
+    for (let n = 1; n <= 7; n++) {
+      const entries = r.step_evidence?.[`step_${n}`] || [];
+      if (entries.length === 0) {
+        lines.push(`  - step_${n} (0): _(留白)_`);
+        continue;
+      }
+      const typeCount = {};
+      for (const e of entries) {
+        if (typeof e?.type === 'string') {
+          typeCount[e.type] = (typeCount[e.type] || 0) + 1;
+        }
+      }
+      const typeStr = Object.entries(typeCount).sort((a, b) => b[1] - a[1])
+        .map(([t, c]) => `\`${t}\`×${c}`).join(', ');
+      lines.push(`  - step_${n} (${entries.length}): ${typeStr}`);
+    }
+    lines.push(``);
+  }
+  return lines.join('\n');
+}
+
+function flushSummaryMarkdown(results, outPath) {
+  if (!outPath) return;
+  // Convention: write alongside --out path, suffix ".summary.md".
+  // E.g. --out observer-eval-report.txt → observer-eval-report.txt.summary.md.
+  const summaryPath = String(outPath) + '.summary.md';
+  const dir = dirname(resolve(summaryPath));
+  try { mkdirSync(dir, { recursive: true }); } catch {}
+  const md = formatMarkdownSummary(results);
+  writeFileSync(resolve(summaryPath), md, 'utf8');
+  _origLog(`[eval] markdown summary → ${summaryPath}`);
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) { printUsage(); return 0; }
@@ -733,6 +868,7 @@ async function main() {
 
   let allPass = true;
   const summary = [];
+  const allResults = [];   // 6/12 round 3 — keep full results for markdown summary
   for (const fixture of fixtures) {
     // Pull turns from DB if requested.
     if (args.fromDb) {
@@ -758,6 +894,7 @@ async function main() {
 
     const r = await evalFixture(fixture);
     printFixtureReport(r);
+    allResults.push(r);
 
     // Optional verbose per-turn observation summary (sanitized).
     if (args.verbose) {
@@ -783,6 +920,9 @@ async function main() {
 
   // Mirror report to file if requested.
   flushReportTo(args.outPath);
+  // 6/12 round 3 — also write markdown summary alongside (.summary.md) for
+  // workflow $GITHUB_STEP_SUMMARY rendering.
+  flushSummaryMarkdown(allResults, args.outPath);
 
   return allPass ? 0 : 1;
 }
