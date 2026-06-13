@@ -49,7 +49,8 @@ Each fixture = 1 JSON file under `lib/observer-eval/fixtures/`.
   // Soft metric thresholds (defaults: recall ≥75%, precision ≥80%).
   "soft_thresholds": {
     "recall_min":    0.75,
-    "precision_min": 0.80
+    "precision_min": 0.80,
+    "values_recall_informational": false   // 6/12 round 3 — set true to demote values_recall to informational (LLM variance safety valve). owned_recall NEVER demotable.
   },
 
   // 🔴 Required: actual verbatim turns from deidentified history.
