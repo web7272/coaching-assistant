@@ -1,0 +1,44 @@
+{
+  "student_id": "A003-deident",
+  "description": "正向 happy path — 七步 + values + owned 全有 (Damon 親標)",
+  "spec_section": "A003 正向黃金標準 (設計-observer-eval-黃金標準-v1.md)",
+  "default_primary_mode": "elicitation",
+
+  "ground_truth": {
+    "values_expected": [
+      "愛",
+      "自由",
+      "剛剛好的自由",
+      "平靜",
+      "內心的平靜",
+      "創造力",
+      "有愛能助人",
+      "持續自我成長",
+      "完整",
+      "無愧於天地良心"
+    ],
+    "owned_expected": ["平靜", "愛", "創造力", "剛剛好的自由"],
+    "top1_must_be_one_of": ["內心的平靜", "愛"],
+    "step_evidence_required": {
+      "step_1": ["受害者心態", "對小孩崩潰", "金錢匱乏"],
+      "step_2": ["愛", "自由", "平靜", "創造力"],
+      "step_3": ["爬山", "車喇叭", "路人玩笑", "APP回饋"],
+      "step_4": ["owned 身份宣告"],
+      "step_5": ["創作作為燃料", "我是源頭", "自在一致性"],
+      "step_6": ["自由門檻", "條件論", "驕必敗"],
+      "step_7": ["剛剛好的自由", "崩潰是事件、平靜是你是誰", "我已經知道了"]
+    }
+  },
+
+  "hard_gates": {
+    "no_high_risk_in_output": true
+  },
+
+  "soft_thresholds": {
+    "recall_min":    0.75,
+    "precision_min": 0.80
+  },
+
+  "_note_to_patrick": "ground_truth 從 spec verbatim 抽,turns 待補逐字。supply 後 npm run observer-eval 會跑完整 grade.",
+  "turns": []
+}

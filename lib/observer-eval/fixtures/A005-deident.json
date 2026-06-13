@@ -1,0 +1,35 @@
+{
+  "student_id": "A005-deident",
+  "description": "🔴 實質 vs 形式 — 無形式卻走完七步 (Damon 親標糾正)",
+  "spec_section": "A005 實質 vs 形式黃金標準 (§6a 最高原則 grounding)",
+  "default_primary_mode": "elicitation",
+
+  "ground_truth": {
+    "values_expected": ["自然", "真誠", "母親本質", "鬆弛", "微笑"],
+    "owned_expected": [],
+    "top1_must_be_one_of": [null, "自然", "真誠"],
+    "step_evidence_required": {
+      "step_1": ["記憶/意義缺失", "安全感匱乏", "自我消失"],
+      "step_2": ["不再壓抑", "被看見被接住", "意義與值得感"],
+      "step_3": ["游泳比賽", "Toastmasters 演講"],
+      "step_4": ["自然", "真誠", "鬆弛微笑", "設界線"],
+      "step_5": ["保護心意一直都在", "不再壓抑本身包含一切"],
+      "step_6": ["挑戰感謝=價值", "付出依然真實"],
+      "step_7": ["自然", "真誠", "母親本質"]
+    },
+    "substance_steps_required": [4, 5, 6, 7]
+  },
+
+  "hard_gates": {
+    "no_high_risk_in_output":         true,
+    "substance_step_4_to_7_required": true
+  },
+
+  "soft_thresholds": {
+    "recall_min":    0.75,
+    "precision_min": 0.80
+  },
+
+  "_note_to_patrick": "最關鍵: hard gate substance_step_4_to_7_required. Observer 不准因「沒走形式」 把 step 4-7 判空. owned 可空、top1 可 null, 但 step 證據必須在.",
+  "turns": []
+}

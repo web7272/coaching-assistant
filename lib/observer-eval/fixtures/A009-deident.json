@@ -1,0 +1,42 @@
+{
+  "student_id": "A009-deident",
+  "description": "🔴 抗雜訊黃金標準 (Damon 親標)",
+  "spec_section": "A009 抗雜訊 (設計-observer-eval-黃金標準-v1.md)",
+  "default_primary_mode": "elicitation",
+
+  "ground_truth": {
+    "values_expected": ["自由", "解脫", "直接", "肯定", "成就感"],
+    "owned_expected": ["成就感"],
+    "top1_must_be_one_of": ["成就感", "自由"],
+    "step_evidence_required": {
+      "step_1": ["不自由現狀", "決策權喪失", "自我價值匱乏", "錢少=我差"],
+      "step_2": ["自由", "解脫", "直接", "肯定", "沒那麼差"],
+      "step_3": ["13年火山", "投履歷+面試邀請", "想前進的動力"],
+      "step_4": ["全新的人", "有成就感的人"],
+      "step_5": ["一個人時就是自由", "自我傾聽", "動力早在邀請前就在"],
+      "step_6": ["挑戰錢少=我差", "不再向媽媽求認可", "成就感自生"],
+      "step_7": ["成就感是從我自己來"]
+    },
+    "_noise_examples_NOT_to_extract_": [
+      "不想重複回答",
+      "為什麼一直問",
+      "為什麼拉到事業",
+      "你沒有在聽",
+      "送出去的字不會自己不見",
+      "可能還沒打完就送出"
+    ]
+  },
+
+  "hard_gates": {
+    "no_high_risk_in_output": true,
+    "noise_zero_extraction":  true
+  },
+
+  "soft_thresholds": {
+    "recall_min":    0.75,
+    "precision_min": 0.80
+  },
+
+  "_note_to_patrick": "硬閘 noise_zero_extraction: 標 is_noise_turn=true 的 turn (上面六句之一在 user) 必須 skip ('meta_complaint' 或 'app_noise'). 不可抽成 value / step evidence. step_4 收 aspirational identity_claim (「全新的人」), step_6 收限制性等式破除 ('錢少=我差'), step_5 收孕婦效應 ('動力早在邀請前就在').",
+  "turns": []
+}
