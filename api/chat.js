@@ -45,7 +45,7 @@ import { callAnthropicWithRetry } from '../lib/api/anthropic-retry.js';
 // 5/29 Patrick — PRODUCT-TRUTH v2.3 §2.5: 採集深度視覺指示 (純函式、不影響 prompt).
 import { computeDepthSignal } from '../lib/api/depth-signal.js';
 // 5/29 Patrick (Vivi access gate) — is_blocked 入口檢查 + 30 天 window lazy expiry.
-import { isBlocked, shouldExpireBetaWindow, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
+import { isBlocked, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
 // ⭐ v5.1 Step 4 PR-23s4b — phase-context retired. mode-context 取代.
 import { modeContextFor } from '../lib/session/mode-context.js';
 // ⭐ v5.2 第二塊 PR-a (Vivi 6/5) — active_context inject helper.
@@ -1278,11 +1278,14 @@ export default async function handler(req, res) {
     }
     // PR-4c-4e — fetch pace from students table (defaults to 'daily' if not set)
     // 5/26 Patrick (Stage 1 漏斗): 順手把 plan 一起撈、trial gate 用.
-    // 5/29 Patrick (access gate): 也撈 is_blocked / is_beta / created_at 給入口
-    // 守門 + 30 天 window lazy check.
+    // 5/29 Patrick (access gate): 也撈 is_blocked / is_beta / created_at 給入口守門.
+    // 6/13 Patrick (Vivi 政策反轉): is_beta=true 凌駕一切 + lookup fail-open.
+    //   lookupOk = SELECT 成功 (pr.length>0) 才 true. SELECT 拋錯 / 找不到 row →
+    //   lookupOk 留 false → 下游 trial gate 不誤觸發 (fail-open).
     let pace = 'daily';
     let plan = 'trial';
     let studentRow = null;
+    let lookupOk = false;
     try {
       const pr = await sql`
         SELECT pace, plan, is_blocked, is_beta, created_at,
@@ -1295,39 +1298,28 @@ export default async function handler(req, res) {
         studentRow = pr[0];
         if (pr[0].pace) pace = pr[0].pace;
         if (pr[0].plan) plan = pr[0].plan;
+        lookupOk = true;
       }
     } catch (e) { console.warn('[chat] pace/plan/access lookup failed:', e.message); }
 
-    // 5/29 Patrick — access gate. 已 blocked → 403. is_beta 過 30 天且未完成 Day 21
-    // → lazy 設 is_blocked=TRUE + 403. 設在 loadOrCreateSession 之前、避免燒
-    // 任何 LLM token 給已關 access 的學員.
-    if (studentRow && isBlocked(studentRow)) {
+    // 6/13 Patrick (Vivi 政策反轉) — is_beta=true 無條件放行 (凌駕一切).
+    //   isBetaPass: 封測者豁免所有 gate. 含義:
+    //     · is_blocked=TRUE 也放行 (self-heal: 過去被 30 天 window 設成 blocked
+    //       的老封測者, 這次請求直接放行, 不必手動解鎖).
+    //     · trial gate 也放行 (封測者就算 plan='trial' 也照走).
+    //   代價: 要擋某個封測者 → 直接 is_beta=false (光設 is_blocked 擋不住).
+    const isBetaPass = studentRow?.is_beta === true;
+
+    // 5/29 Patrick — access gate. 已 blocked → 403. 設在 loadOrCreateSession 之前
+    // 避免燒任何 LLM token 給已關 access 的學員.
+    // 6/13: 加 !isBetaPass — 封測者凌駕 is_blocked (self-heal 老自動鎖案例).
+    if (studentRow && isBlocked(studentRow) && !isBetaPass) {
       return res.status(403).json(BLOCKED_RESPONSE);
     }
-    if (studentRow && studentRow.is_beta === true) {
-      try {
-        // Day 21 完成 = sessions WHERE day=21 AND day_complete=TRUE 至少 1 筆.
-        const d21 = await sql`
-          SELECT 1 FROM sessions
-           WHERE student_id = ${studentId}
-             AND day = 21
-             AND day_complete = TRUE
-           LIMIT 1
-        `;
-        const hasDay21Complete = d21.length > 0;
-        if (shouldExpireBetaWindow({ student: studentRow, hasDay21Complete, now: Date.now() })) {
-          await sql`UPDATE students SET is_blocked = TRUE WHERE student_id = ${studentId}`;
-          console.info('[chat][beta-window-expired]', JSON.stringify({
-            event: 'beta_window_auto_block', student_id: studentId,
-            created_at: studentRow.created_at,
-          }));
-          return res.status(403).json(BLOCKED_RESPONSE);
-        }
-      } catch (e) {
-        // Window check 失敗 → fail-open (寧可放行 trial run 也不誤鎖).
-        console.warn('[chat] beta-window check failed (fail-open):', e?.message || e);
-      }
-    }
+    // 6/13: 移除 30 天 beta-window 自動鎖整段 (政策反轉, dead code).
+    //   舊邏輯走完 30 天會 lazy UPDATE is_blocked=TRUE + 403. 新政策下封測者
+    //   無條件放行, 這段直接 obsolete. 老 is_blocked=TRUE 的封測者由上面
+    //   isBetaPass 跳過 isBlocked gate 自然 self-heal.
     const { gap_days } = detectNewSessionDay(userProfile, now);
 
     // Step 5 — load / create today's session（PR-4c-4e: pace-aware + day_complete-aware）
@@ -1366,8 +1358,14 @@ export default async function handler(req, res) {
     // Vivi 控：先把封測者改 plan_a → 開白老鼠 trial → 才設 env=true.
     // Day 2 的空 session row 可能已被 loadOrCreateSession 建出來、無妨；
     // 付費後同一天會續用同一個 row.
+    // 6/13 Patrick (Vivi 政策反轉, A003 case fix):
+    //   · 加 !isBetaPass — 封測者凌駕 trial gate.
+    //   · 加 lookupOk — SELECT 拋錯 → lookupOk=false → gate 不誤觸發 (fail-open).
+    //     避免「DB 抖一下 → studentRow=null → 預設 plan='trial' → 誤判 402」.
     if (process.env.TRIAL_GATING_ENABLED === 'true'
+        && lookupOk
         && plan === 'trial'
+        && !isBetaPass
         && (sess.sessionDay || 1) >= 2) {
       return res.status(402).json({
         error: 'TRIAL_UPGRADE_REQUIRED',

@@ -11,10 +11,12 @@ import { _setStudentSessionReader } from '../lib/auth/student-session.js';
 // ── mock SQL — tag-template fn that returns canned rows based on query order ──
 
 function makeMockSql(plan) {
-  // plan: { sessionRows, messageRows, studentRows?, day21Rows? }
+  // plan: { sessionRows, messageRows, studentRows? }
   // 5/29 Patrick — text-match dispatch (order-independent, future-proof against
-  // new access-gate / lazy-block queries inserted before the original 2-call path).
-  // Default studentRows=[] → unblocked / not-beta → gate falls through cleanly.
+  // new access-gate queries). Default studentRows=[] → unblocked / not-beta →
+  // gate falls through cleanly.
+  // 6/13 Patrick (Vivi 政策反轉) — day21Rows / lazy-block UPDATE branches 移除.
+  //   保留斷言用 regex (`UPDATE.*is_blocked` / `day=21`) 給測試斷言「絕不該打」.
   const calls = [];
   const fn = (strings, ...values) => {
     const text = strings.reduce(
@@ -22,17 +24,9 @@ function makeMockSql(plan) {
       '',
     );
     calls.push({ text, values });
-    // is_blocked / is_beta access-gate SELECT
-    if (/SELECT is_blocked, is_beta, created_at\s+FROM students/i.test(text)) {
+    // is_blocked / is_beta access-gate SELECT (6/13: 沒有 created_at)
+    if (/SELECT is_blocked, is_beta\s+FROM students/i.test(text)) {
       return Promise.resolve(plan.studentRows || []);
-    }
-    // 30-day window Day 21 completion lookup (only fires if is_beta=TRUE)
-    if (/FROM sessions[\s\S]*day\s*=\s*21/i.test(text)) {
-      return Promise.resolve(plan.day21Rows || []);
-    }
-    // UPDATE students SET is_blocked=TRUE (lazy block path)
-    if (/UPDATE students SET is_blocked\s*=\s*TRUE/i.test(text)) {
-      return Promise.resolve([]);
     }
     // sessions in-progress query (the A008 path: WHERE day_complete=FALSE, no session_date filter)
     if (/FROM sessions[\s\S]*day_complete\s*=\s*FALSE/i.test(text)) {
@@ -268,13 +262,15 @@ test('response messages strip db-internal fields (id, session_id, created_at)', 
 });
 
 // ═════════════════════════════════════════════════════════
-// 🛑 5/29 Patrick (Vivi access gate) — is_blocked + 30 天 window lazy expiry
+// 🛑 5/29 Patrick (Vivi access gate) — is_blocked 入口檢查
+// 🛑 6/13 Patrick (Vivi 政策反轉) — is_beta=true 凌駕 isBlocked
 // ═════════════════════════════════════════════════════════
 
-test('🛑 conversation-today: is_blocked=true → 403 beta_access_ended, no sessions query', async () => {
+test('🛑 conversation-today: is_blocked=true + is_beta=false → 403 beta_access_ended', async () => {
+  // 一般用戶 manual block (非封測者). 6/13 後 isBlocked gate 仍對非封測者有效.
   _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
   const sql = makeMockSql({
-    studentRows: [{ is_blocked: true, is_beta: false, created_at: '2026-05-01' }],
+    studentRows: [{ is_blocked: true, is_beta: false }],
     sessionRows: [{ id: 1, day: 1, day_complete: false }],
     messageRows: [{ role: 'user', content: 'x' }],
   });
@@ -288,54 +284,35 @@ test('🛑 conversation-today: is_blocked=true → 403 beta_access_ended, no ses
     'blocked 學員的 sessions in-progress query 不該執行 (避免無意義的 DB 查詢)');
 });
 
-test('🛑 conversation-today: is_beta=true + created_at > 30 天前 + 未完 Day 21 → lazy block + 403', async () => {
-  const now = Date.now();
-  const created31d = new Date(now - 31 * 24 * 60 * 60 * 1000).toISOString();
-  _setStudentSessionReader(STUDENT_SESSION_FOR('A005'));
-  const sql = makeMockSql({
-    studentRows: [{ is_blocked: false, is_beta: true, created_at: created31d }],
-    day21Rows: [],   // 未完成 Day 21
-  });
-  _setSqlClient(sql);
-  const res = mockRes();
-  await handler(mockReq({ query: { module: 'self' } }), res);
-  assert.equal(res.statusCode, 403);
-  assert.equal(res.body.error, 'beta_access_ended');
-  // Lazy block: UPDATE students SET is_blocked=TRUE 被打.
-  assert.equal(
-    sql.calls.some(c => /UPDATE students SET is_blocked\s*=\s*TRUE/i.test(c.text)),
-    true,
-    'beta-window 過期應該 lazy 設 is_blocked=TRUE',
-  );
-});
+// 6/13 Patrick (Vivi 政策反轉) — is_beta=true 凌駕一切.
+// 舊 4 個 beta-window 測 (created_at 30 天 / Day 21 / 29 天 / is_beta=false 90 天)
+// 全部移除 — window 機制已經死掉. 新原則改測:
+//   (a) is_beta=true + is_blocked=TRUE → 200 (self-heal 老自動鎖案例).
+//   (b) is_beta=true 純走流程 → 200 (正常 restore).
+//   (c) 任何時候絕不該再打 UPDATE is_blocked / Day 21 SELECT.
 
-test('🛑 conversation-today: is_beta=true + 已完成 Day 21 → 不 lazy block (走完不該關 access)', async () => {
-  const now = Date.now();
-  const created60d = new Date(now - 60 * 24 * 60 * 60 * 1000).toISOString();
-  _setStudentSessionReader(STUDENT_SESSION_FOR('A005'));
+test('🛑 6/13: is_beta=true + is_blocked=TRUE (老自動鎖) → 200 self-heal (凌駕 isBlocked)', async () => {
+  // 老封測者過去被 30 天 window 設成 blocked. 政策反轉後該人重來,
+  // 應該直接放行 — 不必 Vivi 手動解鎖.
+  _setStudentSessionReader(STUDENT_SESSION_FOR('A003'));
   const sql = makeMockSql({
-    studentRows: [{ is_blocked: false, is_beta: true, created_at: created60d }],
-    day21Rows: [{ exists: 1 }],   // 已完成 Day 21
-    sessionRows: [],
+    studentRows: [{ is_blocked: true, is_beta: true }],   // ⭐ 兩個都 true
+    sessionRows: [{ id: 11, day: 5, day_complete: false }],
+    messageRows: [{ role: 'user', content: 'hi' }],
   });
   _setSqlClient(sql);
   const res = mockRes();
   await handler(mockReq({ query: { module: 'self' } }), res);
   assert.equal(res.statusCode, 200,
-    '走完 Day 21 的封測者即使已過 30 天也不該被自動關 access');
-  assert.equal(
-    sql.calls.some(c => /UPDATE students SET is_blocked\s*=\s*TRUE/i.test(c.text)),
-    false,
-    'Day 21 完成者絕對不該被 lazy block',
-  );
+    'is_beta=true 凌駕 isBlocked — 老自動鎖案例應 self-heal 放行');
+  assert.equal(res.body.hasInProgress, true);
 });
 
-test('🛑 conversation-today: is_beta=true + 29 天前 (window 內) → 不 block, 正常 restore 流程', async () => {
-  const now = Date.now();
-  const created29d = new Date(now - 29 * 24 * 60 * 60 * 1000).toISOString();
+test('🛑 6/13: is_beta=true 純流程 → 200, 0 Day-21 / 0 UPDATE is_blocked', async () => {
+  // 確認 6/13 後封測者完全不會觸發任何 window 相關 SQL.
   _setStudentSessionReader(STUDENT_SESSION_FOR('A005'));
   const sql = makeMockSql({
-    studentRows: [{ is_blocked: false, is_beta: true, created_at: created29d }],
+    studentRows: [{ is_blocked: false, is_beta: true }],
     sessionRows: [{ id: 7, day: 3, day_complete: false }],
     messageRows: [{ role: 'user', content: 'hi' }],
   });
@@ -344,31 +321,30 @@ test('🛑 conversation-today: is_beta=true + 29 天前 (window 內) → 不 blo
   await handler(mockReq({ query: { module: 'self' } }), res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.hasInProgress, true);
+  // 政策反轉後不該再有任何 window 機制 SQL.
   assert.equal(
     sql.calls.some(c => /UPDATE students SET is_blocked\s*=\s*TRUE/i.test(c.text)),
     false,
-    'window 內 (29d) 不該觸發 lazy block',
+    '6/13 後絕不該再 lazy UPDATE is_blocked=TRUE',
+  );
+  assert.equal(
+    sql.calls.some(c => /day\s*=\s*21/i.test(c.text)),
+    false,
+    '6/13 後絕不該再查 Day 21 完成狀態 (window 已移除)',
   );
 });
 
-test('🛑 conversation-today: is_beta=false + 90 天前 → 不 block (一般學員 window 不適用)', async () => {
-  const now = Date.now();
-  const created90d = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
-  _setStudentSessionReader(STUDENT_SESSION_FOR('A005'));
+test('🛑 6/13: is_beta=false + is_blocked=false → 200 正常流程 (一般用戶)', async () => {
+  // 一般用戶 (非封測者, 未 block) — 照常 restore.
+  _setStudentSessionReader(STUDENT_SESSION_FOR('B001'));
   const sql = makeMockSql({
-    studentRows: [{ is_blocked: false, is_beta: false, created_at: created90d }],
+    studentRows: [{ is_blocked: false, is_beta: false }],
     sessionRows: [],
   });
   _setSqlClient(sql);
   const res = mockRes();
   await handler(mockReq({ query: { module: 'self' } }), res);
-  assert.equal(res.statusCode, 200,
-    '一般學員 (非 is_beta) 即使過 90 天也絕不該被 window 機制鎖');
-  assert.equal(
-    sql.calls.some(c => /UPDATE students SET is_blocked\s*=\s*TRUE/i.test(c.text)),
-    false,
-    'is_beta=false 學員不適用 30 天 window',
-  );
+  assert.equal(res.statusCode, 200);
 });
 
 test('conversation-today: access-gate SQL 失敗 → fail-open (寧可放行 restore 也不誤鎖)', async () => {
@@ -381,7 +357,7 @@ test('conversation-today: access-gate SQL 失敗 → fail-open (寧可放行 res
       (acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''),
       '',
     );
-    if (/SELECT is_blocked, is_beta, created_at\s+FROM students/i.test(text)) {
+    if (/SELECT is_blocked, is_beta\s+FROM students/i.test(text)) {
       return Promise.reject(new Error('students lookup down'));
     }
     if (/day_complete\s*=\s*FALSE/i.test(text)) return Promise.resolve([]);   // no in-progress

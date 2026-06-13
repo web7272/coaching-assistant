@@ -23,8 +23,10 @@
 
 import { neon } from '@neondatabase/serverless';
 import { guardStudentOr401 } from '../lib/auth/student-session.js';
-// 5/29 Patrick (Vivi access gate) — is_blocked 入口檢查 + 30 天 window lazy expiry.
-import { isBlocked, shouldExpireBetaWindow, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
+// 5/29 Patrick (Vivi access gate) — is_blocked 入口檢查.
+// 6/13 Patrick (Vivi 政策反轉) — is_beta=true 凌駕一切 (self-heal 老自動鎖);
+//   移除 30 天 window 自動鎖整段 (相關函式已從 access-gate.js 拆掉).
+import { isBlocked, BLOCKED_RESPONSE } from '../lib/api/access-gate.js';
 
 // Test seam — inject a mock tag-template sql client.
 let _sql = null;
@@ -52,35 +54,20 @@ export default async function handler(req, res) {
   try {
     const sql = getSql();
 
-    // 5/29 Patrick — access gate: blocked 或 beta-window 過期 → 403.
-    // 撈一次 students 取 is_blocked / is_beta / created_at 給 gate 用.
+    // 5/29 Patrick — access gate: blocked → 403.
+    // 6/13 Patrick (Vivi 政策反轉) — is_beta=true 凌駕 (含 self-heal 老自動鎖案例).
+    //   撈一次 students 取 is_blocked / is_beta 給 gate 用. created_at 不再需要
+    //   (window 已移除). isBetaPass=true → 跳過 isBlocked gate.
     try {
       const sr = await sql`
-        SELECT is_blocked, is_beta, created_at FROM students
+        SELECT is_blocked, is_beta FROM students
          WHERE student_id = ${studentId} LIMIT 1
       `;
       if (sr.length > 0) {
         const studentRow = sr[0];
-        if (isBlocked(studentRow)) {
+        const isBetaPass = studentRow.is_beta === true;
+        if (isBlocked(studentRow) && !isBetaPass) {
           return res.status(403).json(BLOCKED_RESPONSE);
-        }
-        if (studentRow.is_beta === true) {
-          const d21 = await sql`
-            SELECT 1 FROM sessions
-             WHERE student_id = ${studentId}
-               AND day = 21
-               AND day_complete = TRUE
-             LIMIT 1
-          `;
-          if (shouldExpireBetaWindow({
-            student: studentRow, hasDay21Complete: d21.length > 0, now: Date.now(),
-          })) {
-            await sql`UPDATE students SET is_blocked = TRUE WHERE student_id = ${studentId}`;
-            console.info('[conversation-today][beta-window-expired]', JSON.stringify({
-              event: 'beta_window_auto_block', student_id: studentId,
-            }));
-            return res.status(403).json(BLOCKED_RESPONSE);
-          }
         }
       }
     } catch (gateErr) {
