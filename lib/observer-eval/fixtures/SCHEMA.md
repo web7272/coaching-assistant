@@ -17,6 +17,10 @@ Each fixture = 1 JSON file under `lib/observer-eval/fixtures/`.
   // Ground truth from Damon 親標 (verbatim from spec).
   "ground_truth": {
     "values_expected":  ["愛", "自由", "..."],     // recall baseline. precision = informational only (6/12).
+    "value_synonyms": {                            // 6/12 round 2 — values synonym-aware (mirror owned)
+      "剛剛好的自由":   ["自由"],                  //   canonical → 可接受變體; 命中任一 = recall tp
+      "內心的平靜":     ["平靜"]                   //   品質詞概念抓對就算
+    },
     "owned_expected":   ["平靜", "愛", "..."],     // canonical trait nouns
     "owned_synonyms": {                            // 6/12 synonym-aware match (canonical OR synonym counts)
       "愛":   ["有愛", "充滿愛", "愛人的人"],

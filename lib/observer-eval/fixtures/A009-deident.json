@@ -5,7 +5,10 @@
   "default_primary_mode": "elicitation",
 
   "ground_truth": {
-    "values_expected": ["自由", "解脫", "直接", "肯定", "成就感", "全新的人"],
+    "values_expected": ["自由", "解脫", "肯定", "成就感"],
+    "value_synonyms": {
+      "肯定": ["有價值"]
+    },
     "owned_expected": ["成就感"],
     "owned_synonyms": {
       "成就感": ["有成就感", "感到成就", "成就感是我的", "有成就感的人"]
