@@ -19,15 +19,17 @@
 //
 // ⚠️ Stage A scope: 純 eval, 不 wire. Fixtures 必須 deidentified (student_id 用代號).
 
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   judge as observerJudge,
   emptyObservation,
+  META_COMPLAINT_REGEX,
 } from '../lib/haiku-judge/sc-observer.js';
 import { _setClient } from '../lib/haiku-judge/_base.js';
+import { SC_STORYBOARD_HIGH_RISK_PATTERNS } from '../lib/api/sc-storyboard-gen.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = resolve(__dirname, '..', 'lib', 'observer-eval', 'fixtures');
@@ -37,12 +39,26 @@ const FIXTURES_DIR = resolve(__dirname, '..', 'lib', 'observer-eval', 'fixtures'
 // ──────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const out = { single: null, mock: false, help: false };
+  const out = {
+    single: null, mock: false, help: false, fromDb: false, verbose: false,
+    outPath: null, mappings: {}, module: 'self',
+  };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--fixture' && argv[i + 1]) { out.single = argv[++i]; }
-    else if (a === '--mock') out.mock = true;
-    else if (a === '--help' || a === '-h') out.help = true;
+    if (a === '--fixture' && argv[i + 1])      { out.single = argv[++i]; }
+    else if (a === '--mock')                    out.mock = true;
+    else if (a === '--from-db')                 out.fromDb = true;
+    else if (a === '--verbose' || a === '-v')   out.verbose = true;
+    else if (a === '--out' && argv[i + 1])     { out.outPath = argv[++i]; }
+    else if (a === '--module' && argv[i + 1])  { out.module = argv[++i]; }
+    else if (a === '--map' && argv[i + 1]) {
+      // --map fixture=real,fixture2=real2
+      for (const pair of argv[++i].split(',')) {
+        const [k, v] = pair.split('=');
+        if (k && v) out.mappings[k.trim()] = v.trim();
+      }
+    }
+    else if (a === '--help' || a === '-h')      out.help = true;
   }
   return out;
 }
@@ -51,14 +67,24 @@ function printUsage() {
   console.log(`Usage: node scripts/observer-eval.js [options]
 
 Options:
-  --fixture <name.json>   Run a single fixture
+  --fixture <name.json>   Run a single fixture (default: all in dir)
   --mock                  Use canned mock LLM (harness self-test, no API call)
+  --from-db               Pull verbatim turns from prod DB (in-memory, NOT committed)
+                          Requires DATABASE_URL env. Real student_id derived from
+                          fixture filename (e.g. A003-deident.json → A003), or pass
+                          --map to override.
+  --map <fix=id,...>      Override fixture → real student_id mapping
+                          (e.g. --map near-empty=A010,A005-deident=A005)
+  --module <name>         Module to pull from (default: 'self')
+  --verbose, -v           Print per-turn observation summary (sanitized, no raw text)
+  --out <path>            Mirror report to file (in addition to stdout)
   --help, -h              Show this help
 
 Fixtures dir: ${FIXTURES_DIR}
 
 Env:
-  ANTHROPIC_API_KEY       Required for real LLM mode.
+  ANTHROPIC_API_KEY       Required for real LLM mode (skip if --mock).
+  DATABASE_URL            Required for --from-db.
 
 Exit:
   0 = all green
@@ -69,7 +95,89 @@ Stage A acceptance (per Patrick spec):
   - A009 零雜訊誤抽
   - A005 不因「沒走形式」 漏抓 step_4-7
   - 近空白 fixture 零捏造
-  - 4 份軟指標 recall ≥ 75% / precision ≥ 80%`);
+  - 4 份軟指標 recall ≥ 75% / precision ≥ 80%
+
+⚠️ 🔴 --from-db 撈出的逐字 ONLY in-memory. 不寫 fixture 檔, 不 commit.
+   --out 報告寫到指定路徑 (報告只含 metadata + observation summary,
+   經 postScrubObservation 已過濾, 但建議路徑放 .gitignore'd / 私有目錄).`);
+}
+
+// ──────────────────────────────────────────────────────────
+// DB pull — assemble verbatim turns in-memory (never committed)
+// ──────────────────────────────────────────────────────────
+
+async function pullTurnsFromDb(realStudentId, moduleName) {
+  // Lazy import — only loaded when --from-db.
+  const { neon } = await import('@neondatabase/serverless');
+  const sql = neon(process.env.DATABASE_URL);
+
+  // Pull all messages JOIN sessions for this student.
+  const rows = await sql`
+    SELECT s.id AS session_id, s.day, s.session_state,
+           m.role, m.content, m.question_number, m.created_at
+      FROM sessions s
+      JOIN messages m ON m.session_id = s.id
+     WHERE s.student_id = ${realStudentId}
+       AND s.module = ${moduleName}
+     ORDER BY s.day ASC, m.created_at ASC, m.id ASC
+  `;
+
+  // Group by session_id, then pair assistant→user as Q/A turn.
+  const bySession = new Map();
+  for (const r of rows) {
+    if (!bySession.has(r.session_id)) {
+      bySession.set(r.session_id, { day: r.day, state: r.session_state, msgs: [] });
+    }
+    bySession.get(r.session_id).msgs.push(r);
+  }
+
+  const turns = [];
+  for (const [sessionId, { day, state, msgs }] of bySession) {
+    // Per-session crisis flag: if at end of session OR any time during session,
+    // primary_mode === 'crisis' OR crisis_in_progress=true OR crisis_sop_state
+    // non-null → mark all turns in this session as crisis-SOP. Over-skip is
+    // safer than under-skip (A006 hard gate).
+    const sessionInCrisis = !!(
+      state && (
+        state.primary_mode === 'crisis' ||
+        state.crisis_in_progress === true ||
+        state.crisis_sop_state != null
+      )
+    );
+
+    // Walk msgs in order. For each assistant, pair with next user.
+    for (let i = 0; i < msgs.length - 1; i++) {
+      const cur = msgs[i];
+      const nxt = msgs[i + 1];
+      if (cur.role !== 'assistant') continue;
+      if (nxt.role !== 'user') continue;
+      const ai   = String(cur.content || '');
+      const user = String(nxt.content || '');
+      if (ai.trim().length === 0 || user.trim().length === 0) continue;
+      turns.push({
+        day,
+        question_number: nxt.question_number ?? cur.question_number ?? 0,
+        ai,
+        user,
+        primary_mode: state?.primary_mode || 'elicitation',
+        // Auto-mark for hard gates (per Stage A spec):
+        //   A006 crisis-SOP — session-level flag (over-skip for safety).
+        //   A009 noise — meta-complaint regex on user content.
+        is_crisis_sop_turn: sessionInCrisis,
+        is_noise_turn:      META_COMPLAINT_REGEX.test(user),
+      });
+    }
+  }
+  return turns;
+}
+
+function deriveRealStudentId(fixture, mappings) {
+  // Explicit mapping wins.
+  if (mappings && mappings[fixture.file]) return mappings[fixture.file];
+  // Convention: <ID>-deident.json → <ID>.
+  const m = fixture.file.match(/^(A\d{3})-deident\.json$/);
+  if (m) return m[1];
+  return null;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -188,6 +296,7 @@ async function evalFixture(fixture) {
     hard_gates: hardGateResults,
     soft_metrics: softResults,
     pass: hardPass && softPass,
+    observations,  // per-turn for verbose dump (already postScrub'd)
   };
 }
 
@@ -416,36 +525,90 @@ function printFixtureReport(r) {
 // Main
 // ──────────────────────────────────────────────────────────
 
+// Capture stdout to mirror to --out file.
+const _reportLines = [];
+const _origLog = console.log;
+function logLine(s) { _reportLines.push(s); _origLog(s); }
+function flushReportTo(path) {
+  if (!path) return;
+  const dir = dirname(resolve(path));
+  try { mkdirSync(dir, { recursive: true }); } catch {}
+  // Strip ANSI for file output (cleaner for sharing).
+  const clean = _reportLines.join('\n').replace(/\x1b\[\d+m/g, '');
+  writeFileSync(resolve(path), clean, 'utf8');
+  _origLog(`\n[eval] report mirrored → ${path}`);
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help) { printUsage(); return 0; }
 
+  // Re-route console.log → captured buffer for --out mirror.
+  console.log = logLine;
+
   const { fixtures, dir_missing } = loadFixtures(args.single);
   if (dir_missing) {
-    console.error(`${COLOR.red}[eval] fixtures directory missing: ${FIXTURES_DIR}${COLOR.reset}`);
-    console.error('       Create JSON fixtures (see lib/observer-eval/fixtures/SCHEMA.md).');
+    _origLog(`${COLOR.red}[eval] fixtures directory missing: ${FIXTURES_DIR}${COLOR.reset}`);
+    _origLog('       Create JSON fixtures (see lib/observer-eval/fixtures/SCHEMA.md).');
     return 1;
   }
   if (fixtures.length === 0) {
-    console.warn(`${COLOR.yellow}[eval] no fixtures loaded (dir: ${FIXTURES_DIR}, filter: ${args.single ?? 'all'})${COLOR.reset}`);
-    console.warn('       Stage A fixture skeletons require verbatim turns (Patrick to supply).');
-    console.warn('       Run with --mock to verify harness machinery without LLM.');
+    _origLog(`${COLOR.yellow}[eval] no fixtures loaded (dir: ${FIXTURES_DIR}, filter: ${args.single ?? 'all'})${COLOR.reset}`);
+    _origLog('       Run with --mock to verify harness machinery without LLM.');
     return 1;
   }
 
+  // Mode selection.
   if (args.mock) {
     _setClient(makeMockClient());
     console.log(`${COLOR.yellow}[eval] --mock: using stub LLM (harness self-test only)${COLOR.reset}`);
   } else if (!process.env.ANTHROPIC_API_KEY) {
-    console.error(`${COLOR.red}[eval] ANTHROPIC_API_KEY not set — pass --mock for harness self-test${COLOR.reset}`);
+    _origLog(`${COLOR.red}[eval] ANTHROPIC_API_KEY not set — pass --mock for harness self-test${COLOR.reset}`);
     return 1;
+  }
+
+  if (args.fromDb && !process.env.DATABASE_URL) {
+    _origLog(`${COLOR.red}[eval] --from-db requires DATABASE_URL env${COLOR.reset}`);
+    return 1;
+  }
+  if (args.fromDb) {
+    console.log(`${COLOR.yellow}[eval] --from-db: pulling verbatim turns from DB (in-memory only; NOT committed)${COLOR.reset}`);
   }
 
   let allPass = true;
   const summary = [];
   for (const fixture of fixtures) {
+    // Pull turns from DB if requested.
+    if (args.fromDb) {
+      const realId = deriveRealStudentId(fixture, args.mappings);
+      if (!realId) {
+        console.log(`${COLOR.yellow}[eval] skip ${fixture.file}: no real student_id mapping (filename != A###-deident.json; pass --map ${fixture.file}=<id>)${COLOR.reset}`);
+        summary.push({ file: fixture.file, pass: false, skipped: 'no mapping' });
+        allPass = false;
+        continue;
+      }
+      try {
+        const pulled = await pullTurnsFromDb(realId, args.module);
+        console.log(`${COLOR.dim}[eval] ${fixture.file} ← pulled ${pulled.length} turn(s) from DB student ${realId} (module=${args.module})${COLOR.reset}`);
+        // ⚠️ In-memory only. We do NOT write back to fixture file.
+        fixture.turns = pulled;
+      } catch (err) {
+        _origLog(`${COLOR.red}[eval] ${fixture.file} DB pull FAILED: ${err.message}${COLOR.reset}`);
+        summary.push({ file: fixture.file, pass: false, skipped: 'db error' });
+        allPass = false;
+        continue;
+      }
+    }
+
     const r = await evalFixture(fixture);
     printFixtureReport(r);
+
+    // Optional verbose per-turn observation summary (sanitized).
+    if (args.verbose) {
+      console.log(`\n   ${COLOR.dim}── per-turn observation summary (sanitized; no raw text) ──${COLOR.reset}`);
+      printObservationsTrace(r);
+    }
+
     summary.push({ file: r.fixture, pass: r.pass });
     if (!r.pass) allPass = false;
   }
@@ -456,11 +619,41 @@ async function main() {
   console.log(`\n═════════════════════════════════════════════════════════`);
   console.log(`📊 SUMMARY (${fixtures.length} fixture(s))`);
   for (const s of summary) {
-    console.log(`   ${badge(s.pass)} ${s.file}`);
+    const tag = s.skipped ? ` (${s.skipped})` : '';
+    console.log(`   ${badge(s.pass)} ${s.file}${tag}`);
   }
   console.log(`\n   ${allPass ? `${COLOR.green}🟢 ALL PASS — safe to wire (Stage B)${COLOR.reset}`
     : `${COLOR.red}🔴 ANY FAIL — Stage B BLOCKED per spec §紅線${COLOR.reset}`}`);
+
+  // Mirror report to file if requested.
+  flushReportTo(args.outPath);
+
   return allPass ? 0 : 1;
+}
+
+// Per-turn observation summary — sanitized (only counts + marker flags + step IDs).
+// Raw quotes/text NEVER printed here. obs.quote fields were already scrubbed by
+// postScrubObservation; this layer also doesn't print quotes — only metadata.
+function printObservationsTrace(result) {
+  if (!Array.isArray(result.observations) || result.observations.length === 0) {
+    console.log(`   (no turns)`);
+    return;
+  }
+  console.log(`   day q# | skip_reason | values | top1 | owned | reframes | steps_hit  | flags`);
+  console.log(`   ─────────────────────────────────────────────────────────────────────────`);
+  for (const { turn, obs } of result.observations) {
+    const stepsHit = [];
+    for (let n = 1; n <= 7; n++) {
+      if (obs.step_evidence[`step_${n}`]?.length > 0) stepsHit.push(n);
+    }
+    const sr = obs.skip_reason || '(--)';
+    const top1 = obs.top1_determined ? `"${obs.top1_determined}"` : '--';
+    const flags = [
+      turn.is_crisis_sop_turn ? 'SOP' : null,
+      turn.is_noise_turn ? 'NOISE' : null,
+    ].filter(Boolean).join(',') || '-';
+    console.log(`   d${String(turn.day).padStart(2,' ')} q${String(turn.question_number).padStart(2,' ')} | ${sr.padEnd(14,' ')} | ${String(obs.values_surfaced.length).padStart(2,' ')}     | ${top1.padEnd(10,' ')} | ${String(obs.owned_confirmed.length).padStart(2,' ')}    | ${String(obs.reframe_events.length).padStart(2,' ')}       | ${stepsHit.join(',').padEnd(10,' ')} | ${flags}`);
+  }
 }
 
 main().then(code => process.exit(code)).catch(err => {
