@@ -5,8 +5,12 @@
   "default_primary_mode": "elicitation",
 
   "ground_truth": {
-    "values_expected": ["照顧", "愛"],
-    "owned_expected": ["照顧", "有愛的能力", "會幫"],
+    "values_expected": ["愛", "被需要", "照顧", "被堅定選擇", "不孤單", "有愛的能力"],
+    "owned_expected": ["照顧", "有愛的能力"],
+    "owned_synonyms": {
+      "照顧":     ["照顧者", "會照顧", "照料", "照顧人的人"],
+      "有愛的能力": ["愛的能力", "懂得愛", "自然就想給的人", "可以依靠的人", "會給愛的人"]
+    },
     "top1_must_be_one_of": ["照顧", null],
     "step_evidence_required": {
       "step_1": ["生存意義匱乏", "存在感匱乏"],

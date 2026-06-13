@@ -16,14 +16,18 @@ Each fixture = 1 JSON file under `lib/observer-eval/fixtures/`.
 
   // Ground truth from Damon 親標 (verbatim from spec).
   "ground_truth": {
-    "values_expected":  ["愛", "自由", "..."],      // recall/precision baseline
-    "owned_expected":   ["平靜", "愛", "..."],
-    "top1_must_be_one_of": ["內心的平靜", "愛"],    // null acceptable for留白 fixtures
+    "values_expected":  ["愛", "自由", "..."],     // recall baseline. precision = informational only (6/12).
+    "owned_expected":   ["平靜", "愛", "..."],     // canonical trait nouns
+    "owned_synonyms": {                            // 6/12 synonym-aware match (canonical OR synonym counts)
+      "愛":   ["有愛", "充滿愛", "愛人的人"],
+      "平靜": ["內心的平靜", "心裡平靜", "安穩"]
+    },
+    "top1_must_be_one_of": ["內心的平靜", "愛"],   // null acceptable for留白 fixtures
     "step_evidence_required": {
-      "step_1": ["受害者心態", "對小孩崩潰", "..."],  // themes (recall: ≥1 evidence per step)
+      "step_1": ["受害者心態", "對小孩崩潰", "..."], // themes (recall: ≥1 evidence per step)
       "step_2": ["..."]
     },
-    "substance_steps_required": [4, 5, 6, 7]        // A005-style: must capture substance even without form
+    "substance_steps_required": [4, 5, 6, 7]       // A005-style: substance must be captured
   },
 
   // Hard gates (per fixture). All declared gates MUST PASS or eval FAILs.
@@ -33,8 +37,9 @@ Each fixture = 1 JSON file under `lib/observer-eval/fixtures/`.
     "noise_zero_extraction":          true,   // A009 — turns marked is_noise_turn must skip
     "substance_step_4_to_7_required": true,   // A005 — substance steps must NOT be empty
     "fabrication_zero":               true,   // 近空白 — values近空 / top1 null / owned 空
-    "owned_must_include_one_of":      ["照顧", "有愛的能力", "會幫"],   // A006 — owned MUST have ≥1
-    "owned_must_not_include":         ["被需要", "被選擇", "被認同"]   // A006 — owned MUST NOT have any (Damon tier-1 reject)
+    "owned_must_include_one_of":      ["照顧", "有愛的能力", "會幫"],   // A006 — owned MUST have ≥1 (synonym-aware)
+    "owned_must_not_include":         ["被需要", "被選擇", "被認同"],   // A006 — owned MUST NOT have any (Damon tier-1 reject)
+    "values_must_not_include":        ["觀察力", "放空", "專注", "可見性", "細微性"]   // 6/12 universal default — transient states not values; override with custom array per fixture
   },
 
   // Soft metric thresholds (defaults: recall ≥75%, precision ≥80%).
