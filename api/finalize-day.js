@@ -28,6 +28,8 @@ import {
   getUserProfile, setCrisisStateCarryForward,
   appendActiveContextSummary, updateUserProfile,
 } from '../lib/state/state-manager.js';
+// 6/13 Stage B — shared observer-driver (also used by Stage A eval harness).
+import { runObserverOverSession } from '../lib/api/observer-driver.js';
 import { sendExportEmail } from '../lib/email/brevo.js';
 import {
   sanitizeStudentNote, containsForbiddenContent, safeNoteForStudent,
@@ -732,10 +734,82 @@ export default async function handler(req, res) {
       }
     }
 
+    // ⭐ 6/13 Stage B — observer-driver: pull THIS session's messages → run
+    //   sc-observer judge per Q/A turn (rolling accumulated) → write
+    //   students.sc_journey_evidence + sc_journey_step. Mutate in-memory
+    //   session_state so downstream blocks (Stage 1 upe_values_sync + J2/J3
+    //   brain_state gen reading sc_steps_touched_this_session) pick up
+    //   observer's authoritative state.
+    //
+    //   🔴 0 facing: observer purely reads what already happened in messages,
+    //     writes state. NO conversation alteration. Crisis/high_risk/noise
+    //     turns are skipped by observer's pre-LLM gate (no Haiku call wasted).
+    //   🔴 Safety: observer postScrubObservation drops any high-risk quote;
+    //     SC_STORYBOARD_HIGH_RISK_PATTERNS guards before write.
+    //   🔴 Fail-soft: any error path → log + continue. Never blocks finalize.
+    //   🔵 Cost: ~15-30 Q/A pairs/day × Haiku 4.5 ~$0.004/turn ≈ $0.1/day/student.
+    let _observerResult = null;
+    try {
+      const msgRows = await sql`
+        SELECT role, content, question_number
+          FROM messages
+          WHERE session_id = ${existing.id}
+          ORDER BY created_at ASC, id ASC
+      `;
+      if (Array.isArray(msgRows) && msgRows.length > 0) {
+        _observerResult = await runObserverOverSession({
+          messages: msgRows,
+          primaryMode: existing.session_state?.primary_mode || 'elicitation',
+          now_iso: new Date().toISOString(),
+          log: (m) => console.warn('[observer-driver]', m),
+        });
+        // Write to students table (authoritative source for storyboard + page Y).
+        try {
+          await sql`
+            UPDATE students
+               SET sc_journey_evidence = ${JSON.stringify(_observerResult.step_evidence)}::jsonb,
+                   sc_journey_step     = ${_observerResult.sc_journey_step}
+             WHERE student_id = ${existing.student_id}
+          `;
+          console.info('[observer-driver][persisted]', JSON.stringify({
+            event: 'sc_journey_observer_persist',
+            student_id_present: !!existing.student_id,
+            session_id: existing.id,
+            sc_journey_step: _observerResult.sc_journey_step,
+            values_count: _observerResult.accumulated.values.length,
+            owned_count: _observerResult.accumulated.owned.length,
+            top1_present: !!_observerResult.accumulated.top1,
+            steps_touched: _observerResult.accumulated.steps_touched,
+            skip_counts: _observerResult.skip_counts,
+            turns_count: _observerResult.turns_count,
+            judged_count: _observerResult.judged_count,
+            // 鐵律 #2: NEVER log quote text / value strings / raw turn.
+          }));
+        } catch (persistErr) {
+          console.error('[observer-driver][persist-failed]', persistErr?.message || persistErr);
+        }
+        // Mutate in-memory session_state for downstream blocks (Stage 1 upe sync
+        // reads values_collected_list/top1_value; J2 brain_state reads
+        // sc_steps_touched_this_session for incremental gen).
+        existing.session_state = {
+          ...(existing.session_state || {}),
+          values_collected_list: _observerResult.accumulated.values,
+          top1_value: _observerResult.accumulated.top1,
+          sc_steps_touched_this_session: _observerResult.accumulated.steps_touched,
+        };
+      }
+    } catch (observerErr) {
+      // Fail-soft: observer failure must NEVER block finalize.
+      console.error('[observer-driver] session run failed (fail-soft):',
+        observerErr?.message || observerErr);
+    }
+
     // ⭐ v5.2 七步 PR-4 Path B — write sc_journey_step (promote-only, fail-soft).
     //   Mirrors day1_completed_at fail-soft pattern: never blocks finalize on
     //   metadata write. Single point of step write (race-safe vs per-turn
     //   evidence appends in chat.js Path A).
+    //   6/13 Stage B note: observer already wrote sc_journey_step above;
+    //   this call recomputes from sc_journey_evidence as defensive sync (idempotent).
     await writeScJourneyStepFailSoft(sql, existing.student_id);
 
     // ⭐ v5.3 件3 PR-J2 + PR-J3 — sc_storyboard incremental generation + write.
