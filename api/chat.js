@@ -1734,7 +1734,15 @@ export default async function handler(req, res) {
     //   per-turn ONLY appends evidence; sc_journey_step write deferred to
     //   finalize-day (Path B). Skipped during onboarding (七步 framing assumes
     //   active_context already locked — onboarding turns 沒有 step 語意).
-    if (!onboardingTookTurn && studentRow) {
+    //
+    // ⭐ 6/13 Stage B — OBSERVER_TAKES_OVER_SC_EVIDENCE flag:
+    //   observer-driver in finalize-day captures sc_journey_evidence semantically
+    //   (richer, less noisy than per-turn reframe_id/quality_candidate heuristic).
+    //   Per-turn legacy path DISABLED to avoid two-source drift — Patrick spec
+    //   「別兩套並存打架」. detectScJourneyEvidenceForTurn (pure fn) unchanged,
+    //   只是不在 production path 觸發. Set false to revert if observer breaks.
+    const OBSERVER_TAKES_OVER_SC_EVIDENCE = true;
+    if (!onboardingTookTurn && studentRow && !OBSERVER_TAKES_OVER_SC_EVIDENCE) {
       const scEvidenceEntries = detectScJourneyEvidenceForTurn({
         primaryMode: primaryModeForInject,
         prevSessionState: sessionState,
