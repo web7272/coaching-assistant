@@ -491,25 +491,35 @@ function computeSoftMetrics(fixture, accumulated, stepEvidenceAll) {
   const minRecall = fixture.soft_thresholds?.recall_min ?? 0.75;
   const minPrecision = fixture.soft_thresholds?.precision_min ?? 0.80;
 
-  // Values: set overlap, normalized by ground truth and actual sizes.
-  if (Array.isArray(gt.values_expected)) {
-    const expected = new Set(gt.values_expected.map(v => v.trim()));
-    const actual = new Set(accumulated.values.map(v => v.trim()));
-    const tp = [...actual].filter(v => expected.has(v)).length;
-    const recall = expected.size > 0 ? tp / expected.size : 1;
-    const precision = actual.size > 0 ? tp / actual.size : 1;
+  // Values: synonym-aware recall (mirror owned_recall pattern).
+  // 6/12 round 2 — owned 已 synonym-aware, values 比照. Each canonical matches
+  // if actual.values contains the canonical OR any value_synonyms[canonical]
+  // synonym. precision stays informational (Patrick: 「surfaced」 list 本來就
+  // 高量, precision 是錯的量法).
+  if (Array.isArray(gt.values_expected) && gt.values_expected.length > 0) {
+    const synonymsMap = gt.value_synonyms || {};
+    const actualValues = accumulated.values.map(v => v.trim());
+    let tp = 0;
+    for (const canonical of gt.values_expected) {
+      const canon = String(canonical).trim();
+      const syns  = Array.isArray(synonymsMap[canon]) ? synonymsMap[canon] : [];
+      const allCandidates = new Set([canon, ...syns.map(s => String(s).trim())]);
+      if (actualValues.some(a => allCandidates.has(a))) tp++;
+    }
+    const recall = gt.values_expected.length > 0 ? tp / gt.values_expected.length : 1;
+    const precision = actualValues.length > 0 ? tp / actualValues.length : 1;
     out.push({
-      id: 'values_recall', description: 'values recall',
+      id: 'values_recall', description: 'values recall (synonym-aware)',
       value: recall, threshold: minRecall,
       pass: recall >= minRecall,
-      detail: `tp=${tp}, expected=${expected.size}, actual=${actual.size}`,
+      detail: `tp=${tp} / expected=${gt.values_expected.length}, actual_values=${actualValues.length}`,
     });
     out.push({
       id: 'values_precision', description: 'values precision (informational — not blocking)',
       value: precision, threshold: minPrecision,
       pass: precision >= minPrecision,
-      informational: true,    // 6/12 — precision is wrong measurement for "surfaced" list (naturally high-count).
-      detail: `tp=${tp}, expected=${expected.size}, actual=${actual.size}`,
+      informational: true,
+      detail: `tp=${tp}, expected=${gt.values_expected.length}, actual=${actualValues.length}`,
     });
   }
 
