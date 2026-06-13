@@ -375,6 +375,38 @@ function checkHardGates(fixture, observations) {
     });
   }
 
+  // A006: owned MUST include at least one of the expected healthy identities
+  // (照顧 / 有愛的能力 / 會幫). Validates Damon 親標 — observer didn't drop them all.
+  if (Array.isArray(gateSpec.owned_must_include_one_of) && gateSpec.owned_must_include_one_of.length > 0) {
+    const expected = new Set(gateSpec.owned_must_include_one_of.map(s => String(s).trim()));
+    const actualOwned = accumulatedOwned(observations).map(s => String(s).trim());
+    const matched = actualOwned.filter(o => expected.has(o));
+    gates.push({
+      id: 'owned_must_include_one_of',
+      description: `A006: owned 必須含 ≥1 of [${[...expected].join(' / ')}] (Damon 親標健康身份)`,
+      pass: matched.length > 0,
+      detail: `actual owned=${JSON.stringify(actualOwned)}, required ≥1 from ${JSON.stringify([...expected])}`,
+      required: true,
+    });
+  }
+
+  // A006: owned MUST NOT include Damon tier-1 reject (被需要 / 被選擇 / 被認同).
+  // These are step_1/2 匱乏 (lack/longing), NOT healthy owned identity.
+  if (Array.isArray(gateSpec.owned_must_not_include) && gateSpec.owned_must_not_include.length > 0) {
+    const forbidden = new Set(gateSpec.owned_must_not_include.map(s => String(s).trim()));
+    const actualOwned = accumulatedOwned(observations).map(s => String(s).trim());
+    const leaked = actualOwned.filter(o => forbidden.has(o));
+    gates.push({
+      id: 'owned_must_not_include',
+      description: `A006: owned 絕不可含 [${[...forbidden].join(' / ')}] (Damon tier-1 reject — 匱乏渴望非 owned)`,
+      pass: leaked.length === 0,
+      detail: leaked.length > 0
+        ? `🔴 leaked: ${JSON.stringify(leaked)} (這些是 step_1/2 匱乏, 不是 owned)`
+        : `none of forbidden tokens present`,
+      required: true,
+    });
+  }
+
   // Near-empty: must NOT fabricate.
   if (gateSpec.fabrication_zero) {
     const fabricated = {
@@ -518,7 +550,72 @@ function printFixtureReport(r) {
     console.log(`   ${badge(s.pass)} [${s.id}] ${s.description}${val}`);
     if (!s.pass) console.log(`     └─ ${COLOR.dim}${s.detail}${COLOR.reset}`);
   }
+
+  printCapturedTermsSummary(r);
+
   console.log(`\n   ${r.pass ? `${COLOR.green}OVERALL PASS${COLOR.reset}` : `${COLOR.red}OVERALL FAIL${COLOR.reset}`}`);
+}
+
+// ──────────────────────────────────────────────────────────
+// Captured terms summary — what observer extracted across all turns.
+//
+// ⚠️ Safe content only:
+//   - values_surfaced / owned_confirmed / top1_determined: quality TERMS
+//     (自由 / 平靜 / 照顧 / 愛 / ...) — already postScrubObservation'd by
+//     observer (high-risk dropped, scrubber-cleaned, ≤80 char).
+//   - reframe_events / step_evidence: only TYPE ENUM names + counts (NOT
+//     quote text from the entries). Type enums are safe constants
+//     (pain_surface / longing_surface / data_mining / identity_claim / etc.).
+//   - 0 raw turn text printed. 0 step_evidence.quote text printed.
+//
+// Patrick uses this to compare extracted terms vs Damon 親標 ground truth.
+// ──────────────────────────────────────────────────────────
+function printCapturedTermsSummary(r) {
+  console.log(`\n   📦 Captured terms (對 Damon 親標比對 — quality terms + type enums; 0 quote text, 0 raw turn):`);
+  const values = r.accumulated.values || [];
+  const owned  = r.accumulated.owned  || [];
+  const top1   = r.accumulated.top1;
+  console.log(`   values surfaced (${values.length}): ${values.length ? values.join(', ') : '(none)'}`);
+  console.log(`   owned confirmed (${owned.length}): ${owned.length ? owned.join(', ') : '(none)'}`);
+  console.log(`   top1: ${top1 || '(null)'}`);
+
+  // Aggregate reframe event type counts (across all observations).
+  const reframeTypeCount = {};
+  for (const { obs } of (r.observations || [])) {
+    if (obs.skip) continue;
+    for (const e of (obs.reframe_events || [])) {
+      if (typeof e?.type === 'string') {
+        reframeTypeCount[e.type] = (reframeTypeCount[e.type] || 0) + 1;
+      }
+    }
+  }
+  const reframeStr = Object.keys(reframeTypeCount).length === 0
+    ? '(none)'
+    : Object.entries(reframeTypeCount)
+        .sort((a, b) => b[1] - a[1])
+        .map(([t, c]) => `${t} × ${c}`).join(', ');
+  console.log(`   reframe events: ${reframeStr}`);
+
+  // Step evidence — per step, type counts only (NO quote text).
+  console.log(`   step evidence types (per step):`);
+  for (let n = 1; n <= 7; n++) {
+    const key = `step_${n}`;
+    const entries = r.step_evidence?.[key] || [];
+    if (entries.length === 0) {
+      console.log(`     step_${n} (0): (留白)`);
+      continue;
+    }
+    const typeCount = {};
+    for (const e of entries) {
+      if (typeof e?.type === 'string') {
+        typeCount[e.type] = (typeCount[e.type] || 0) + 1;
+      }
+    }
+    const typeStr = Object.entries(typeCount)
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, c]) => `${t} × ${c}`).join(', ');
+    console.log(`     step_${n} (${entries.length}): ${typeStr}`);
+  }
 }
 
 // ──────────────────────────────────────────────────────────
