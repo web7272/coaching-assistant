@@ -1,0 +1,224 @@
+# .github/workflows/backfill-dryrun.yml
+# v5.3 Stage D (6/13) — backfill dry-run from prod DB, reports → STEP_SUMMARY.
+#
+# Trigger: workflow_dispatch (manual button on default branch).
+#
+# Why exists:
+#   Patrick can't hit /api/admin/backfill-storyboard (requireAdmin secret) and
+#   has no prod DATABASE_URL. This workflow runs scripts/backfill-storyboard.js
+#   --dry-run per student under GitHub secrets, writes each report into
+#   $GITHUB_STEP_SUMMARY (browser-readable). Patrick审 + 給綠燈 → Vivi 用 admin
+#   endpoint --commit 真寫.
+#
+# 🔴 Safety design (沿用 observer-eval pattern, 雙保險):
+#   1. --dry-run hard-coded — NEVER --commit. Filter step actually drops any
+#      attempt to pass --commit via the students input.
+#   2. Secrets stay in CI (GitHub auto-masks DATABASE_URL / ANTHROPIC_API_KEY).
+#   3. Report content: scripts/backfill-storyboard.js formatStudentReport 既有
+#      只 emit step/type/quote(observer postScrub'd) + signals enum/count/ms.
+#      0 raw 對話, 0 PII.
+#   4. Leak-guard double-check: grep 11 SI 詞 + role markers AFTER report write.
+#      命中 → rm + fail (寧可不顯示也不洩漏, 沿用 Patrick 紅線).
+#   5. Concurrency queued — one run at a time, no duplicate API spend.
+
+name: backfill-dryrun
+
+on:
+  workflow_dispatch:
+    inputs:
+      students:
+        description: 'Space-separated student IDs (default = 7 老封測者).'
+        required: false
+        type: string
+        default: 'A003 A005 A006 A008 A009 A011 A012'
+
+# Workflow only reads repo source; never writes back.
+permissions:
+  contents: read
+
+# Queue overlapping triggers — prevents duplicate API spend.
+concurrency:
+  group: backfill-dryrun
+  cancel-in-progress: false
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    # 7 學員 × observer 跨 ~10-21 day 歷史. 估 ~5-10 min/人 worst-case.
+    # 60min 上限給寬鬆 headroom.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout (latest main)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --loglevel=warn
+
+      - name: Syntax smoke test (backfill + observer modules)
+        run: |
+          node --check scripts/backfill-storyboard.js
+          node --check lib/api/backfill-observer-pass.js
+          node --check lib/api/observer-driver.js
+          node --check lib/haiku-judge/sc-observer.js
+
+      - name: 🔴 Hard-lock --dry-run (defence-in-depth — refuse any commit attempt)
+        env:
+          STUDENTS: ${{ inputs.students }}
+        run: |
+          set -e
+          # The yaml hardcodes --dry-run below; this step rejects any attempt to
+          # smuggle --commit through the students input.
+          if echo "$STUDENTS" | grep -qiE '(--commit|commit=|--no-dry-run)'; then
+            echo "::error::students input must NOT contain --commit / commit= / --no-dry-run. This workflow is dry-run only."
+            exit 1
+          fi
+          echo "✓ students input clean — no commit smuggle"
+
+      - name: Run backfill dry-run per student
+        id: dryrun
+        env:
+          # 🔴 Secrets — GitHub auto-masks in logs. Never echo $SECRET.
+          DATABASE_URL:      ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STUDENTS:          ${{ inputs.students }}
+        run: |
+          set +e   # capture exit codes — failures collected, leak-guard still runs
+
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret not set. Configure in repo Settings → Secrets and variables → Actions."
+            echo "exit_code=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret not set."
+            echo "exit_code=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p reports
+          OVERALL_CODE=0
+          FAILED_LIST=""
+
+          # Tokenise students (whitespace-separated).
+          for SID in $STUDENTS; do
+            # Defensive — strip anything not in [A-Za-z0-9_].
+            CLEAN_SID=$(echo "$SID" | tr -cd '[:alnum:]_')
+            if [ -z "$CLEAN_SID" ]; then continue; fi
+            echo "[workflow] dry-run $CLEAN_SID …"
+            node scripts/backfill-storyboard.js \
+              --dry-run \
+              --student "$CLEAN_SID" \
+              --report "reports/${CLEAN_SID}.txt"
+            CODE=$?
+            echo "[workflow] $CLEAN_SID exit=$CODE"
+            if [ "$CODE" != "0" ]; then
+              OVERALL_CODE=$CODE
+              FAILED_LIST="$FAILED_LIST $CLEAN_SID"
+            fi
+          done
+
+          echo "exit_code=$OVERALL_CODE" >> "$GITHUB_OUTPUT"
+          echo "failed_list=$FAILED_LIST" >> "$GITHUB_OUTPUT"
+          echo "[workflow] all-students exit overall=$OVERALL_CODE failed=$FAILED_LIST"
+          exit 0
+
+      - name: Concatenate per-student reports into combined.md
+        # Build the markdown summary BEFORE leak-guard (so guard scrubs the
+        # actual rendered bytes).
+        if: always()
+        run: |
+          set -e
+          {
+            echo "# Stage D backfill dry-run"
+            echo ""
+            echo "**Run:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  "
+            echo "**Mode:** dry-run (no DB writes)  "
+            echo "**Students requested:** \`${{ inputs.students }}\`"
+            echo ""
+            echo "---"
+            echo ""
+            for f in reports/*.txt; do
+              [ -f "$f" ] || continue
+              base=$(basename "$f" .txt)
+              echo "### $base"
+              echo ""
+              echo '```'
+              cat "$f"
+              echo '```'
+              echo ""
+            done
+          } > combined.md
+          echo "✓ combined.md built ($(wc -l < combined.md) lines)"
+
+      - name: 🔴 Defence-in-depth — verify combined.md 0 SI leak (11 patterns)
+        # Same regex set as SC_STORYBOARD_HIGH_RISK_PATTERNS
+        # (lib/api/sc-storyboard-gen.js). Update both together if list changes.
+        if: always()
+        run: |
+          set -e
+          if [ ! -f combined.md ]; then
+            echo "::warning::no combined.md — concat step may have skipped"
+            exit 0
+          fi
+          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念' combined.md; then
+            echo "::error::🔴🔴 combined.md contains SI substring — defence-in-depth FAILED. File DELETED before STEP_SUMMARY render."
+            # Do NOT echo offending lines — would re-leak in workflow log.
+            rm -f combined.md
+            exit 1
+          fi
+          echo "✓ defence-in-depth: 0 SI substring in combined.md"
+
+      - name: 🔴 Defence-in-depth — verify combined.md 0 conversation role markers
+        # Per Patrick spec — report must be enum/count/ms only.
+        if: always()
+        run: |
+          set -e
+          if [ ! -f combined.md ]; then
+            exit 0
+          fi
+          # Grep is anchored to "role:" / "user:" / "assistant:" as labels.
+          # Allow legitimate identifier-like usage in code blocks via word boundary.
+          if grep -qiE '\b(role|user|assistant):' combined.md; then
+            echo "::error::🔴🔴 combined.md contains conversation role markers — formatStudentReport leaked raw conversation. File DELETED."
+            rm -f combined.md
+            exit 1
+          fi
+          echo "✓ defence-in-depth: 0 role markers in combined.md"
+
+      - name: 🔵 Render combined.md into $GITHUB_STEP_SUMMARY
+        # Patrick reads here, no artifact download needed.
+        if: always()
+        run: |
+          if [ -f combined.md ]; then
+            cat combined.md >> "$GITHUB_STEP_SUMMARY"
+            echo "✓ combined.md rendered into Step Summary"
+          else
+            echo "::warning::no combined.md to render (leak-guard may have deleted it)"
+          fi
+
+      - name: Upload combined report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backfill-dryrun-${{ github.run_id }}
+          path: combined.md
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Fail workflow if any per-student run failed
+        if: always()
+        run: |
+          EXIT="${{ steps.dryrun.outputs.exit_code }}"
+          FAILED="${{ steps.dryrun.outputs.failed_list }}"
+          if [ -z "$EXIT" ]; then EXIT="1"; fi
+          if [ "$EXIT" != "0" ]; then
+            echo "::error::dryrun exit code: $EXIT — failed students:$FAILED"
+            exit 1
+          fi
+          echo "🟢 all per-student dry-runs green — Patrick can read STEP_SUMMARY + 給綠燈 → Vivi --commit"
