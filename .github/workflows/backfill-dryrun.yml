@@ -166,7 +166,7 @@ jobs:
             echo "::warning::no combined.md — concat step may have skipped"
             exit 0
           fi
-          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念' combined.md; then
+          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念|傷害自己|傷害我自己|傷害了自己|自我傷害' combined.md; then
             echo "::error::🔴🔴 combined.md contains SI substring — defence-in-depth FAILED. File DELETED before STEP_SUMMARY render."
             # Do NOT echo offending lines — would re-leak in workflow log.
             rm -f combined.md

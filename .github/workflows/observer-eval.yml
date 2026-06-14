@@ -142,7 +142,7 @@ jobs:
 
           # 🔴 Single-source regex = SC_STORYBOARD_HIGH_RISK_PATTERNS (lib/api/sc-storyboard-gen.js).
           # Update both together if list changes.
-          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念' observer-eval-report.txt; then
+          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念|傷害自己|傷害我自己|傷害了自己|自我傷害' observer-eval-report.txt; then
             echo "::error::🔴🔴 Report contains high-risk substring — postScrubObservation defence-in-depth FAILED. Report DELETED before upload."
             # Don't echo the offending lines — would also leak in the workflow log.
             rm -f observer-eval-report.txt
@@ -159,7 +159,7 @@ jobs:
             echo "::warning::no .summary.md — eval may have crashed pre-write"
             exit 0
           fi
-          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念' observer-eval-report.txt.summary.md; then
+          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念|傷害自己|傷害我自己|傷害了自己|自我傷害' observer-eval-report.txt.summary.md; then
             echo "::error::🔴🔴 Summary markdown contains high-risk substring. DELETED before STEP_SUMMARY render."
             rm -f observer-eval-report.txt.summary.md
             exit 1
