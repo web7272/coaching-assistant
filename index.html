@@ -162,7 +162,7 @@
 
   <!-- ─────────── §5.4 教練卡 — green sweep + new copy ─────────── -->
   <section id="view-note" class="view paper-page" aria-label="教練筆記">
-    <header class="app-header" style="width:100%;"><span class="label" id="note-header-label">看見自己 · 第N天</span></header>
+    <header class="note-topbar"><button class="note-nav-btn" data-nav="journey" aria-label="返回旅程"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><span class="label" id="note-header-label">看見自己 · 第N天</span><a class="note-nav-btn" href="#/storyboard" aria-label="看看你的人生旅途"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></a></header>
     <div style="height:52px"></div>
     <!-- PR-4c-green Patrick 5/24 — day hero scene above the paper card (set by renderNote) -->
     <figure class="day-hero day-hero--note">
@@ -181,14 +181,10 @@
     <!-- P3: button row context-aware — student.js toggles 「明天見」 visibility
          (shown only when arriving from the conversation closure transition;
          hidden when re-reading via a journey cell click). -->
-    <div class="btn-row" id="note-btn-row">
+    <div class="btn-row note-bottom" id="note-btn-row">
       <button class="paper-btn" data-nav="journey">回到旅程</button>
       <button class="paper-btn" data-nav="journey" id="note-btn-tomorrow">明天見</button>
-    </div>
-    <!-- v5.3 件3 PR-J5 ① — 教練卡 → 頁 Y 入口 (#/storyboard).
-         hint-italic 風格 (沿用「先回旅程」 既有卡內連結樣式). -->
-    <div style="margin-top:16px;text-align:center;">
-      <a href="#/storyboard" class="hint-italic">看看你的人生旅途 →</a>
+      <a href="#/storyboard" class="note-map-btn" aria-label="看看你的人生旅途"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></a>
     </div>
   </section>
 
