@@ -33,6 +33,8 @@ import {
   generateBrainState,
   generateSovereignAction,
 } from '../../lib/api/sc-storyboard-gen.js';
+// 6/13 Stage D — observer 回放 helper (重用 Stage B driver).
+import { runObserverBackfillPass } from '../../lib/api/backfill-observer-pass.js';
 import { backfillOneStudent } from '../../scripts/backfill-storyboard.js';
 
 export const config = { maxDuration: 60 };
@@ -127,6 +129,24 @@ function composeDeps({ sql, anthropic, callAnthropic, dryRun, log, report }) {
        WHERE student_id = ${sid}
     `;
   };
+  // 6/13 Stage D — observer 回放 dep (per Patrick: 重用 Stage B 已驗 driver).
+  const loadMessagesForSession = async (sessionId) => {
+    const rows = await sql`
+      SELECT role, content, question_number
+        FROM messages
+       WHERE session_id = ${sessionId}
+       ORDER BY created_at ASC, id ASC
+    `;
+    return rows;
+  };
+  const runObserverPass = async ({ studentId: _sid, sessions }) => {
+    return await runObserverBackfillPass({
+      sessions,
+      loadMessagesForSession,
+      now_iso: new Date().toISOString(),
+      log,
+    });
+  };
   // 6/12 — opts spread LAST so caller (backfillOneStudent per-step capture)
   // can override default log for diagnostic null-reason capture.
   const genBrainState = (opts) => generateBrainState({
@@ -139,6 +159,7 @@ function composeDeps({ sql, anthropic, callAnthropic, dryRun, log, report }) {
     dryRun, log, report,
     loadStudent, loadSessions, loadUpe, writeBackfill,
     genBrainState, genSovereignAction,
+    runObserverPass,   // 6/13 Stage D
   };
 }
 

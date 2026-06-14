@@ -655,3 +655,154 @@ test('🛑 runBackfill: one student error caught, others continue', async () => 
   assert.ok(results[1].committed);
   assert.equal(writes.length, 1); // only A003 written
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/13 Stage D — runObserverPass dep:
+//   提供 → observer 結果取代 legacy derive 路徑 (ground truth from messages).
+//   formatStudentReport 新增「observer pass」section (sessions/turns/judged/skip_counts).
+//   commit 模式 write 的 evidence 用 observer 結果.
+//   observer 拋錯 → 走 fall back legacy derive (fail-soft, 不阻塞 backfill).
+//   不提供 → fall back 到 legacy derive (back-compat, 既有 51 測未動).
+// ═════════════════════════════════════════════════════════
+
+// Canned observer pass output — 對齊 Stage B driver output shape.
+function cannedObserverPass(stepEvidence, totals = {}) {
+  let sc_journey_step = null;
+  for (let n = 7; n >= 1; n--) {
+    if (stepEvidence[`step_${n}`]?.length > 0) { sc_journey_step = n; break; }
+  }
+  return async () => ({
+    accumulated: { values: [], owned: [], top1: null, steps_touched: [] },
+    step_evidence: {
+      step_1: [], step_2: [], step_3: [], step_4: [],
+      step_5: [], step_6: [], step_7: [],
+      ...stepEvidence,
+    },
+    sc_journey_step,
+    per_session: [],
+    totals: {
+      sessions_count: 3, turns_observed: 28, judged_count: 24,
+      skip_counts: { crisis: 0, high_risk: 0, app_noise: 4, meta_complaint: 0 },
+      budget_hit_count: 0, elapsed_ms_total: 5500,
+      ...totals,
+    },
+  });
+}
+
+test('🛑 Stage D: runObserverPass 提供 → 取代 legacy derive 結果 (observer 是 ground truth)', async () => {
+  // legacy derive 從 reframe history 推出 step 6, observer 卻只看到 step 4.
+  // runObserverPass 結果應該贏 — 證明 observer 路徑生效, 不是 legacy fallback.
+  const observerEvidence = {
+    step_2: [{ type: 'longing_surface', quote: '被理解' }],
+    step_4: [{ type: 'identity_claim', quote: '我是會撐住的人' }],
+  };
+  const { deps, writes, reports, brainCalls } = makeDeps({
+    runObserverPass: cannedObserverPass(observerEvidence),
+    dryRun: false,
+  });
+  const result = await backfillOneStudent('A003', deps);
+  // ⭐ step=4 (observer), NOT 6 (legacy derive would have given 6).
+  assert.equal(result.derived.step, 4,
+    'observer 給的 step=4 必須勝過 legacy derive 的 step=6');
+  assert.equal(result.derived.evidence.step_2.length, 1);
+  assert.equal(result.derived.evidence.step_4.length, 1);
+  assert.equal(result.derived.evidence.step_6.length, 0,
+    'observer 沒看到 step_6 → 不該有 step_6 evidence (legacy 路徑壓不過 observer)');
+  // J2/J3 只對 observer 看到的 2 步呼叫.
+  assert.equal(brainCalls.length, 2);
+  assert.deepEqual(brainCalls.map(c => c.stepNo).sort(), [2, 4]);
+  // commit 寫進的 evidence 是 observer 的.
+  assert.equal(writes[0].payload.sc_journey_step, 4);
+  assert.equal(writes[0].payload.sc_storyboard.steps.step_6.state, 'empty');
+});
+
+test('🛑 Stage D: dryRun 報告新增 observer pass section (sessions/turns/judged/skip_counts)', async () => {
+  const { deps, reports } = makeDeps({
+    runObserverPass: cannedObserverPass(
+      { step_3: [{ type: 'data_mining', quote: '撐住' }] },
+      {
+        sessions_count: 12, turns_observed: 240, judged_count: 210,
+        skip_counts: { crisis: 5, high_risk: 2, app_noise: 18, meta_complaint: 5 },
+        budget_hit_count: 1, elapsed_ms_total: 28000,
+      },
+    ),
+    dryRun: true,
+  });
+  await backfillOneStudent('A003', deps);
+  const block = reports[0];
+  assert.match(block, /── observer pass ─/);
+  assert.match(block, /sessions:\s+12/);
+  assert.match(block, /turns observed:\s+240/);
+  assert.match(block, /judged \(LLM\):\s+210/);
+  assert.match(block, /crisis=5\s+high_risk=2\s+app_noise=18\s+meta_complaint=5/);
+  assert.match(block, /soft-budget hit:\s+1/);
+  assert.match(block, /elapsed_ms total:\s+28000/);
+});
+
+test('🛑 Stage D: A006 危機 — observer pass section 顯示 crisis skip count', async () => {
+  // A006 是 12 天 SI 案. observer pass 計算的 crisis skip 必須誠實 surface 給
+  // Vivi 後台看 (才知道哪些 turn 被 pre-LLM gate 擋掉, 安全動作 visible).
+  const { deps, reports } = makeDeps({
+    loadStudent: async (id) => ({ ...STUDENT_A003, student_id: id }),  // accept A006
+    runObserverPass: cannedObserverPass(
+      { step_2: [{ type: 'longing_surface', quote: '被需要' }] },
+      { sessions_count: 12, turns_observed: 200, judged_count: 150,
+        skip_counts: { crisis: 35, high_risk: 8, app_noise: 7, meta_complaint: 0 } },
+    ),
+    dryRun: true,
+  });
+  await backfillOneStudent('A006', deps);
+  const block = reports[0];
+  assert.match(block, /crisis=35/);
+  assert.match(block, /high_risk=8/);
+  // 報告本身不可有 SI 詞 (鐵律 #2).
+  for (const word of ['想死', '自殺', '輕生', '上吊', '跳樓']) {
+    assert.equal(block.includes(word), false,
+      `report MUST NOT contain raw SI keyword "${word}"`);
+  }
+});
+
+test('🛑 Stage D: observer 拋錯 → fall back 到 legacy derive (fail-soft, 不阻塞 backfill)', async () => {
+  const { deps, logs, writes } = makeDeps({
+    runObserverPass: async () => { throw new Error('observer-down'); },
+    dryRun: false,
+  });
+  const result = await backfillOneStudent('A003', deps);
+  // 仍走完 → 寫入 (legacy derive 結果, step=6).
+  assert.equal(result.derived.step, 6, 'fall back legacy derive should produce step=6');
+  assert.equal(writes.length, 1);
+  // 有 log 標明 fall back 原因.
+  assert.ok(logs.some(m => /observer pass threw/.test(m)),
+    'fall back 必須 log 「observer pass threw」 訊息');
+});
+
+test('🛑 Stage D: observer 回 null evidence → fall back legacy derive (defensive)', async () => {
+  const { deps, logs, writes } = makeDeps({
+    runObserverPass: async () => null,   // ← null result
+    dryRun: false,
+  });
+  const result = await backfillOneStudent('A003', deps);
+  assert.equal(result.derived.step, 6);
+  assert.equal(writes.length, 1);
+  assert.ok(logs.some(m => /observer pass returned no evidence/.test(m)));
+});
+
+test('🛑 Stage D: runObserverPass 收到 { studentId, sessions } 簽名', async () => {
+  let receivedArgs = null;
+  const { deps } = makeDeps({
+    runObserverPass: async (args) => {
+      receivedArgs = args;
+      return { step_evidence: { step_1: [], step_2: [], step_3: [], step_4: [],
+                                step_5: [], step_6: [], step_7: [] },
+               sc_journey_step: null,
+               totals: { sessions_count: 0, turns_observed: 0, judged_count: 0,
+                         skip_counts: { crisis: 0, high_risk: 0, app_noise: 0, meta_complaint: 0 },
+                         budget_hit_count: 0, elapsed_ms_total: 0 } };
+    },
+    dryRun: true,
+  });
+  await backfillOneStudent('A003', deps);
+  assert.equal(receivedArgs.studentId, 'A003');
+  assert.equal(Array.isArray(receivedArgs.sessions), true);
+  assert.equal(receivedArgs.sessions.length, SESSIONS_A003.length);
+});

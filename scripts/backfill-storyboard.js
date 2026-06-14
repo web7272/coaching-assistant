@@ -40,6 +40,8 @@ import {
   generateBrainState,
   generateSovereignAction,
 } from '../lib/api/sc-storyboard-gen.js';
+// v5.3 Stage D (6/13) — observer 回放 helper (重用 Stage B driver).
+import { runObserverBackfillPass } from '../lib/api/backfill-observer-pass.js';
 
 // ────────────────────────────────────────────────────────────────
 // CLI arg parsing.
@@ -204,12 +206,28 @@ export function summarizeNullReason(logsArray) {
 //   (來自 generate* 已 log 的 reasons map). signals + reasons 都 optional
 //   (向後相容, 沒給就走 generic 版).
 // ────────────────────────────────────────────────────────────────
-export function formatStudentReport({ studentId, signals, derived, generated, reasons }) {
+export function formatStudentReport({ studentId, signals, derived, generated, reasons, observerTotals }) {
   const lines = [];
   lines.push(`═══════════════════════════════════════════════════════════════`);
   lines.push(`student: ${studentId}`);
   lines.push(`sc_journey_step: ${derived.step ?? '(null)'}`);
   lines.push('');
+  // 6/13 Stage D — observer pass summary section (鐵律 #2: 只 count/enum/ms).
+  if (observerTotals) {
+    const sc = observerTotals.skip_counts || {};
+    lines.push(`── observer pass ─────────────────`);
+    lines.push(`  sessions:        ${observerTotals.sessions_count || 0}`);
+    lines.push(`  turns observed:  ${observerTotals.turns_observed || 0}`);
+    lines.push(`  judged (LLM):    ${observerTotals.judged_count || 0}`);
+    lines.push(`  skip_counts:     crisis=${sc.crisis || 0} high_risk=${sc.high_risk || 0} app_noise=${sc.app_noise || 0} meta_complaint=${sc.meta_complaint || 0}`);
+    if (observerTotals.budget_hit_count) {
+      lines.push(`  soft-budget hit: ${observerTotals.budget_hit_count} session(s) (driver deferred turns)`);
+    }
+    if (observerTotals.elapsed_ms_total) {
+      lines.push(`  elapsed_ms total: ${observerTotals.elapsed_ms_total}`);
+    }
+    lines.push('');
+  }
   if (signals) {
     lines.push(summarizeSignals(signals));
     lines.push('');
@@ -263,6 +281,7 @@ export function formatStudentReport({ studentId, signals, derived, generated, re
 export async function backfillOneStudent(studentId, deps) {
   const { loadStudent, loadSessions, loadUpe,
           writeBackfill, genBrainState, genSovereignAction,
+          runObserverPass,   // 6/13 Stage D — observer 回放 (optional dep)
           log, report, dryRun } = deps;
 
   const studentRow = await loadStudent(studentId);
@@ -274,8 +293,46 @@ export async function backfillOneStudent(studentId, deps) {
   const sessions = await loadSessions(studentId);
   const upe      = await loadUpe(studentId);
 
+  // composeSignals 仍跑 — 給 report 的「signals summary」section 用 (診斷
+  // 訊號薄/沒 vs 有訊號沒被觀者吃到), 6/13 起不再是 evidence 的來源.
   const signals = composeSignals(studentRow, sessions, upe);
-  const derived = deriveScJourneyFromHistory(signals);
+
+  // 6/13 Stage D — observer 回放 (Patrick spec):
+  //   有 runObserverPass dep → 回放 observer ground truth, 取代 derive 路徑.
+  //   無 → fall back 到 legacy deriveScJourneyFromHistory (back-compat for
+  //   既有單元測 + 任何不需要 observer 的 dry path).
+  //   Production CLI / endpoint composeDeps 都會注入 runObserverPass.
+  let derived;
+  let observerTotals = null;
+  if (typeof runObserverPass === 'function') {
+    let observerResult;
+    try {
+      observerResult = await runObserverPass({ studentId, sessions });
+    } catch (err) {
+      log(`[${studentId}] observer pass threw — fall back to legacy derive: ${err?.message || err}`);
+      observerResult = null;
+    }
+    if (observerResult && observerResult.step_evidence) {
+      derived = {
+        evidence: observerResult.step_evidence,
+        step:     observerResult.sc_journey_step,
+      };
+      observerTotals = observerResult.totals || null;
+      log(`[${studentId}] observer pass: ` +
+          `sessions=${observerTotals?.sessions_count || 0}, ` +
+          `turns=${observerTotals?.turns_observed || 0}, ` +
+          `judged=${observerTotals?.judged_count || 0}, ` +
+          `skips={c:${observerTotals?.skip_counts?.crisis || 0},` +
+          `hr:${observerTotals?.skip_counts?.high_risk || 0},` +
+          `n:${observerTotals?.skip_counts?.app_noise || 0},` +
+          `mc:${observerTotals?.skip_counts?.meta_complaint || 0}}`);
+    } else {
+      log(`[${studentId}] observer pass returned no evidence — fall back to legacy derive`);
+      derived = deriveScJourneyFromHistory(signals);
+    }
+  } else {
+    derived = deriveScJourneyFromHistory(signals);
+  }
 
   // For each populated step, call J2 + J3 (走既有 helper, 不另寫生成).
   // 6/12 — 每步包 capture-log: 把 generate* 內部 log 的「具體 null 原因」
@@ -350,7 +407,7 @@ export async function backfillOneStudent(studentId, deps) {
 
   // Output OR commit.
   if (dryRun) {
-    report(formatStudentReport({ studentId, signals, derived, generated, reasons }));
+    report(formatStudentReport({ studentId, signals, derived, generated, reasons, observerTotals }));
   } else {
     log(`[${studentId}] writing — sc_journey_step=${derived.step} stepsWithEvidence=${Object.keys(steps).filter(k => steps[k].state === 'filled').length}`);
     await writeBackfill(studentId, {
@@ -510,6 +567,28 @@ function buildCliDeps({ sql, anthropic, args }) {
     `;
   };
 
+  // 6/13 Stage D — observer 回放. dryRun 也跑 observer (~$0.7-1.5 total
+  // for 7 学員, 可接受 — Patrick: dryRun 報告 useful 比省這點錢重要).
+  //   loadMessagesForSession: per-session 撈 (sessions 表沒 messages 欄,
+  //     另查 messages 表; 順序對齊 Stage B finalize wire).
+  const loadMessagesForSession = async (sessionId) => {
+    const rows = await sql`
+      SELECT role, content, question_number
+        FROM messages
+       WHERE session_id = ${sessionId}
+       ORDER BY created_at ASC, id ASC
+    `;
+    return rows;
+  };
+  const runObserverPass = async ({ studentId: _sid, sessions }) => {
+    return await runObserverBackfillPass({
+      sessions,
+      loadMessagesForSession,
+      now_iso: new Date().toISOString(),
+      log,
+    });
+  };
+
   // 6/12 — opts spread LAST so caller-supplied log (per-step capture in
   // backfillOneStudent) overrides default. Required for diagnostic reasons map.
   const genBrainState = (opts) => generateBrainState({
@@ -529,6 +608,7 @@ function buildCliDeps({ sql, anthropic, args }) {
     dryRun, log, report, listTargets,
     loadStudent, loadSessions, loadUpe, writeBackfill,
     genBrainState, genSovereignAction,
+    runObserverPass,   // 6/13 Stage D — observer 回放 (ground truth)
     _flushReport: () => {
       if (!dryRun) return;
       const out = reportBuf.join('\n');
