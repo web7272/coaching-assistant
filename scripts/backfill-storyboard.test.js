@@ -13,6 +13,11 @@ import {
   backfillOneStudent,
   runBackfill,
 } from './backfill-storyboard.js';
+// 6/14 Patrick (頁Y 內容空 fix) — write→read round-trip 鎖:
+// backfill 寫的 sc_storyboard, 用 endpoint 真讀函式 (buildScStoryboardSteps)
+// 取得 brain_state / sovereign_action 非 null. 這條測就是 dryRun 報告沒涵蓋
+// 的缺口 (報告只看 generated[step_N] 生成值, 沒驗 write→read shape).
+import { buildScStoryboardSteps } from '../api/sc-storyboard.js';
 
 // ─── Fixture helpers ──────────────────────────────────────
 
@@ -216,7 +221,7 @@ test('🛑 backfillOneStudent: dry-run A003 happy path — derives 5 steps, call
   assert.equal(sov4.ctx.stepEvidence[0].type, 'identity_claim');
 });
 
-test('🛑 backfillOneStudent: --commit writes one UPDATE with full payload', async () => {
+test('🛑 backfillOneStudent: --commit writes one UPDATE with full payload (扁平 sc_storyboard shape)', async () => {
   const { deps, reports, writes } = makeDeps({ dryRun: false });
   await backfillOneStudent('A003', deps);
   // No report block in commit mode.
@@ -225,13 +230,114 @@ test('🛑 backfillOneStudent: --commit writes one UPDATE with full payload', as
   assert.equal(writes.length, 1);
   assert.equal(writes[0].id, 'A003');
   const p = writes[0].payload;
-  // payload shape: keyed evidence + step int + storyboard{module,currentStep,steps}.
+  // 6/14 Patrick (頁Y 內容空 fix) — payload shape:
+  //   evidence (keyed) + step int + storyboard 扁平 (step_N 直接在頂層).
+  //   舊 shape { module, currentStep, steps:{...} } 已廢 — endpoint /
+  //   finalize 都讀扁平 sb["step_N"].brain_state.
   assert.ok(p.sc_journey_evidence.step_4.length === 1);
   assert.equal(p.sc_journey_step, 6);
-  assert.equal(p.sc_storyboard.module, 'self');
-  assert.equal(p.sc_storyboard.currentStep, 6);
-  assert.equal(p.sc_storyboard.steps.step_4.state, 'filled');
-  assert.equal(p.sc_storyboard.steps.step_1.state, 'empty');  // pain_surface 留空
+  assert.equal(p.sc_storyboard.step_4.state, 'filled');
+  assert.equal(p.sc_storyboard.step_1.state, 'empty');  // pain_surface 留空
+  // anti-regression: 舊 wrapper 三 key 必須不在.
+  assert.equal(p.sc_storyboard.module, undefined,
+    '6/14 fix: sc_storyboard.module wrapper 已廢 (endpoint reads sb["step_N"] flat)');
+  assert.equal(p.sc_storyboard.currentStep, undefined,
+    '6/14 fix: sc_storyboard.currentStep wrapper 已廢 (sc_journey_step 是頂層欄位)');
+  assert.equal(p.sc_storyboard.steps, undefined,
+    '6/14 fix: sc_storyboard.steps wrapper 已廢 (step_N 直接在 sb 頂層)');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🔴 6/14 Patrick — write→read round-trip 鎖 (頁Y 內容空 bug 防回歸)
+//
+// 線上實證:7 個舊人 commit 後, 頁Y 步驟全 filled、currentStep 對, 但每步
+// brain_state / sovereign_action 全 null. 根因:backfill 寫
+// { module, currentStep, steps:{...} } 多包一層, endpoint
+// buildScStoryboardSteps 找 sb["step_N"] = undefined.
+//
+// 這條測:用 endpoint 真讀函式對 backfill payload 跑 round-trip, 鎖
+// brain_state / sovereign_action 真讀得回來.
+// ═════════════════════════════════════════════════════════
+
+test('🔴 6/14 round-trip: backfill 寫的 sc_storyboard → endpoint buildScStoryboardSteps 真讀得到 brain_state / sovereign_action', async () => {
+  // 1. backfill commit 一場 (A003 fixture: step_2/3/4/6 都 filled).
+  const { deps, writes } = makeDeps({ dryRun: false });
+  await backfillOneStudent('A003', deps);
+  assert.equal(writes.length, 1);
+  const payload = writes[0].payload;
+
+  // 2. 用 endpoint 的真讀函式 round-trip — 模擬 GET /api/sc-storyboard
+  //    讀 students.sc_journey_evidence + sc_storyboard 那一刻.
+  const steps = buildScStoryboardSteps(
+    payload.sc_journey_evidence,   // → state filled/empty 來源
+    payload.sc_storyboard,          // → brain_state / sovereign_action 來源
+  );
+
+  // 3. 7 步 array shape 鎖.
+  assert.equal(steps.length, 7);
+
+  // 4. step_4 (A003 fixture filled, R2 identity_claim) — brain_state +
+  //    sovereign_action 必須非 null.
+  const step4 = steps[3];
+  assert.equal(step4.state, 'filled');
+  assert.ok(step4.brain_state, '🔴 6/14 fix: step_4.brain_state 必須非 null (頁Y 才有料)');
+  assert.equal(typeof step4.brain_state.description, 'string');
+  assert.ok(step4.brain_state.description.length > 0,
+    '🔴 6/14 fix: step_4.brain_state.description 必須非空字串');
+  assert.ok(step4.sovereign_action, '🔴 6/14 fix: step_4.sovereign_action 必須非 null');
+  assert.equal(typeof step4.sovereign_action, 'string');
+
+  // 5. step_1 (empty, pain_surface 留空) — brain_state / sovereign_action null
+  //    by-design (state='empty' → endpoint surface null 即使 column 有料).
+  const step1 = steps[0];
+  assert.equal(step1.state, 'empty');
+  assert.equal(step1.brain_state, null);
+  assert.equal(step1.sovereign_action, null);
+
+  // 6. 其他 filled 步 (2/3/6) 也應有料 — anti-regression 對所有 filled 步.
+  for (const idx of [1, 2, 5]) {
+    const s = steps[idx];
+    assert.equal(s.state, 'filled', `step_${idx + 1} 應該 filled`);
+    assert.ok(s.brain_state,      `🔴 6/14 fix: step_${idx + 1}.brain_state 必須非 null`);
+    assert.ok(s.sovereign_action, `🔴 6/14 fix: step_${idx + 1}.sovereign_action 必須非 null`);
+  }
+});
+
+test('🔴 6/14 round-trip: 反向 sanity — 舊 wrapper shape (module/currentStep/steps) 餵給 endpoint 會回全 null (證實 bug 真實)', () => {
+  // 鎖 bug 根因:就算 brain_state 在 wrapper 內生成, endpoint 找 sb["step_N"]
+  // 找不到, 全 null. 把這個壞 shape 跑 round-trip → 應該收到全 null.
+  const evidence = {
+    step_1: [], step_2: [],
+    step_3: [], step_4: [{ type: 'identity_claim', quote: '我是會撐住的人' }],
+    step_5: [], step_6: [], step_7: [],
+  };
+  const oldBadShape = {
+    module: 'self',
+    currentStep: 4,
+    steps: {
+      step_1: { state: 'empty', brain_state: null, sovereign_action: null },
+      step_2: { state: 'empty', brain_state: null, sovereign_action: null },
+      step_3: { state: 'empty', brain_state: null, sovereign_action: null },
+      step_4: {
+        state: 'filled',
+        brain_state:      { description: '你親口認領了這個身份。', quote: '我是會撐住的人' },
+        sovereign_action: '今天試著用「我是會撐住的人」 的視角看一件事。',
+      },
+      step_5: { state: 'empty', brain_state: null, sovereign_action: null },
+      step_6: { state: 'empty', brain_state: null, sovereign_action: null },
+      step_7: { state: 'empty', brain_state: null, sovereign_action: null },
+    },
+  };
+  const steps = buildScStoryboardSteps(evidence, oldBadShape);
+  // step_4 state=filled (從 evidence 派生 — 對); 但 brain_state / sovereign_action
+  // 全 null (因 endpoint 找 sb["step_4"] = undefined; 真實內容藏在 sb.steps.step_4).
+  // 這就是 7 人頁Y 線上看到的症狀:filled 但內容空.
+  const step4 = steps[3];
+  assert.equal(step4.state, 'filled', 'state 仍對 (evidence 派生)');
+  assert.equal(step4.brain_state, null,
+    '舊 wrapper shape → endpoint 找不到 brain_state (頁Y 內容空 root cause)');
+  assert.equal(step4.sovereign_action, null,
+    '舊 wrapper shape → endpoint 找不到 sovereign_action');
 });
 
 test('🛑 backfillOneStudent: 不存在的 student_id → skipped, no LLM call, no write', async () => {
@@ -318,7 +424,7 @@ test('🛑 backfillOneStudent: 全空訊號 → 0 LLM call, all steps empty, sc_
   assert.equal(writes[0].payload.sc_journey_step, null);
   // All steps empty.
   for (let n = 1; n <= 7; n++) {
-    assert.equal(writes[0].payload.sc_storyboard.steps[`step_${n}`].state, 'empty');
+    assert.equal(writes[0].payload.sc_storyboard[`step_${n}`].state, 'empty');
   }
 });
 
@@ -713,7 +819,7 @@ test('🛑 Stage D: runObserverPass 提供 → 取代 legacy derive 結果 (obse
   assert.deepEqual(brainCalls.map(c => c.stepNo).sort(), [2, 4]);
   // commit 寫進的 evidence 是 observer 的.
   assert.equal(writes[0].payload.sc_journey_step, 4);
-  assert.equal(writes[0].payload.sc_storyboard.steps.step_6.state, 'empty');
+  assert.equal(writes[0].payload.sc_storyboard.step_6.state, 'empty');
 });
 
 test('🛑 Stage D: dryRun 報告新增 observer pass section (sessions/turns/judged/skip_counts)', async () => {

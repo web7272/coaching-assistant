@@ -388,28 +388,34 @@ export async function backfillOneStudent(studentId, deps) {
     };
   }
 
-  // Compose sc_storyboard payload (per migration 038 shape: keyed by step_N).
-  const steps = {};
+  // Compose sc_storyboard payload (per migration 038 shape: 扁平, keyed by step_N).
+  // 6/14 Patrick (頁Y 內容空 bug):
+  //   舊 shape  = { module, currentStep, steps: { step_N: {...} } }
+  //   正確 shape = { step_N: { state, brain_state, sovereign_action }, ... step_7 }
+  //   對齊 api/sc-storyboard.js buildScStoryboardSteps (讀 sb["step_N"].brain_state)
+  //   + api/finalize-day.js (jsonb_set sc_storyboard -> step_N -> brain_state).
+  //   `state` key endpoint 不讀但保留無妨 (由 evidence 派生); brain_state /
+  //   sovereign_action 才是 endpoint 取的兩個欄位.
+  const scStoryboard = {};
   for (let n = 1; n <= 7; n++) {
     const entries = derived.evidence[`step_${n}`];
     const gen = generated[`step_${n}`];
     if (!entries || entries.length === 0) {
-      steps[`step_${n}`] = { state: 'empty', brain_state: null, sovereign_action: null };
+      scStoryboard[`step_${n}`] = { state: 'empty', brain_state: null, sovereign_action: null };
       continue;
     }
-    steps[`step_${n}`] = {
+    scStoryboard[`step_${n}`] = {
       state: 'filled',
       brain_state:      gen?.brain_state      ?? null,
       sovereign_action: gen?.sovereign_action ?? null,
     };
   }
-  const scStoryboard = { module: 'self', currentStep: derived.step, steps };
 
   // Output OR commit.
   if (dryRun) {
     report(formatStudentReport({ studentId, signals, derived, generated, reasons, observerTotals }));
   } else {
-    log(`[${studentId}] writing — sc_journey_step=${derived.step} stepsWithEvidence=${Object.keys(steps).filter(k => steps[k].state === 'filled').length}`);
+    log(`[${studentId}] writing — sc_journey_step=${derived.step} stepsWithEvidence=${Object.keys(scStoryboard).filter(k => scStoryboard[k].state === 'filled').length}`);
     await writeBackfill(studentId, {
       sc_journey_evidence: derived.evidence,
       sc_journey_step:     derived.step,
