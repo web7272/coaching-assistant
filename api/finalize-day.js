@@ -57,10 +57,15 @@ function getSql() {
   return neon(process.env.DATABASE_URL);
 }
 
-// Vercel Pro 預設 60s、明寫保險
+// Vercel Pro plan max = 300s. finalize-day 是 async 背景工 (前端 closure 已有
+// 「稍後送達」fallback, note 頁 GET /api/note 會 re-fetch) → 拉長無妨.
+// 6/13 Patrick (A022 case fix): 原 60s 上限被 Stage B observer 推到邊界,
+// 教練筆記是最後一棒被 timeout 砍掉 → 提到 300s 給寬鬆 headroom.
+// (chat.js 維持 60s, 對話要快.)
 export const config = {
-  maxDuration: 60,
+  maxDuration: 300,
 };
+export const FINALIZE_MAX_DURATION_SECONDS = 300;
 
 // ════════════════════════════════════════════════════════════════
 // PR-4c v5 day numbering — pure helpers（chat orchestration + tests 用）
@@ -659,6 +664,11 @@ export default async function handler(req, res) {
   const day = sessionDay;
   const graduation = isGraduationDay(sessionDay);
 
+  // 6/13 Patrick (A022 case fix) — per-stage timing. observer/J2/J3/note 各算 ms,
+  // 結尾統一 log (鐵律 #2: 只記 ms / enum / count, 0 raw 對話 / 0 PII).
+  const tFinalizeStart = Date.now();
+  const timing = { observer_ms: null, j2_ms: null, j3_ms: null, damon_note_ms: null };
+
   try {
     const sql = getSql();
 
@@ -749,6 +759,7 @@ export default async function handler(req, res) {
     //   🔴 Fail-soft: any error path → log + continue. Never blocks finalize.
     //   🔵 Cost: ~15-30 Q/A pairs/day × Haiku 4.5 ~$0.004/turn ≈ $0.1/day/student.
     let _observerResult = null;
+    const _tObs = Date.now();
     try {
       const msgRows = await sql`
         SELECT role, content, question_number
@@ -803,6 +814,7 @@ export default async function handler(req, res) {
       console.error('[observer-driver] session run failed (fail-soft):',
         observerErr?.message || observerErr);
     }
+    timing.observer_ms = Date.now() - _tObs;
 
     // ⭐ v5.2 七步 PR-4 Path B — write sc_journey_step (promote-only, fail-soft).
     //   Mirrors day1_completed_at fail-soft pattern: never blocks finalize on
@@ -825,6 +837,7 @@ export default async function handler(req, res) {
         ? existing.session_state.sc_steps_touched_this_session : [];
       if (touched.length > 0) {
         // J2 — brain_state.
+        const _tJ2 = Date.now();
         try {
           await writeBrainStateFailSoft(sql, existing.student_id, touched, {
             anthropic: getAnthropic(),
@@ -836,9 +849,11 @@ export default async function handler(req, res) {
           console.warn('[finalize-day][brain_state-pass-failed]',
             brainErr?.message || brainErr);
         }
+        timing.j2_ms = Date.now() - _tJ2;
 
         // J3 — sovereign_action. Fetch active_context + surfaced_values for
         // personalization (Patrick: 必須餵那位學員自己的素材).
+        const _tJ3 = Date.now();
         try {
           let activeContextName = null;
           let activeContextDefinition = null;
@@ -881,6 +896,7 @@ export default async function handler(req, res) {
           console.warn('[finalize-day][sovereign_action-pass-failed]',
             sovErr?.message || sovErr);
         }
+        timing.j3_ms = Date.now() - _tJ3;
       }
     }
 
@@ -893,9 +909,34 @@ export default async function handler(req, res) {
     const wasCrisis = sessionTouchedCrisis(existing.session_state);
 
     // Damon Note + yesterdaySCHypothesis lookup + Notebook page（內含的既有實作）
-    const noteResult = await generateDamonNote(sql, sessionId, module, week, day, wasCrisis);
-    if (!noteResult) {
-      return res.status(500).json({ error: 'NOTE_GENERATION_FAILED' });
+    // 6/13 Patrick (A022 case fix) — note 失敗不再 500. observer / J2 / J3 已持
+    // 久化 (學員的七步 / brain_state / sovereign_action 不丟), 前端 closure 有
+    // 「稍後送達」fallback, note 頁 GET /api/note 會 re-fetch. 改回 200 + null,
+    // 讓前端正常收尾, note 可由後續重跑 / GET 補. 安全:
+    //   · safeNoteForStudent(null) 既有路徑天然回 null (sanitizer 不洩漏).
+    //   · downstream extractKeyPhrase / Anchor 對 null 已 return null (見 L432) →
+    //     daily_takeaways / active_context_summary 兩段的 `if (displayTerm)` 天然 skip.
+    //   · Day-21 graduation gen 讀 noteResult.fullNote, 需明確 guard 跳過.
+    const _tNote = Date.now();
+    let noteResult = await generateDamonNote(sql, sessionId, module, week, day, wasCrisis);
+    timing.damon_note_ms = Date.now() - _tNote;
+    const _noteAvailable = !!noteResult;
+    if (!_noteAvailable) {
+      // generateDamonNote 內部 null path 已 log 過具體原因 (catch block / messages<2 /
+      // student_id 缺). 此處 surface 一筆 finalize-side 觀測 (timing + sessionDay
+      // + wasCrisis) — 鐵律 #2: 不 log 對話內容 / PII.
+      console.warn('[finalize-day][note-null]', JSON.stringify({
+        event: 'note_generation_returned_null',
+        session_id: sessionId,
+        session_day: sessionDay,
+        was_crisis: wasCrisis,
+        damon_note_ms: timing.damon_note_ms,
+        observer_ms: timing.observer_ms,
+        j2_ms: timing.j2_ms,
+        j3_ms: timing.j3_ms,
+      }));
+      // Synthesize empty shape so downstream null-guards work naturally.
+      noteResult = { fullNote: null, notebookPage: null };
     }
 
     // PR-4c-green 5/24 cleanup — 週報退場、產品改 5 phase reports。
@@ -1040,7 +1081,13 @@ export default async function handler(req, res) {
 
     // (2) Day 21：生結業內容（coach letter + declaration）+ export prompt + email stub
     //     ⚠️ 不放進 finalize-day response（07 §3-B 沒這欄）— 持久化後由 GET /api/graduation 讀（07 §3-F、P1 落地）
-    if (graduation) {
+    // 6/13 Patrick (A022 fix) — 若 note null (上面 fallback), 跳過 Day-21 gen.
+    //   省 Sonnet token + 避免送 `${null}` 給 LLM 拿到垃圾結業文.
+    //   下次 finalize 重跑 (或 Vivi 手動重觸) 自然會補上.
+    if (graduation && !_noteAvailable) {
+      console.warn('[finalize-day][graduation-skipped] note unavailable; deferring Day-21 gen until next finalize');
+    }
+    if (graduation && _noteAvailable) {
       try {
         // 2a. 撈 user_profile + 累積的 daily_takeaways
         const profile = (await getUserProfile(existing.student_id)) || {};
@@ -1112,6 +1159,21 @@ export default async function handler(req, res) {
     if (noteResult.notebookPage && containsForbiddenContent(noteResult.notebookPage)) {
       console.warn(`[finalize-day B1] freshly-generated notebook_page contained forbidden coach-internal content — sanitized at API boundary`);
     }
+    // 6/13 Patrick (A022 case) — per-stage timing summary (鐵律 #2: 只 ms / enum).
+    //   能一眼看出 observer / J2 / J3 / note 各花多久, 下次 timeout 一眼定位真因.
+    console.info('[finalize-day][timing]', JSON.stringify({
+      event: 'finalize_timing',
+      session_id: sessionId,
+      session_day: sessionDay,
+      observer_ms: timing.observer_ms,
+      j2_ms: timing.j2_ms,
+      j3_ms: timing.j3_ms,
+      damon_note_ms: timing.damon_note_ms,
+      total_ms: Date.now() - tFinalizeStart,
+      note_available: _noteAvailable,
+      was_crisis: wasCrisis,
+      graduation,
+    }));
     // Patrick 5/25 leak fix — see「alreadyDone」 branch comment above.
     // damonNotePublic removed; notebookPage runs through fail-closed sanitizer.
     return res.status(200).json({

@@ -17,6 +17,8 @@ import {
   writeScJourneyStepFailSoft,      // v5.2 七步 PR-4 Path B
   writeBrainStateFailSoft,         // v5.3 件3 PR-J2
   writeSovereignActionFailSoft,    // v5.3 件3 PR-J3
+  FINALIZE_MAX_DURATION_SECONDS,    // 6/13 A022 fix
+  config as finalizeConfig,         // 6/13 A022 fix
 } from './finalize-day.js';
 
 // ─────────────────────────────────────────────────────────
@@ -1087,4 +1089,79 @@ test('🛑 PR-J3 writeSovereignAction: handler integration — J3 call follows J
     'J3 sovereign_action MUST follow J2 brain_state (same touched-steps block)');
   assert.ok(j3Idx < noteIdx,
     'J3 sovereign_action runs BEFORE generateDamonNote');
+});
+
+// ═════════════════════════════════════════════════════════
+// 🛑 6/13 Patrick (A022 case fix) — finalize-day 韌性鎖
+//   (1) maxDuration 提到 300s (Vercel Pro plan max).
+//   (2) note null 不再 500; 走 fallback shape → 200 + safeNoteForStudent.
+//   (3) per-stage timing log (observer/J2/J3/note + total) emit 在 200 前.
+//   (4) Day-21 graduation gen 需 _noteAvailable guard (不送 null 給 Sonnet).
+//   (5) vercel.json 同步 maxDuration=300.
+// ═════════════════════════════════════════════════════════
+
+test('🛑 6/13: FINALIZE_MAX_DURATION_SECONDS === 300 (Vercel Pro plan max)', () => {
+  // 60 → 300. 給 observer + J2 + J3 + Damon note 寬鬆 headroom, 不被 timeout
+  // 砍掉最後一棒 (A022 case: 教練筆記 null).
+  assert.equal(FINALIZE_MAX_DURATION_SECONDS, 300);
+  assert.equal(finalizeConfig.maxDuration, 300,
+    'export const config.maxDuration must = 300 (Vercel reads this for the function)');
+});
+
+test('🛑 6/13: vercel.json api/finalize-day.js maxDuration === 300 (deploy-side lock)', () => {
+  // vercel.json 是 Vercel platform 真正的 source-of-truth (config 內注釋 import
+  // 在某些 build 環境會被忽略). 兩處同步鎖.
+  const vercelPath = join(__finalizeDayDir, '..', 'vercel.json');
+  const vercelCfg = JSON.parse(readFileSync(vercelPath, 'utf8'));
+  assert.equal(
+    vercelCfg.functions?.['api/finalize-day.js']?.maxDuration, 300,
+    'vercel.json api/finalize-day.js maxDuration must = 300');
+  // chat.js 不動, 對話路徑要快.
+  assert.equal(
+    vercelCfg.functions?.['api/chat.js']?.maxDuration, 60,
+    'vercel.json api/chat.js maxDuration must stay 60 (對話要快)');
+});
+
+test('🛑 6/13: note null → 不再 500; 改 fallback shape + log [finalize-day][note-null]', () => {
+  // 移除舊的 `return res.status(500).json({ error: 'NOTE_GENERATION_FAILED' })`.
+  // 新邏輯: log + noteResult = { fullNote: null, notebookPage: null } + 走 200.
+  assert.equal(
+    /NOTE_GENERATION_FAILED/.test(finalizeDaySrc), false,
+    '舊的 NOTE_GENERATION_FAILED 500 path 必須移除 (A022 fix: 韌性回 200)');
+  // 新觀測 log 必須存在.
+  assert.match(finalizeDaySrc, /\[finalize-day\]\[note-null\]/,
+    '`[finalize-day][note-null]` 觀測 log 必須存在');
+  // fallback shape 必須有.
+  assert.match(finalizeDaySrc, /noteResult\s*=\s*\{\s*fullNote:\s*null,\s*notebookPage:\s*null\s*\}/,
+    'note null 時必須改寫 noteResult 為 { fullNote: null, notebookPage: null } fallback shape');
+  // _noteAvailable sentinel 必須存在 (downstream guard).
+  assert.match(finalizeDaySrc, /const\s+_noteAvailable\s*=\s*!!noteResult/,
+    '_noteAvailable sentinel 必須存在, 給 Day-21 graduation guard 用');
+});
+
+test('🛑 6/13: per-stage timing — observer/J2/J3/note 各包計時 + 結尾 summary log', () => {
+  // 4 個 Date.now() 計時點 — 不鎖每一個 (refactor 容忍), 鎖 summary log 一定 emit.
+  assert.match(finalizeDaySrc, /\[finalize-day\]\[timing\]/,
+    'finalize 結尾必須 emit [finalize-day][timing] 統一觀測 log');
+  // timing 物件初始化必須存在.
+  assert.match(finalizeDaySrc, /const\s+timing\s*=\s*\{[^}]*observer_ms[^}]*j2_ms[^}]*j3_ms[^}]*damon_note_ms/,
+    'const timing = { observer_ms, j2_ms, j3_ms, damon_note_ms } 必須宣告');
+  // total_ms 必須算
+  assert.match(finalizeDaySrc, /total_ms:\s*Date\.now\(\)\s*-\s*tFinalizeStart/,
+    'timing summary 必須 emit total_ms = Date.now() - tFinalizeStart');
+});
+
+test('🛑 6/13: Day-21 graduation 必須 guard _noteAvailable (不送 null 給 Sonnet)', () => {
+  // 鎖 graduation block 開頭包含 _noteAvailable 檢查.
+  assert.match(finalizeDaySrc, /if\s*\(\s*graduation\s+&&\s+_noteAvailable\s*\)/,
+    'Day-21 graduation gen 必須以 `if (graduation && _noteAvailable)` 開, note 不在時 skip');
+});
+
+test('🛑 6/13: safeNoteForStudent(null) 流經產品 fallback (「教練筆記稍後送達」)', () => {
+  // 200 response 結構不變 — notebookPage 走 safeNoteForStudent(noteResult.notebookPage).
+  // 當 noteResult.notebookPage = null (本 PR fallback shape), safeNoteForStudent
+  // 回 fallback string. 鎖 200 path 沒被改成 hard-null.
+  assert.match(finalizeDaySrc,
+    /notebookPage:\s*safeNoteForStudent\(noteResult\.notebookPage/,
+    '200 response 必須繼續走 safeNoteForStudent(noteResult.notebookPage) 路徑');
 });
