@@ -354,6 +354,107 @@ test('buildSystemPromptArrayV5: caching OFF → single merged text block', () =>
   assert.equal(arr[0].cache_control, undefined);
 });
 
+// ═════════════════════════════════════════════════════════
+// 🛑 v5.3 Stage C (6/13) — 記憶餵回 inject wire 鎖:
+//   (1) flag off (預設) → dynamic block 不含 inject (0-facing).
+//   (2) flag on + 有 values/owned → dynamic block 含「已經確認過的東西」+「指引」.
+//   (3) flag on + crisis primary_mode → 仍不 inject (安全閘).
+//   (4) 必須 在 dynamic block (arr 最後一格), NOT cached prefix → 不破 cache.
+//   (5) cache breakpoint 位置不動 (section 4 仍 ephemeral).
+// ═════════════════════════════════════════════════════════
+
+const STAGE_C_BASE = {
+  sessionState: {},
+  userProfile: {
+    values_collected_list: ['自由', '誠實'],
+    top1_value: '自由',
+  },
+  gapDays: 0,
+  conditionalInjects: [],
+  cachingEnabled: true,
+  scJourney: {
+    step: 4,
+    evidence: { step_4: [{ type: 'identity_claim', quote: '會撐住的人' }] },
+  },
+};
+
+test('🛑 Stage C: flag off (預設) → dynamic block 不含「已經確認過的東西」(0-facing 默認)', () => {
+  const arr = buildSystemPromptArrayV5(STAGE_C_BASE);   // scMemoryInjectEnabled 預設 false
+  for (const block of arr) {
+    assert.equal(/已經確認過的東西/.test(block.text), false,
+      'flag off 時, 所有 system blocks 都不該含記憶餵回 inject');
+  }
+});
+
+test('🛑 Stage C: flag on + 有 values/owned → dynamic block 含「已經確認過的東西」+ 指引', () => {
+  const arr = buildSystemPromptArrayV5({ ...STAGE_C_BASE, scMemoryInjectEnabled: true });
+  // 只 dynamic block (最後一格) 該含 inject; cached 4 段全不該含.
+  for (let i = 0; i < 4; i++) {
+    assert.equal(/已經確認過的東西/.test(arr[i].text), false,
+      `cached section ${i + 1} 絕不可含 inject (per-student, 進 cached 破全員)`);
+  }
+  assert.match(arr[4].text, /已經確認過的東西/, 'dynamic block 必須含 inject');
+  assert.match(arr[4].text, /核心價值[:：][^\n]*自由/);
+  assert.match(arr[4].text, /已認領身份[:：][^\n]*會撐住的人/);
+  assert.match(arr[4].text, /指引/);
+});
+
+test('🛑 Stage C: flag on + primary_mode=crisis → 仍不 inject (安全閘優先)', () => {
+  const arr = buildSystemPromptArrayV5({
+    ...STAGE_C_BASE,
+    sessionState: { primary_mode: 'crisis' },
+    scMemoryInjectEnabled: true,
+  });
+  for (const block of arr) {
+    assert.equal(/已經確認過的東西/.test(block.text), false,
+      'crisis primary_mode 必須跳過 inject (即使 flag 開)');
+  }
+});
+
+test('🛑 Stage C: flag on + 全空狀態 → 仍不 inject (0 副作用)', () => {
+  const arr = buildSystemPromptArrayV5({
+    ...STAGE_C_BASE,
+    userProfile: {},      // no values, no top1
+    scJourney: { step: null, evidence: {} },
+    scMemoryInjectEnabled: true,
+  });
+  for (const block of arr) {
+    assert.equal(/已經確認過的東西/.test(block.text), false,
+      '全空狀態 (Day 1 新人) 必須跳過 inject');
+  }
+});
+
+test('🛑 Stage C: cache breakpoint 位置不動 (section 4 仍 ephemeral, dynamic 仍 uncached)', () => {
+  const arr = buildSystemPromptArrayV5({ ...STAGE_C_BASE, scMemoryInjectEnabled: true });
+  assert.equal(arr.length, 5, '4 cached + 1 dynamic — count unchanged');
+  assert.equal(arr[0].cache_control, undefined);
+  assert.equal(arr[1].cache_control, undefined);
+  assert.equal(arr[2].cache_control, undefined);
+  assert.deepEqual(arr[3].cache_control, { type: 'ephemeral' },
+    'breakpoint 必須仍在 cached section 4');
+  assert.equal(arr[4].cache_control, undefined,
+    'dynamic block (含 Stage C inject) 不該被 cache');
+});
+
+test('🛑 Stage C: cached prefix content snapshot 1:1 — Stage C 上線不破任何 cache hit', () => {
+  // flag off vs on, cached 4 段內容必須完全一致 (cache 命中靠 byte-equal).
+  const arrOff = buildSystemPromptArrayV5({ ...STAGE_C_BASE });
+  const arrOn  = buildSystemPromptArrayV5({ ...STAGE_C_BASE, scMemoryInjectEnabled: true });
+  for (let i = 0; i < 4; i++) {
+    assert.equal(arrOff[i].text, arrOn[i].text,
+      `cached section ${i + 1} bytes 必須跟 flag off 完全相同 (cache 命中)`);
+  }
+});
+
+test('🛑 Stage C: 鐵律 #2 — inject 字串不含 role: / user: / assistant: markers', () => {
+  const arr = buildSystemPromptArrayV5({ ...STAGE_C_BASE, scMemoryInjectEnabled: true });
+  const dynamic = arr[4].text;
+  // 整個 dynamic block (含 active_context / mode_context 等) 既有就無 role markers;
+  // Stage C 新增的段也必須繼承這條.
+  assert.equal(/\brole:|\buser:|\bassistant:/i.test(dynamic), false,
+    'dynamic block 含 Stage C inject 後仍不該有對話 role markers');
+});
+
 test('buildSystemPromptArrayV5: conditional injects land in the dynamic block', () => {
   const arr = buildSystemPromptArrayV5({
     sessionState: {}, userProfile: {}, gapDays: 0,

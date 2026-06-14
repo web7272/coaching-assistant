@@ -54,6 +54,9 @@ import {
 } from '../lib/session/active-context.js';
 // ⭐ v5.2 第三塊 PR-b — Cross-Session Memory inject (per-category bucket from UPE).
 import { buildActiveContextSummaryInject } from '../lib/session/active-context-summary-inject.js';
+// v5.3 Stage C (6/13) — 記憶餵回 inject (止 Day8 / A009 鬼打牆). Flag-gated;
+// 預設 OFF (SC_MEMORY_INJECT_ENABLED env 未設 → 完全不 inject, 0-facing).
+import { buildScMemoryInject } from '../lib/session/sc-memory-inject.js';
 // ⭐ v5.2 第四塊 PR-b — Onboarding intercept (new students, before Mode routing).
 import { onboardingFlowHandler } from '../lib/detector-handlers/onboarding-flow.js';
 // ⭐ v5.2 第二塊 PR-b — cross-context handler (case 3 reminder lock).
@@ -872,6 +875,29 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
     }
   }
 
+  // ⭐ v5.3 Stage C (6/13) — 記憶餵回 inject (止 Day8 / A009 鬼打牆).
+  //   讀 userProfile.values_collected_list / top1_value + sc_journey_evidence.step_4
+  //   (owned identities), 生一段「已確認名單 + 別重問指引」 dynamic block (NOT cached).
+  //   0-facing 三道閘 (helper 內):
+  //     · flagEnabled=false → null (預設 OFF, sandbox 完才開).
+  //     · primary_mode === 'crisis' → null (危機 session 不拉回身份工作).
+  //     · 全空狀態 → null (Day 1 / 新人 0 副作用).
+  //   denylist defence-in-depth + 長度上限 (品質詞/身份詞 ≤ 24 字, 防 raw 滲入).
+  //   ⚠️ Vivi 過稿前文案在 helper 內標明草稿位; 邏輯不動, 改文案 verbatim 即可.
+  const scMemoryInject = buildScMemoryInject({
+    valuesCollected: Array.isArray(userProfile.values_collected_list)
+      ? userProfile.values_collected_list
+      : (Array.isArray(sessionState.values_collected_list) ? sessionState.values_collected_list : []),
+    top1: userProfile.top1_value || sessionState.top1_value || null,
+    scJourneyEvidence: opts.scJourney?.evidence || null,
+    primaryMode,
+    flagEnabled: opts.scMemoryInjectEnabled === true,
+  });
+  if (scMemoryInject) {
+    lines.push('');
+    lines.push(scMemoryInject);
+  }
+
   // {{current_mode_context}} — v5.1 Step 4 PR-23s4b:
   //   modeContextFor 取代 contextFor. elicitation mode router_phase-aware variant
   //   (opening 含起手式 / elicitation 鏈式追問) for transitional dual-write compat.
@@ -913,9 +939,11 @@ export function buildSystemPromptArrayV5({
   sessionState, userProfile, gapDays = 0, conditionalInjects = [], cachingEnabled = false,
   activeContext = null,   // ⭐ v5.2 第二塊 PR-a — threaded through to dynamic block
   scJourney = null,       // ⭐ v5.2 七步 PR-3 — same dynamic-only positioning as activeContext
+  scMemoryInjectEnabled = false,  // ⭐ v5.3 Stage C — 記憶餵回 flag (預設 OFF)
 }) {
-  const dynamicText = buildDynamicContext(sessionState, userProfile, gapDays, { activeContext, scJourney })
-    + (conditionalInjects.length ? '\n\n' + conditionalInjects.join('\n\n') : '');
+  const dynamicText = buildDynamicContext(sessionState, userProfile, gapDays, {
+    activeContext, scJourney, scMemoryInjectEnabled,
+  }) + (conditionalInjects.length ? '\n\n' + conditionalInjects.join('\n\n') : '');
 
   if (!cachingEnabled) {
     const merged = CACHED_PREFIX_SECTIONS.map(s => s.content).join('\n\n')
@@ -1798,6 +1826,9 @@ export default async function handler(req, res) {
       ? { step: studentRow.sc_journey_step ?? null,
           evidence: studentRow.sc_journey_evidence ?? {} }
       : null;
+    // ⭐ v5.3 Stage C (6/13) — 記憶餵回 env flag. 預設 OFF (env 未設 / 非 'true'
+    //   字串 → 完全不 inject, 0-facing). Vivi sandbox 過稿 → set 'true' 全開.
+    const scMemoryInjectEnabled = process.env.SC_MEMORY_INJECT_ENABLED === 'true';
     const systemParam = buildSystemPromptArrayV5({
       sessionState: stateForPrompt,
       userProfile: userProfile || {},
@@ -1806,6 +1837,7 @@ export default async function handler(req, res) {
       cachingEnabled,
       activeContext,
       scJourney,
+      scMemoryInjectEnabled,
     });
 
     // Step 9 — Anthropic Sonnet call (with 429 backoff + 5xx 1-retry, 6/3 burst protection).
