@@ -1,0 +1,246 @@
+# .github/workflows/backfill-commit.yml
+# v5.3 Stage D (6/14) — backfill --commit from prod DB, writes UPDATEs.
+#
+# Trigger: workflow_dispatch (manual button on default branch).
+#
+# Why exists:
+#   prod /api/admin/backfill-storyboard endpoint has maxDuration=60s, but
+#   observer pass per student takes 141-171s on the long-history learners
+#   (A003 / A006) — endpoint times out before write. This workflow runs
+#   scripts/backfill-storyboard.js --commit in CI where there's no HTTP
+#   timeout. Secrets stay in GitHub.
+#
+# 🔴 Safety design (沿用 backfill-dryrun.yml pattern):
+#   1. workflow_dispatch only — no schedule, no other trigger. Hand-fired by Patrick.
+#   2. students input REQUIRED non-empty (refuses blank — prevents drive-by run).
+#   3. Default = 6 學員 (A003 A005 A008 A009 A011 A012); A006 等 denylist 修完
+#      另跑 (Patrick 6/14 spec).
+#   4. Secrets stay in CI (GitHub auto-masks DATABASE_URL / ANTHROPIC_API_KEY).
+#   5. Per-student log captured via `tee` → extracted enum/count summary →
+#      $GITHUB_STEP_SUMMARY (Patrick browser-reads audit trail).
+#   6. Leak-guards 沿用 backfill-dryrun.yml — 11 SI + 4 「傷害自己」 family +
+#      role markers grep. 命中 → rm + fail (寧可不顯示).
+#   7. Concurrency 'backfill-commit' queued — one at a time, no DB race.
+#   8. CLI has built-in 3s confirm delay per --commit invocation.
+
+name: backfill-commit
+
+on:
+  workflow_dispatch:
+    inputs:
+      students:
+        description: 'Space-separated student IDs to COMMIT (writes prod DB). Empty rejected.'
+        required: true
+        type: string
+        default: 'A003 A005 A008 A009 A011 A012'
+
+# Workflow only reads repo source; UPDATE statements go to DB via Neon client.
+permissions:
+  contents: read
+
+# Queued — one commit run at a time. No cancel-in-progress (don't abort mid-write).
+concurrency:
+  group: backfill-commit
+  cancel-in-progress: false
+
+jobs:
+  commit:
+    runs-on: ubuntu-latest
+    # 6 學員 × observer ~150s + J2/J3 + DB write + CLI 3s confirm ≈ ~17 min.
+    # 60min upper bound — comfortable headroom for long-history A003 / A006.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout (latest main)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --loglevel=warn
+
+      - name: Syntax smoke test (backfill + observer modules)
+        run: |
+          node --check scripts/backfill-storyboard.js
+          node --check lib/api/backfill-observer-pass.js
+          node --check lib/api/observer-driver.js
+          node --check lib/haiku-judge/sc-observer.js
+
+      - name: Refuse if students input empty (no drive-by all-学員 commit)
+        env:
+          STUDENTS: ${{ inputs.students }}
+        run: |
+          set -e
+          # Trim whitespace.
+          TRIMMED=$(echo "$STUDENTS" | tr -s '[:space:]' ' ' | sed 's/^ //;s/ $//')
+          if [ -z "$TRIMMED" ]; then
+            echo "::error::students input is empty. --commit must be explicit; rerun with target student IDs."
+            exit 1
+          fi
+          echo "✓ students input non-empty: $TRIMMED"
+
+      - name: Run --commit per student
+        id: commit
+        env:
+          DATABASE_URL:      ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STUDENTS:          ${{ inputs.students }}
+        run: |
+          set +e   # collect per-student exit codes; leak-guards run regardless
+
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret not set."
+            echo "exit_code=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret not set."
+            echo "exit_code=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mkdir -p logs
+          OVERALL_CODE=0
+          FAILED_LIST=""
+          COMMITTED_LIST=""
+
+          # Tokenise students (whitespace-separated).
+          for SID in $STUDENTS; do
+            # Defensive — strip anything not in [A-Za-z0-9_].
+            CLEAN_SID=$(echo "$SID" | tr -cd '[:alnum:]_')
+            if [ -z "$CLEAN_SID" ]; then continue; fi
+            echo "[workflow] --commit $CLEAN_SID … (CLI prints 3s confirm)"
+            # Capture stdout + stderr to per-student log file. tee preserves
+            # console visibility while persisting for summary extraction.
+            node scripts/backfill-storyboard.js \
+              --commit \
+              --student "$CLEAN_SID" \
+              2>&1 | tee "logs/${CLEAN_SID}.log"
+            CODE=${PIPESTATUS[0]}
+            echo "[workflow] $CLEAN_SID exit=$CODE"
+            if [ "$CODE" != "0" ]; then
+              OVERALL_CODE=$CODE
+              FAILED_LIST="$FAILED_LIST $CLEAN_SID"
+            else
+              COMMITTED_LIST="$COMMITTED_LIST $CLEAN_SID"
+            fi
+          done
+
+          echo "exit_code=$OVERALL_CODE"       >> "$GITHUB_OUTPUT"
+          echo "failed_list=$FAILED_LIST"     >> "$GITHUB_OUTPUT"
+          echo "committed_list=$COMMITTED_LIST" >> "$GITHUB_OUTPUT"
+          echo "[workflow] commit pass done. overall=$OVERALL_CODE committed=$COMMITTED_LIST failed=$FAILED_LIST"
+          exit 0
+
+      - name: Build commit summary markdown
+        # Extract enum/count lines only — observer pass summary + write line.
+        # formatStudentReport (with quote text) does NOT fire in --commit mode
+        # (see scripts/backfill-storyboard.js _flushReport guard); but leak-guards
+        # below still run as defence-in-depth.
+        if: always()
+        env:
+          STUDENTS_INPUT:  ${{ inputs.students }}
+          COMMITTED_LIST:  ${{ steps.commit.outputs.committed_list }}
+          FAILED_LIST:     ${{ steps.commit.outputs.failed_list }}
+        run: |
+          set -e
+          {
+            echo "# Stage D backfill **COMMIT** run"
+            echo ""
+            echo "**Run:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  "
+            echo "**Mode:** --commit (prod DB UPDATEs)  "
+            echo "**Students requested:** \`$STUDENTS_INPUT\`  "
+            echo "**Committed:** \`$COMMITTED_LIST\`  "
+            echo "**Failed:** \`$FAILED_LIST\`"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Per-student summary (enum/count only)"
+            for f in logs/*.log; do
+              [ -f "$f" ] || continue
+              base=$(basename "$f" .log)
+              echo "### $base"
+              echo ""
+              echo '```'
+              # Extract:
+              #   · [backfill] mode= / targets= header
+              #   · `[A003] observer pass: sessions=N, turns=N, judged=N, skips={...}`
+              #   · `[A003] writing — sc_journey_step=N stepsWithEvidence=N`
+              #   · skip path: 'skipped:not-found' / `[FAILED]`
+              #   · CLI 3s confirm / startup warnings
+              # NEVER captures quote text (formatStudentReport disabled in commit mode).
+              grep -E '\[backfill\]|observer pass|writing — sc_journey_step|skipped|FAILED|FATAL|⚠️|Proceeding in 3s' "$f" \
+                || echo "(no summary lines captured)"
+              echo '```'
+              echo ""
+            done
+          } > commit-summary.md
+          echo "✓ commit-summary.md built ($(wc -l < commit-summary.md) lines)"
+
+      - name: 🔴 Defence-in-depth — verify summary 0 SI leak (13 patterns)
+        # Same single-source list as SC_STORYBOARD_HIGH_RISK_PATTERNS
+        # (lib/api/sc-storyboard-gen.js) — 11 original + 4 「傷害自己」 family
+        # (6/14 A006 漏網修, c2e593b). Update both together if list changes.
+        # POSIX ERE `.` is byte-match on UTF-8 → use explicit alternation.
+        if: always()
+        run: |
+          set -e
+          if [ ! -f commit-summary.md ]; then
+            echo "::warning::no commit-summary.md"
+            exit 0
+          fi
+          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念|傷害自己|傷害我自己|傷害了自己|自我傷害' commit-summary.md; then
+            echo "::error::🔴🔴 commit-summary.md contains SI substring — defence-in-depth FAILED. File DELETED before STEP_SUMMARY render."
+            rm -f commit-summary.md
+            exit 1
+          fi
+          echo "✓ defence-in-depth: 0 SI substring in commit-summary.md"
+
+      - name: 🔴 Defence-in-depth — verify summary 0 conversation role markers
+        if: always()
+        run: |
+          set -e
+          if [ ! -f commit-summary.md ]; then
+            exit 0
+          fi
+          if grep -qiE '\b(role|user|assistant):' commit-summary.md; then
+            echo "::error::🔴🔴 commit-summary.md contains conversation role markers — DELETED."
+            rm -f commit-summary.md
+            exit 1
+          fi
+          echo "✓ defence-in-depth: 0 role markers in commit-summary.md"
+
+      - name: 🔵 Render commit-summary.md into $GITHUB_STEP_SUMMARY
+        if: always()
+        run: |
+          if [ -f commit-summary.md ]; then
+            cat commit-summary.md >> "$GITHUB_STEP_SUMMARY"
+            echo "✓ commit-summary.md rendered into Step Summary"
+          else
+            echo "::warning::no commit-summary.md to render (leak-guard may have deleted it)"
+          fi
+
+      - name: Upload commit summary artifact
+        # Retention 30 days — commit-mode logs kept longer than dry-run for audit.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backfill-commit-${{ github.run_id }}
+          path: commit-summary.md
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Fail workflow if any per-student run failed
+        if: always()
+        run: |
+          EXIT="${{ steps.commit.outputs.exit_code }}"
+          FAILED="${{ steps.commit.outputs.failed_list }}"
+          if [ -z "$EXIT" ]; then EXIT="1"; fi
+          if [ "$EXIT" != "0" ]; then
+            echo "::error::commit exit code: $EXIT — failed students:$FAILED"
+            exit 1
+          fi
+          echo "🟢 all per-student --commit green — backfill applied to prod"
