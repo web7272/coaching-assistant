@@ -1301,3 +1301,29 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   .storyboard-pip-num { width: 22px; height: 22px; font-size: 11.5px; }
   .storyboard-pips { gap: 5px; }
 }
+
+/* ───────────── 教練卡頁 (#/note) 導覽 (Vivi 6/14) — ← 返回 / 地圖 icon / 底部置中 ───────────── */
+.note-topbar {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 4px 2px 12px; border-bottom: 1px solid var(--card-line);
+}
+.note-topbar .label { flex: 1; text-align: center; }
+.note-nav-btn {
+  flex: 0 0 auto; width: 36px; height: 36px; border: none; background: none;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold); border-radius: 50%; cursor: pointer; text-decoration: none;
+  transition: background .2s;
+}
+.note-nav-btn:hover, .note-nav-btn:focus-visible { background: rgba(198,107,79,.12); }
+.note-nav-btn:focus-visible { outline: 3px solid rgba(198,107,79,.4); outline-offset: 2px; }
+
+/* 底部 CTA 列置中 + 地圖 icon 與「回到旅程」並排 */
+.note-bottom { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.note-map-btn {
+  flex: 0 0 auto; width: 44px; height: 44px; border: 1px solid var(--card-line);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold); border-radius: 12px; cursor: pointer; text-decoration: none;
+  transition: background .2s;
+}
+.note-map-btn:hover, .note-map-btn:focus-visible { background: rgba(198,107,79,.12); }
+.note-map-btn:focus-visible { outline: 3px solid rgba(198,107,79,.4); outline-offset: 2px; }
