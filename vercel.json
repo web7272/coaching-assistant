@@ -6,7 +6,7 @@
       "maxDuration": 60
     },
     "api/finalize-day.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   }
 }
