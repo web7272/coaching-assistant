@@ -46,8 +46,8 @@ export const SC_STORYBOARD_STEPS = Object.freeze([
   { no: '03', name_zh: '挖掘數據',   name_en: 'Mining the Database' },
   { no: '04', name_zh: '認領身份',   name_en: 'Claiming the Identity' },
   { no: '05', name_zh: '發現資源',   name_en: 'Resource Retrieval' },
-  { no: '06', name_zh: '奪回裁判權', name_en: 'Reclaiming the Sovereignty' },
-  { no: '07', name_zh: '標籤定錨',   name_en: 'Anchoring the Concept' },
+  { no: '06', name_zh: '奪回主權', name_en: 'Reclaiming the Sovereignty' },
+  { no: '07', name_zh: '新的身分',   name_en: 'Anchoring the Concept' },
 ]);
 
 /**
