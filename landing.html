@@ -312,7 +312,7 @@ a{color:inherit;text-decoration:none}
 
 /* 6/8 設計師方案 3 — 止血線 (#cta-scarcity).
    6/8 v4 (Vivi 看 v3 live 後): 從卡內搬到卡外 (整張動作卡之後、置中, 間距留呼吸).
-   分支: > threshold → 質性「限量體驗 － 只陪真心想看見自己的人」; 0<r<=threshold → 「只剩 N 個名額」;
+   分支: > threshold → 質性「限量體驗 - 每一次教練對話都會產生成本，因此我們希望把免費試用資源留給真正想認真嘗試的人。需要花5秒鐘回答3個問題。」; 0<r<=threshold → 「只剩 N 個名額」;
          ≤0 → 「名額已滿」; fetch fail → 留空. */
 .cta-scarcity{font-family:var(--sans);font-size:12px;letter-spacing:.04em;color:var(--gold);
   margin:20px 0 0;padding:0;line-height:1.5;display:none;text-align:center}
@@ -560,7 +560,6 @@ footer .fb{font-family:var(--serif);color:var(--gold);letter-spacing:.16em;font-
         <form class="cta-form" onsubmit="ctaSubmit(event, 3)">
           <button type="button" class="cta-back" onclick="ctaClose(this)" aria-label="返回">← 返回</button>
           <p class="cta-t cta-t-open">立刻領取《價值觀挖掘練習PDF》＋免費解鎖 AI 教練體驗</p>
-          <p class="cta-quiz-head">在開始之前，3 個問題<span>幫教練更快認識你</span></p>
 
           <div class="cta-q">
             <p class="cta-qt">1. 哪一個最能描述你目前的階段？</p>
@@ -945,7 +944,7 @@ document.querySelectorAll('.faq .qq').forEach(q=>{
 // 顯示分支 (門檻可調, 從 /api/day1-quota 的 scarcity_threshold 欄拿):
 //   • remaining ≤ 0           → 「名額已滿」 (按鈕仍可送 — 後端走候補 + 仍寄 PDF).
 //   • 0 < remaining ≤ threshold → 「只剩 N 個名額」 (推力最大).
-//   • remaining > threshold    → 「限量體驗 － 只陪真心想看見自己的人」 (Patrick 6/8 v4 verbatim).
+//   • remaining > threshold    → 「限量體驗 - 每一次教練對話都會產生成本，因此我們希望把免費試用資源留給真正想認真嘗試的人。需要花5秒鐘回答3個問題。」 (Patrick 6/8 v4 verbatim).
 //   • fetch 失敗 / 無資料      → 該行留空 (fail-open, 不擋頁、不顯示 0 或錯字).
 //
 // SAFETY: 永不擋表單. JS 只負責 display; 真把關靠 /api/auth/request-link +
@@ -970,7 +969,7 @@ document.querySelectorAll('.faq .qq').forEach(q=>{
       el.classList.add('show', 'full');
     } else if(remaining > threshold){
       // 6/8 v4 (Vivi 看 v3 live 後): 質性文案改短 (D4b verbatim).
-      el.textContent = '限量體驗 － 只陪真心想看見自己的人';
+      el.textContent = '限量體驗 - 每一次教練對話都會產生成本，因此我們希望把免費試用資源留給真正想認真嘗試的人。需要花5秒鐘回答3個問題。';
       el.classList.add('show');
       el.classList.remove('full');
     } else {

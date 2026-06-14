@@ -1507,9 +1507,42 @@ const STORYBOARD_STEP_META_INLINE = [
   { no: '03', name_zh: '挖掘數據',   name_en: 'Mining the Database' },
   { no: '04', name_zh: '認領身份',   name_en: 'Claiming the Identity' },
   { no: '05', name_zh: '發現資源',   name_en: 'Resource Retrieval' },
-  { no: '06', name_zh: '奪回裁判權', name_en: 'Reclaiming the Sovereignty' },
-  { no: '07', name_zh: '標籤定錨',   name_en: 'Anchoring the Concept' },
+  { no: '06', name_zh: '奪回主權', name_en: 'Reclaiming the Sovereignty' },
+  { no: '07', name_zh: '新的身分',   name_en: 'Anchoring the Concept' },
 ];
+
+// 過場引導句 (mirror of STORYBOARD_CONNECTORS; storyboard-render.js sync).
+const STORYBOARD_CONNECTORS_INLINE = [
+  '你慢慢看清，匱乏的另一面，其實是渴望。',
+  '你動身往回挖記憶，但有個聲音說『你不配』。',
+  '你開始找到證據，你能說出『我是誰』。',
+  '戴上新眼鏡後，你開始看見以前看不見的東西。',
+  '此時外在環境試圖告訴你，世界不是這樣運作。',
+  '你堅守自己的主權，告訴世界，我決定『我是誰』。',
+  null,
+];
+
+// 頂部數字圓圈進度條 (mirror of renderProgressBarHTML).
+function renderStoryboardProgressBar(steps, currentStep) {
+  const pips = (steps || []).map((s, i) => {
+    const n = i + 1;
+    const filled = s && s.state === 'filled';
+    const cur = currentStep === n;
+    const cls = 'storyboard-pip'
+      + (filled ? ' storyboard-pip--filled' : '')
+      + (cur ? ' storyboard-pip--current' : '');
+    return '<a class="' + cls + '" href="#storyboard-step-' + escapeHTMLStoryboard(s.no) + '" '
+      + 'aria-label="跳到步驟 ' + n + ' ' + escapeHTMLStoryboard(s.name_zh || '') + '">'
+      + '<span class="storyboard-pip-num">' + n + '</span>'
+      + '<span class="storyboard-pip-bar"></span></a>';
+  }).join('');
+  const filledCount = (steps || []).filter(s => s && s.state === 'filled').length;
+  return '<div class="storyboard-progress" aria-label="七步進度">'
+    + '<div class="storyboard-pips">' + pips + '</div>'
+    + '<div class="storyboard-progress-label">已點亮 <b>' + filledCount + '</b>/7</div>'
+    + '</div>';
+}
+
 
 // 🔴 VERBATIM — Vivi 6/11 終審逐字 (Patrick 逐行比). DO NOT EDIT.
 const STORYBOARD_STORY_INLINE = [
@@ -1567,11 +1600,11 @@ const STORYBOARD_STORY_INLINE = [
 
   { kind: 'p',     text: '你慢慢聽懂了。' },
   { kind: 'p',     text: '它所有的話，其實都在做同一件事——' },
-  { kind: 'p',     text: '偷偷把「我夠不夠好」的裁判權，從你手中拿走，交給別人、交給結果、交給外面的世界。' },
+  { kind: 'p',     text: '偷偷把「我夠不夠好」的主權，從你手中拿走，交給別人、交給結果、交給外面的世界。' },
   { kind: 'p',     text: '但這一次，你看穿了。' },
   { kind: 'p',     text: '你一把拍開它。' },
 
-  { kind: 'step',  no: 6, name_zh: '奪回裁判權' },
+  { kind: 'step',  no: 6, name_zh: '奪回主權' },
   { kind: 'p',     text: '我是誰。' },
   { kind: 'p',     text: '我夠不夠好。' },
   { kind: 'p',     text: '我值不值得。' },
@@ -1580,8 +1613,8 @@ const STORYBOARD_STORY_INLINE = [
   { kind: 'p',     text: '我的價值不跟任何人、事、物、環境、事件掛勾。' },
   { kind: 'p',     text: '於是，你走到了最後一步。' },
 
-  { kind: 'step',  no: 7, name_zh: '標籤定錨' },
-  { kind: 'p',     text: '你親手為自己貼上新的標籤。' },
+  { kind: 'step',  no: 7, name_zh: '新的身分' },
+  { kind: 'p',     text: '你親手為自己貼上新的身分。' },
   { kind: 'p',     text: '把它深深融入心裡，成為自己穩定的座標。' },
   { kind: 'p',     text: '最初那份自我懷疑的迷惘與不安，慢慢退去。' },
   { kind: 'p',     text: '因為你終於明白：' },
@@ -1706,18 +1739,26 @@ function buildStoryboardBodyHTML(apiResp) {
     && safe.currentStep >= 1 && safe.currentStep <= 7
     ? safe.currentStep : null;
   const storyHTML = STORYBOARD_STORY_INLINE.map(renderStoryboardNode).join('\n');
-  const navHTML = renderStoryboardSideNav(currentStep);
-  const stepsHTML = steps.map((step, i) => renderStoryboardStepBlock(step, i === 0)).join('\n');
+  const progressHTML = renderStoryboardProgressBar(steps, currentStep);
+  const stepsHTML = steps.map((step, i) => {
+    const block = renderStoryboardStepBlock(step, i === 0);
+    const conn = STORYBOARD_CONNECTORS_INLINE[i];
+    const connHTML = conn
+      ? '<div class="storyboard-connector" aria-hidden="true">'
+        + '<span class="storyboard-connector-line"></span>'
+        + '<span class="storyboard-connector-text">' + escapeHTMLStoryboard(conn) + '</span>'
+        + '<span class="storyboard-connector-line"></span></div>'
+      : '';
+    return block + connHTML;
+  }).join('\n');
   // 6/12 Vivi — 故事預設收起 + 「展開更多」 toggle (storyboard-render.js sync).
-  return '<div class="storyboard-story-wrap storyboard-story-wrap--collapsed" id="storyboard-story-wrap">'
+  return progressHTML
+    + '<div class="storyboard-story-wrap storyboard-story-wrap--collapsed" id="storyboard-story-wrap">'
     + '<div class="storyboard-story" id="storyboard-story">' + storyHTML + '</div>'
     + '<button type="button" class="storyboard-story-toggle" '
     + 'aria-expanded="false" aria-controls="storyboard-story">展開更多</button>'
     + '</div>'
-    + '<div class="storyboard-layout">'
-    + navHTML
-    + '<div class="storyboard-steps" id="storyboard-steps">' + stepsHTML + '</div>'
-    + '</div>';
+    + '<div class="storyboard-steps" id="storyboard-steps">' + stepsHTML + '</div>';
 }
 
 function attachStoryboardToggleHandlers(rootEl) {
