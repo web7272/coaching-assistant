@@ -1327,3 +1327,16 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 }
 .note-map-btn:hover, .note-map-btn:focus-visible { background: rgba(198,107,79,.12); }
 .note-map-btn:focus-visible { outline: 3px solid rgba(198,107,79,.4); outline-offset: 2px; }
+
+/* ───────────── 故事 v2 arc card (Vivi 6/14) — 標題在上 + chevron + 預設收起 ───────────── */
+.storyboard-arc { background: var(--paper-card, #FFFDF9); border: 1px solid var(--card-line); border-radius: 16px; overflow: hidden; margin: 0 0 14px; }
+.storyboard-arc-toggle { width: 100%; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 18px 22px; font-family: inherit; text-align: left; }
+.storyboard-arc-title { flex: 1; font-size: 15px; font-weight: 700; color: var(--gold-soft); }
+.storyboard-arc-peek { font-size: 13px; color: var(--ink-soft); }
+.storyboard-arc-chev { width: 20px; height: 20px; color: var(--ink-soft); transition: transform .3s; flex-shrink: 0; }
+.storyboard-arc-toggle[aria-expanded="true"] .storyboard-arc-chev { transform: rotate(180deg); }
+.storyboard-arc-toggle:focus-visible { outline: 3px solid rgba(198,107,79,.4); outline-offset: -3px; }
+.storyboard-arc-body { max-height: 0; overflow: hidden; transition: max-height .5s ease; }
+.storyboard-arc:not(.storyboard-arc--collapsed) .storyboard-arc-body { max-height: none; }
+.storyboard-arc-body > .storyboard-story { padding: 2px 22px 22px; }
+@media (prefers-reduced-motion: reduce) { .storyboard-arc-body, .storyboard-arc-chev { transition: none; } }
