@@ -1644,7 +1644,10 @@ function renderStoryboardStepBlock(step, isFirst) {
     + 'aria-controls="storyboard-step-body-' + noPad + '">'
     + '<span class="storyboard-step-no">' + escapeHTMLStoryboard(noPad) + '</span>'
     + '<span class="storyboard-step-name-zh">' + escapeHTMLStoryboard(step.name_zh || '') + '</span>'
-    + '<span class="storyboard-step-name-en">' + escapeHTMLStoryboard(step.name_en || '') + '</span>'
+    + '<span class="storyboard-step-peek">' + (isFirst ? '收合' : '展開') + '</span>'
+    + '<svg class="storyboard-step-chev" viewBox="0 0 24 24" fill="none" '
+    + 'stroke="currentColor" stroke-width="2" aria-hidden="true">'
+    + '<path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
     + '</button>'
     + '<div id="storyboard-step-body-' + noPad + '" class="storyboard-step-body"' + hiddenAttr + '>'
     + body
@@ -1715,6 +1718,8 @@ function attachStoryboardToggleHandlers(rootEl) {
       const expanded = btn.getAttribute('aria-expanded') === 'true';
       const next = !expanded;
       btn.setAttribute('aria-expanded', next ? 'true' : 'false');
+      const peek = btn.querySelector('.storyboard-step-peek');
+      if (peek) peek.textContent = next ? '收合' : '展開';
       const bodyId = btn.getAttribute('aria-controls');
       const body = bodyId ? rootEl.querySelector('#' + bodyId) : null;
       if (body) {
@@ -1750,6 +1755,8 @@ function attachStoryboardToggleHandlers(rootEl) {
       if (toggle && body && toggle.getAttribute('aria-expanded') !== 'true') {
         toggle.setAttribute('aria-expanded', 'true');
         body.removeAttribute('hidden');
+        const tpeek = toggle.querySelector('.storyboard-step-peek');
+        if (tpeek) tpeek.textContent = '收合';
       }
     });
   });

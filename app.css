@@ -799,6 +799,11 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   text-align: center;
   margin-bottom: 32px;
 }
+/* 6/14 Vivi — 頂部「回到旅程」靠左, 標題仍置中. */
+.storyboard-topbar {
+  text-align: left;
+  margin-bottom: 12px;
+}
 .storyboard-icon {
   display: inline-flex;
   align-items: center;
@@ -1033,10 +1038,22 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   font-weight: 600;
   flex: 1;
 }
-.storyboard-step-name-en {
-  font-size: 12px;
+/* 6/14 Vivi — 步驟頭右側「展開/收合」+ chevron (取代英文名). */
+.storyboard-step-peek {
+  font-size: 13px;
   color: var(--text-faint);
-  letter-spacing: 0.04em;
+  align-self: center;
+}
+.storyboard-step-chev {
+  width: 18px;
+  height: 18px;
+  color: var(--text-faint);
+  transition: transform .3s;
+  flex-shrink: 0;
+  align-self: center;
+}
+.storyboard-step-toggle[aria-expanded="true"] .storyboard-step-chev {
+  transform: rotate(180deg);
 }
 .storyboard-step-toggle[aria-expanded="true"] {
   background: rgba(224, 138, 60, 0.05);
@@ -1339,7 +1356,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .storyboard-arc-body { max-height: 0; overflow: hidden; transition: max-height .5s ease; }
 .storyboard-arc:not(.storyboard-arc--collapsed) .storyboard-arc-body { max-height: none; }
 .storyboard-arc-body > .storyboard-story { padding: 2px 22px 22px; }
-@media (prefers-reduced-motion: reduce) { .storyboard-arc-body, .storyboard-arc-chev { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .storyboard-arc-body, .storyboard-arc-chev, .storyboard-step-chev { transition: none; } }
 
 /* ───────────── 故事文章版 (Vivi 6/14) — inline 引號/步驟/誘惑句，順文章流 ───────────── */
 /* 故事內 inline 步驟連結 — 文章內粗體可點 (覆蓋 batch1 的 pill 樣式) */
