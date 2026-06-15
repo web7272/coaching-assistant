@@ -1753,11 +1753,18 @@ function buildStoryboardBodyHTML(apiResp) {
   }).join('\n');
   // 6/12 Vivi — 故事預設收起 + 「展開更多」 toggle (storyboard-render.js sync).
   return progressHTML
-    + '<div class="storyboard-story-wrap storyboard-story-wrap--collapsed" id="storyboard-story-wrap">'
+    + '<div class="storyboard-arc storyboard-arc--collapsed" id="storyboard-story-wrap">'
+    + '<button type="button" class="storyboard-arc-toggle" '
+    + 'aria-expanded="false" aria-controls="storyboard-story">'
+    + '<span class="storyboard-arc-title">先看這趟旅程的故事線</span>'
+    + '<span class="storyboard-arc-peek">展開</span>'
+    + '<svg class="storyboard-arc-chev" viewBox="0 0 24 24" fill="none" '
+    + 'stroke="currentColor" stroke-width="2" aria-hidden="true">'
+    + '<path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    + '</button>'
+    + '<div class="storyboard-arc-body">'
     + '<div class="storyboard-story" id="storyboard-story">' + storyHTML + '</div>'
-    + '<button type="button" class="storyboard-story-toggle" '
-    + 'aria-expanded="false" aria-controls="storyboard-story">展開更多</button>'
-    + '</div>'
+    + '</div></div>'
     + '<div class="storyboard-steps" id="storyboard-steps">' + stepsHTML + '</div>';
 }
 
@@ -1786,7 +1793,7 @@ function attachStoryboardToggleHandlers(rootEl) {
     });
   });
   // Smooth scroll for story → step links (respect reduced-motion).
-  rootEl.querySelectorAll('.storyboard-step-link, .storyboard-nav-item').forEach(a => {
+  rootEl.querySelectorAll('.storyboard-step-link, .storyboard-nav-item, .storyboard-pip').forEach(a => {
     a.addEventListener('click', (e) => {
       const href = a.getAttribute('href') || '';
       if (!href.startsWith('#storyboard-step-')) return;
@@ -1811,15 +1818,17 @@ function attachStoryboardToggleHandlers(rootEl) {
   // 6/12 Vivi — 故事 「展開更多」/「收起」 toggle.
   // a11y: <button> + aria-expanded + native keyboard (Enter/Space).
   const storyWrap = rootEl.querySelector('#storyboard-story-wrap');
-  const storyToggle = rootEl.querySelector('.storyboard-story-toggle');
+  const storyToggle = rootEl.querySelector('.storyboard-arc-toggle');
   if (storyWrap && storyToggle) {
+    const storyBody = storyWrap.querySelector('.storyboard-arc-body');
+    const storyPeek = storyToggle.querySelector('.storyboard-arc-peek');
     storyToggle.addEventListener('click', () => {
       const expanded = storyToggle.getAttribute('aria-expanded') === 'true';
       const next = !expanded;
       storyToggle.setAttribute('aria-expanded', next ? 'true' : 'false');
-      storyToggle.textContent = next ? '收起' : '展開更多';
-      if (next) storyWrap.classList.remove('storyboard-story-wrap--collapsed');
-      else      storyWrap.classList.add('storyboard-story-wrap--collapsed');
+      if (storyPeek) storyPeek.textContent = next ? '收合' : '展開';
+      storyWrap.classList.toggle('storyboard-arc--collapsed', !next);
+      if (storyBody) storyBody.style.maxHeight = next ? storyBody.scrollHeight + 'px' : '0px';
     });
   }
 }
