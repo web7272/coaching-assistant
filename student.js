@@ -1544,84 +1544,29 @@ function renderStoryboardProgressBar(steps, currentStep) {
 }
 
 
-// 🔴 VERBATIM — Vivi 6/11 終審逐字 (Patrick 逐行比). DO NOT EDIT.
+// 🔴 VERBATIM — Vivi 6/14 終審逐字 (文章版). DO NOT EDIT.
 const STORYBOARD_STORY_INLINE = [
-  { kind: 'p',     text: '你一直覺得，現在的自己，好像不是全部的自己。' },
-  { kind: 'p',     text: '有時候，是焦慮、煩躁、疲憊；有時候，是明明已經很努力，卻總事與願違達不到目標。有時候，是一直替別人著想，卻不知道什麼時候別人會轉過身替你想。你隱約知道，生命裡有一塊是空的，始終沒有被滿足。' },
-  { kind: 'p',     text: '你開始懷疑：' },
-  { kind: 'quote', lines: ['「是不是我不夠好？」', '「是不是我做得不夠多？」', '「什麼時候會輪到我？」'] },
-  { kind: 'p',     text: '這些說不清的匱乏感與不滿足，推著你往內看。' },
-  { kind: 'p',     text: '於是，你開始：' },
-
-  { kind: 'step',  no: 1, name_zh: '發現匱乏' },
-  { kind: 'p',     text: '你終於慢慢看清，自己真正缺的到底是什麼。也許是被理解、被愛、被重視；也許是自由、成就、認可；也許只是一直以來，都沒有好好照顧過自己。' },
-  { kind: 'p',     text: '但你慢慢明白，匱乏的另一面，其實就是渴望。之所以會覺得缺，不是因為你太貪心，而是因為你的心裡，本來就真的想要。' },
-  { kind: 'p',     text: '看清這件事還不夠。真正難的，是看見，並且承認自己的渴望。' },
-
-  { kind: 'step',  no: 2, name_zh: '承認渴望' },
-  { kind: 'p',     text: '承認「我就是想要這個」，發生在看見原來我是想要這個後面。' },
-  { kind: 'p',     text: '對一個總是把自己放在最後、習慣壓抑需求的人來說，需要很大的勇氣。' },
-  { kind: 'p',     text: '因為你可能早已習慣告訴自己：' },
-  { kind: 'quote', lines: ['「沒關係。」', '「我不需要。」', '「先顧別人比較重要。」'] },
-  { kind: 'p',     text: '甚至，你連自己的渴望到底是什麼，都丟失了。這次，在這裡你決定把它找回來，因為你知道看見了、承認了，你才真正有了起點，才能繼續走下去。' },
-  { kind: 'p',     text: '於是，你開始：' },
-
-  { kind: 'step',  no: 3, name_zh: '挖掘數據' },
-  { kind: 'p',     text: '往自己的過去、情緒、反應與選擇裡挖掘。找出那些一直在默默替你做決定，卻從來沒有被說出口的模式與線索。你想找出證據你值得這個渴望。' },
-  { kind: 'villain-intro', before: '但就在這時，第一個阻力跳了出來——', name: '限制性信念', after: '。' },
-  { kind: 'p',     text: '它在你耳邊低聲說：' },
-  { kind: 'quote-villain', lines: ['「你不配。」', '「你做不到。」', '「你以前沒有以後也不會有。」'] },
-  { kind: 'p',     text: '它想喝止你停下。它試圖把你拉回舒適圈。' },
-  { kind: 'p',     text: '但這次你沒有逗留。' },
-  { kind: 'p',     text: '你跨越了它，開始：' },
-
-  { kind: 'step',  no: 4, name_zh: '認領身份' },
-  { kind: 'p',     text: '你不再用別人的標準定義自己，而是親口說出：' },
-  { kind: 'quote', lines: ['「我是誰。」「我是．．．的人。」'] },
-  { kind: 'p',     text: '當你真正認領自己的身份，你才驚訝地發現，' },
-  { kind: 'p',     text: '原來自己一直都擁有許多被你遺忘的力量。' },
-  { kind: 'p',     text: '你只需要' },
-
-  { kind: 'step',  no: 5, name_zh: '發現資源' },
-  { kind: 'p',     text: '那些你以為自己沒有的能力、特質、天賦與韌性，其實一直都在。' },
-  { kind: 'p',     text: '只是過去的你，不曾允許自己相信，也不敢真正認領。' },
-  { kind: 'p',     text: '故事還沒有結束。' },
-  { kind: 'p',     text: '當你開始慢慢站穩，第二個阻力登場了。' },
-  { kind: 'p',     text: '它比限制性信念更狡猾。因為它不阻止你，它威逼利誘你。' },
-  { kind: 'p',     text: '它告訴你：' },
-  { kind: 'quote-villain', lines: ['「世界不是這樣運作的。」'] },
-  { kind: 'p',     text: '然後，它用不同的聲音，對不同的人說出同一件事。' },
-
-  { kind: 'villain-title', name: '追求外在認可' },
-  { kind: 'temptation', label: '對渴望被肯定的人，它說：', quote: '「別人說你好，你才算好。」' },
-  { kind: 'temptation', label: '對渴望被愛的人，它說：',   quote: '「有人愛你，你才有價值。」' },
-  { kind: 'temptation', label: '對渴望成功的人，它說：',   quote: '「做出成績，你才值得被看見。」' },
-  { kind: 'temptation', label: '對渴望財富的人，它說：',   quote: '「帳戶裡的數字，就是你這個人的分數。」' },
-
-  { kind: 'p',     text: '你慢慢聽懂了。' },
-  { kind: 'p',     text: '它所有的話，其實都在做同一件事——' },
-  { kind: 'p',     text: '偷偷把「我夠不夠好」的主權，從你手中拿走，交給別人、交給結果、交給外面的世界。' },
-  { kind: 'p',     text: '但這一次，你看穿了。' },
-  { kind: 'p',     text: '你一把拍開它。' },
-
-  { kind: 'step',  no: 6, name_zh: '奪回主權' },
-  { kind: 'p',     text: '我是誰。' },
-  { kind: 'p',     text: '我夠不夠好。' },
-  { kind: 'p',     text: '我值不值得。' },
-  { kind: 'p',     text: '不再由任何人、任何成績、任何眼光來決定。' },
-  { kind: 'p',     text: '而是由我自己定義。' },
-  { kind: 'p',     text: '我的價值不跟任何人、事、物、環境、事件掛勾。' },
-  { kind: 'p',     text: '於是，你走到了最後一步。' },
-
-  { kind: 'step',  no: 7, name_zh: '新的身分' },
-  { kind: 'p',     text: '你親手為自己貼上新的身分。' },
-  { kind: 'p',     text: '把它深深融入心裡，成為自己穩定的座標。' },
-  { kind: 'p',     text: '最初那份自我懷疑的迷惘與不安，慢慢退去。' },
-  { kind: 'p',     text: '因為你終於明白：' },
-  { kind: 'p',     text: '你是誰，從來不是世界告訴你的。' },
-  { kind: 'p',     text: '而是你願意相信，並親自認領的那個自己。' },
-
-  { kind: 'final', text: '你就是你的渴望' },
+  { kind: 'para', seg: [{ t: '你一直覺得，現在的自己，好像不是全部的自己。' }] },
+  { kind: 'para', seg: [{ t: '有時候，是焦慮、煩躁、疲憊；有時候，是明明已經很努力，卻總事與願違達不到目標。有時候，是一直替別人著想，卻不知道什麼時候別人會轉過身替你想。你隱約知道，生命裡有一塊是空的，始終沒有被滿足。' }] },
+  { kind: 'para', seg: [{ t: '你開始懷疑：' }, { q: '是不是我不夠好？' }, { q: '是不是我做得不夠多？' }, { q: '什麼時候會輪到我？' }] },
+  { kind: 'para', seg: [{ t: '這些說不清的匱乏感與不滿足，推著你往內看。於是，你開始：' }, { step: 1, label: '1.發現匱乏' }, { t: '。你終於慢慢看清，自己真正缺的到底是什麼。也許是被理解、被愛、被重視；也許是自由、成就、認可；也許只是一直以來，都沒有好好照顧過自己。' }] },
+  { kind: 'para', seg: [{ t: '但你慢慢明白，匱乏的另一面，其實就是渴望。之所以會覺得缺，不是因為你太貪心，而是因為你的心裡，本來就真的想要。看清這件事還不夠。真正難的，是看見，並且' }, { step: 2, label: '2.承認渴望' }, { t: '。' }] },
+  { kind: 'para', seg: [{ t: '承認' }, { q: '我就是想要這個' }, { t: '之前，是先' }, { q: '看見' }, { t: '原來我是想要這個。對一個總是把自己放在最後、習慣壓抑需求的人來說，需要很大的勇氣。因為你可能早已習慣告訴自己：' }, { q: '沒關係。' }, { q: '我不需要。' }, { q: '先顧別人比較重要。' }] },
+  { kind: 'para', seg: [{ t: '甚至，你連自己的渴望到底是什麼，都丟失了。這次，在這裡你決定把它找回來，因為你知道看見了、承認了，你才真正有了起點，才能繼續走下去。於是，你開始：' }, { step: 3, label: '3.挖掘數據' }, { t: '。' }] },
+  { kind: 'para', seg: [{ t: '往自己的過去、情緒、反應與選擇裡挖掘。找出那些一直在默默替你做決定，卻從來沒有被說出口的模式與線索。你想找出證據你值得這個渴望。但就在這時，第一個阻力跳了出來——' }, { vil: '限制性信念' }, { t: '。' }] },
+  { kind: 'para', seg: [{ t: '它在你耳邊低聲說：' }, { q: '你不配。' }, { q: '你做不到。' }, { q: '你以前沒有以後也不會有。' }, { t: '它想喝止你停下。它試圖把你拉回舒適圈。但這次你沒有逗留。你跨越了它，開始：' }, { step: 4, label: '4. 認領身份' }, { t: '。' }] },
+  { kind: 'para', seg: [{ t: '你不再用別人的標準定義自己，而是親口說出：' }, { q: '我是誰。' }, { q: '我是．．．的人。' }, { t: '當你真正認領自己的身份，你才驚訝地發現，原來自己一直都擁有許多被你遺忘的力量。你只需要' }, { step: 5, label: '5. 發現資源' }, { t: '。' }] },
+  { kind: 'para', seg: [{ t: '那些你以為自己沒有的能力、特質、天賦與韌性，其實一直都在。只是過去的你，不曾允許自己相信，也不敢真正認領。故事還沒有結束。當你開始慢慢站穩，第二個阻力登場了。它比限制性信念更狡猾。因為它不阻止你，它企圖給你洗腦。' }] },
+  { kind: 'para', seg: [{ t: '它告訴你：' }, { q: '世界不是這樣運作的。' }, { t: '然後，它用不同的聲音，對不同的人說出同一件事 — ' }, { vil: '追求外在認可' }] },
+  { kind: 'tempt', label: '對渴望被肯定的人，它說：', quote: '別人說你好，你才算好。' },
+  { kind: 'tempt', label: '對渴望被愛的人，它說：', quote: '有人愛你，你才有價值。' },
+  { kind: 'tempt', label: '對渴望成功的人，它說：', quote: '做出成績，你才值得被看見。' },
+  { kind: 'tempt', label: '對渴望財富的人，它說：', quote: '帳戶裡的數字，就是你這個人的分數。' },
+  { kind: 'para', seg: [{ t: '你慢慢聽懂了。它所有的話，其實都在做同一件事——偷偷把' }, { q: '我夠不夠好' }, { t: '的主權，從你手中拿走，交給別人、交給結果、交給外面的世界。但這一次，你看穿了。你一把拍開它' }, { step: 6, label: '奪回主權' }, { t: '。' }] },
+  { kind: 'para', seg: [{ t: '我是誰。我夠不夠好。我值不值得。不再由任何人、任何成績、任何眼光來決定。' }] },
+  { kind: 'para', seg: [{ t: '而是由我自己定義。我的價值不跟任何人、事、物、環境、事件掛勾。於是，你走到了最後一步。' }] },
+  { kind: 'para', seg: [{ step: 7, label: '7. 新的身分' }, { t: '。你親手為自己貼上新的身分。把它深深融入心裡，成為自己穩定的座標。最初那份自我懷疑的迷惘與不安，慢慢退去。因為你終於明白：你是誰，從來不是世界告訴你的。而是你願意相信，並決定成為那個自己。' }] },
+  { kind: 'final', text: '你決定活出全部的你。' },
 ];
 
 function escapeHTMLStoryboard(s) {
@@ -1633,39 +1578,32 @@ function escapeHTMLStoryboard(s) {
 function renderStoryboardNode(node) {
   if (!node || typeof node !== 'object') return '';
   switch (node.kind) {
-    case 'p':
-      return '<p class="storyboard-p">' + escapeHTMLStoryboard(node.text) + '</p>';
-    case 'quote':
-      return '<p class="storyboard-quote">' + node.lines.map(escapeHTMLStoryboard).join('<br>') + '</p>';
-    case 'quote-villain':
-      return '<p class="storyboard-quote storyboard-quote--villain">'
-        + node.lines.map(escapeHTMLStoryboard).join('<br>') + '</p>';
-    case 'step': {
-      // 6/12 fix — href 補零對齊 block id (storyboard-render.js sync).
-      // 可見文字保留單位數 (故事 verbatim 不動).
-      const no = String(node.no);
-      const noPad = no.padStart(2, '0');
-      return '<h3 class="storyboard-step-heading">'
-        + '<a class="storyboard-step-link" href="#storyboard-step-' + noPad + '">'
-        + no + '. ' + escapeHTMLStoryboard(node.name_zh) + '</a></h3>';
-    }
-    case 'villain-intro':
+    case 'para':
       return '<p class="storyboard-p">'
-        + escapeHTMLStoryboard(node.before)
-        + '<span class="storyboard-villain-name">' + escapeHTMLStoryboard(node.name) + '</span>'
-        + escapeHTMLStoryboard(node.after) + '</p>';
-    case 'villain-title':
-      return '<h4 class="storyboard-villain-title">' + escapeHTMLStoryboard(node.name) + '</h4>';
-    case 'temptation':
+        + (Array.isArray(node.seg) ? node.seg : []).map(renderStoryboardSeg).join('')
+        + '</p>';
+    case 'tempt':
       return '<div class="storyboard-temptation">'
-        + '<p class="storyboard-p">' + escapeHTMLStoryboard(node.label) + '</p>'
-        + '<p class="storyboard-quote storyboard-quote--villain">' + escapeHTMLStoryboard(node.quote) + '</p>'
+        + '<span class="storyboard-tempt-label">' + escapeHTMLStoryboard(node.label) + '</span>'
+        + '<span class="storyboard-tempt-quote">「' + escapeHTMLStoryboard(node.quote) + '」</span>'
         + '</div>';
     case 'final':
       return '<p class="storyboard-final">' + escapeHTMLStoryboard(node.text) + '</p>';
     default:
       return '';
   }
+}
+
+function renderStoryboardSeg(seg) {
+  if (!seg || typeof seg !== 'object') return '';
+  if (typeof seg.t === 'string') return escapeHTMLStoryboard(seg.t);
+  if (typeof seg.q === 'string') return '<span class="storyboard-iquote">「' + escapeHTMLStoryboard(seg.q) + '」</span>';
+  if (Number.isInteger(seg.step)) {
+    const noPad = String(seg.step).padStart(2, '0');
+    return '<a class="storyboard-step-link" href="#storyboard-step-' + noPad + '">' + escapeHTMLStoryboard(seg.label || '') + '</a>';
+  }
+  if (typeof seg.vil === 'string') return '<span class="storyboard-villain-name">' + escapeHTMLStoryboard(seg.vil) + '</span>';
+  return '';
 }
 
 function renderStoryboardStepBlock(step, isFirst) {

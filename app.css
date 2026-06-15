@@ -1340,3 +1340,15 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .storyboard-arc:not(.storyboard-arc--collapsed) .storyboard-arc-body { max-height: none; }
 .storyboard-arc-body > .storyboard-story { padding: 2px 22px 22px; }
 @media (prefers-reduced-motion: reduce) { .storyboard-arc-body, .storyboard-arc-chev { transition: none; } }
+
+/* ───────────── 故事文章版 (Vivi 6/14) — inline 引號/步驟/誘惑句，順文章流 ───────────── */
+/* 故事內 inline 步驟連結 — 文章內粗體可點 (覆蓋 batch1 的 pill 樣式) */
+.storyboard-step-link { background: none; padding: 0; border-radius: 0; font-weight: 700;
+  color: var(--gold-soft); text-decoration: none; border-bottom: 1.5px solid rgba(198,107,79,.45); white-space: nowrap; }
+.storyboard-step-link:hover, .storyboard-step-link:focus { background: none; color: var(--gold); border-bottom-color: var(--gold); }
+/* inline 引號 — 不進框，順著文章流 */
+.storyboard-iquote { color: var(--soil); }
+/* 誘惑句 — 一行 label + 引號 */
+.storyboard-temptation { margin: 6px 0; line-height: 1.9; }
+.storyboard-tempt-label { color: var(--ink-soft); }
+.storyboard-tempt-quote { color: var(--villain); font-weight: 700; }
