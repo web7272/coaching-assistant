@@ -206,7 +206,7 @@ export function summarizeNullReason(logsArray) {
 //   (來自 generate* 已 log 的 reasons map). signals + reasons 都 optional
 //   (向後相容, 沒給就走 generic 版).
 // ────────────────────────────────────────────────────────────────
-export function formatStudentReport({ studentId, signals, derived, generated, reasons, observerTotals }) {
+export function formatStudentReport({ studentId, signals, derived, generated, reasons, observerTotals, observerAccumulatedValues }) {
   const lines = [];
   lines.push(`═══════════════════════════════════════════════════════════════`);
   lines.push(`student: ${studentId}`);
@@ -220,6 +220,16 @@ export function formatStudentReport({ studentId, signals, derived, generated, re
     lines.push(`  turns observed:  ${observerTotals.turns_observed || 0}`);
     lines.push(`  judged (LLM):    ${observerTotals.judged_count || 0}`);
     lines.push(`  skip_counts:     crisis=${sc.crisis || 0} high_risk=${sc.high_risk || 0} app_noise=${sc.app_noise || 0} meta_complaint=${sc.meta_complaint || 0}`);
+    // 6/14 Patrick (主權行動 null 診斷) — observer 真抓的 values 計數 + 前 5
+    //   preview. J3 拿這個當材料寫 sovereign_action; 0 → 真沒值 (另議); >0 但
+    //   J3 仍 null → J3 驗證另有卡點. 鐵律 #2: values 本就是 canonical quality
+    //   term (去識別), 不是 raw 對話. 0 PII.
+    if (Array.isArray(observerAccumulatedValues)) {
+      const safe = observerAccumulatedValues.filter(v => typeof v === 'string' && v.length > 0);
+      const preview = safe.slice(0, 5).join(', ');
+      const moreStr = safe.length > 5 ? ` ... (+${safe.length - 5})` : '';
+      lines.push(`  accumulated values: ${safe.length} 筆${safe.length > 0 ? ` (前 5: ${preview}${moreStr})` : ''}`);
+    }
     if (observerTotals.budget_hit_count) {
       lines.push(`  soft-budget hit: ${observerTotals.budget_hit_count} session(s) (driver deferred turns)`);
     }
@@ -304,6 +314,13 @@ export async function backfillOneStudent(studentId, deps) {
   //   Production CLI / endpoint composeDeps 都會注入 runObserverPass.
   let derived;
   let observerTotals = null;
+  // 6/14 Patrick (主權行動全 null fix) — observer accumulated.values hoist 到
+  //   外層. 舊 J3 用 signals.surfacedValues (從舊 UPE active_context_session_summary
+  //   讀, 舊測試者全空) → J3 拿空材料寫不出個人化建議 → 49 步 sovereign_action 全 null.
+  //   observer pass 已抓到實值 (accumulated.values), 拿來餵 J3 才有東西寫.
+  //   Sentinel: null = observer 沒跑 (legacy fallback); array (含 []) = 跑了
+  //   (用 observer 的, 即使是 [] 也是真實狀態).
+  let observerAccumulatedValues = null;
   if (typeof runObserverPass === 'function') {
     let observerResult;
     try {
@@ -318,10 +335,13 @@ export async function backfillOneStudent(studentId, deps) {
         step:     observerResult.sc_journey_step,
       };
       observerTotals = observerResult.totals || null;
+      observerAccumulatedValues = Array.isArray(observerResult.accumulated?.values)
+        ? observerResult.accumulated.values : [];
       log(`[${studentId}] observer pass: ` +
           `sessions=${observerTotals?.sessions_count || 0}, ` +
           `turns=${observerTotals?.turns_observed || 0}, ` +
           `judged=${observerTotals?.judged_count || 0}, ` +
+          `values=${observerAccumulatedValues.length}, ` +
           `skips={c:${observerTotals?.skip_counts?.crisis || 0},` +
           `hr:${observerTotals?.skip_counts?.high_risk || 0},` +
           `n:${observerTotals?.skip_counts?.app_noise || 0},` +
@@ -365,11 +385,18 @@ export async function backfillOneStudent(studentId, deps) {
     const saLogs = [];
     const captureSa = (m) => { saLogs.push(m); log(m); };
     try {
+      // 6/14 Patrick (主權行動全 null fix) — observer 跑時用 observer accumulated.values
+      //   (學員真說過的 quality terms), 取代舊 UPE 空 signals.surfacedValues.
+      //   observer 沒跑 → 維持 legacy signals.surfacedValues (back-compat).
+      //   sentinel = null 才 fall back; [] 視為 observer 真實狀態 (空就空).
+      const surfacedValuesForJ3 = observerAccumulatedValues !== null
+        ? observerAccumulatedValues
+        : signals.surfacedValues;
       sovereignAction = await genSovereignAction({
         stepNo: n,
         ctx: {
           activeContext:  signals.activeContext,
-          surfacedValues: signals.surfacedValues,
+          surfacedValues: surfacedValuesForJ3,
           stepEvidence:   entries,
         },
         log: captureSa,  // ← caller-wins log
@@ -413,7 +440,7 @@ export async function backfillOneStudent(studentId, deps) {
 
   // Output OR commit.
   if (dryRun) {
-    report(formatStudentReport({ studentId, signals, derived, generated, reasons, observerTotals }));
+    report(formatStudentReport({ studentId, signals, derived, generated, reasons, observerTotals, observerAccumulatedValues }));
   } else {
     log(`[${studentId}] writing — sc_journey_step=${derived.step} stepsWithEvidence=${Object.keys(scStoryboard).filter(k => scStoryboard[k].state === 'filled').length}`);
     await writeBackfill(studentId, {

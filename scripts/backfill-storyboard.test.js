@@ -772,13 +772,13 @@ test('🛑 runBackfill: one student error caught, others continue', async () => 
 // ═════════════════════════════════════════════════════════
 
 // Canned observer pass output — 對齊 Stage B driver output shape.
-function cannedObserverPass(stepEvidence, totals = {}) {
+function cannedObserverPass(stepEvidence, totals = {}, accumulatedValues = []) {
   let sc_journey_step = null;
   for (let n = 7; n >= 1; n--) {
     if (stepEvidence[`step_${n}`]?.length > 0) { sc_journey_step = n; break; }
   }
   return async () => ({
-    accumulated: { values: [], owned: [], top1: null, steps_touched: [] },
+    accumulated: { values: accumulatedValues, owned: [], top1: null, steps_touched: [] },
     step_evidence: {
       step_1: [], step_2: [], step_3: [], step_4: [],
       step_5: [], step_6: [], step_7: [],
@@ -911,4 +911,104 @@ test('🛑 Stage D: runObserverPass 收到 { studentId, sessions } 簽名', asyn
   assert.equal(receivedArgs.studentId, 'A003');
   assert.equal(Array.isArray(receivedArgs.sessions), true);
   assert.equal(receivedArgs.sessions.length, SESSIONS_A003.length);
+});
+
+// ═════════════════════════════════════════════════════════
+// 🔴 6/14 Patrick — 主權行動全 null fix (observer accumulated.values 接給 J3)
+//
+// 線上實證:7 舊人 commit 後頁Y 每步 sovereign_action 全 null. 根因:J3 餵的
+// surfacedValues 來自舊 UPE active_context_session_summary (空) — observer
+// pass 真抓的 accumulated.values 沒接給 J3. 修法:observer 跑時 J3 ctx
+// surfacedValues 用 observerResult.accumulated.values; 沒跑 → legacy fallback.
+// ═════════════════════════════════════════════════════════
+
+test('🔴 6/14 fix: observer 跑 + 有 accumulated.values → J3 ctx.surfacedValues == observer 的值 (取代空 signals.surfacedValues)', async () => {
+  // observer 抓到 3 個 quality term; signals (來自 UPE) 空 — 對比 prod 場景.
+  const observerValues = ['誠實', '勇敢', '自由'];
+  const { deps, sovCalls } = makeDeps({
+    runObserverPass: cannedObserverPass(
+      { step_2: [{ type: 'longing_surface', quote: '想要被理解' }] },
+      {},
+      observerValues,   // ← 3rd arg: observer accumulated.values
+    ),
+    loadUpe: async () => ({ active_context_session_summary: {}, daily_takeaways: [] }),  // 空 UPE
+    dryRun: false,
+  });
+  await backfillOneStudent('A003', deps);
+  // J3 對 step_2 呼叫一次, ctx.surfacedValues 必須是 observer 的 3 個 term.
+  const sov2 = sovCalls.find(c => c.stepNo === 2);
+  assert.ok(sov2, 'J3 必須對 step_2 呼叫 (observer evidence filled)');
+  assert.deepEqual(sov2.ctx.surfacedValues, observerValues,
+    '🔴 6/14 fix: J3 ctx.surfacedValues 必須 == observer accumulated.values (不是空 signals)');
+});
+
+test('🔴 6/14 fix: observer 跑 + accumulated.values 為 [] (真空) → J3 拿 [] (不 fall back legacy)', async () => {
+  // 即使 observer accumulated.values 是 [], 也算 observer 跑了的真實狀態,
+  // 不該 fall back legacy. Patrick spec:「若 observer accumulated values 也 0,
+  // 那是真沒值」 — 給 J3 看 [] 才知道.
+  const { deps, sovCalls } = makeDeps({
+    runObserverPass: cannedObserverPass(
+      { step_2: [{ type: 'longing_surface', quote: '被理解' }] },
+      {},
+      [],   // ← observer accumulated.values 空
+    ),
+    loadUpe: async () => ({
+      active_context_session_summary: { career: { surfaced_values: ['legacy值1', 'legacy值2'], surfaced_examples: [] } },
+      daily_takeaways: [],
+    }),
+    dryRun: false,
+  });
+  await backfillOneStudent('A003', deps);
+  const sov2 = sovCalls.find(c => c.stepNo === 2);
+  assert.deepEqual(sov2.ctx.surfacedValues, [],
+    '🔴 6/14 fix: observer 跑時即使 accumulated.values=[], J3 仍拿 [] (不 fall back legacy UPE)');
+});
+
+test('🔴 6/14 fix: observer 沒跑 (無 runObserverPass dep) → J3 fall back signals.surfacedValues (legacy back-compat)', async () => {
+  // 沒提供 runObserverPass dep → 走 legacy derive 路徑. J3 ctx 用 signals (UPE) values.
+  const { deps, sovCalls } = makeDeps({
+    // 🔴 不傳 runObserverPass — legacy path.
+    dryRun: false,
+  });
+  await backfillOneStudent('A003', deps);
+  const sov2 = sovCalls.find(c => c.stepNo === 2);
+  assert.ok(sov2, 'legacy path J3 仍對 step_2 呼叫');
+  // signals.surfacedValues 來自 UPE_A003 fixture (career bucket): ['被理解', '自由']
+  assert.deepEqual(sov2.ctx.surfacedValues, ['被理解', '自由'],
+    'observer 沒跑 → J3 fall back signals.surfacedValues (legacy back-compat)');
+});
+
+test('🛑 6/14 dryRun 報告:observer pass section 含 accumulated values 計數 + 前 5 preview', async () => {
+  const observerValues = ['誠實', '勇敢', '自由', '被理解', '創造力', '尊重'];   // 6 個
+  const { deps, reports } = makeDeps({
+    runObserverPass: cannedObserverPass(
+      { step_2: [{ type: 'longing_surface', quote: '被理解' }] },
+      {},
+      observerValues,
+    ),
+    dryRun: true,
+  });
+  await backfillOneStudent('A003', deps);
+  const block = reports[0];
+  assert.match(block, /accumulated values:\s+6 筆/);
+  // 前 5 preview
+  assert.match(block, /前 5: 誠實, 勇敢, 自由, 被理解, 創造力/);
+  // 第 6 個顯示 +1
+  assert.match(block, /\.\.\.\s*\(\+1\)/);
+});
+
+test('🛑 6/14 dryRun 報告:observer accumulated values 0 筆 → 顯示 0 筆 不顯示 preview', async () => {
+  const { deps, reports } = makeDeps({
+    runObserverPass: cannedObserverPass(
+      { step_2: [{ type: 'longing_surface', quote: '被理解' }] },
+      {},
+      [],
+    ),
+    dryRun: true,
+  });
+  await backfillOneStudent('A003', deps);
+  const block = reports[0];
+  assert.match(block, /accumulated values:\s+0 筆/);
+  // 不該有 「前 5:」
+  assert.equal(/前 5:/.test(block), false);
 });
