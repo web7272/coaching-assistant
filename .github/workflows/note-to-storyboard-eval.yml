@@ -1,0 +1,119 @@
+# .github/workflows/note-to-storyboard-eval.yml
+# READ-ONLY eval — generate the 7-step storyboard FROM a student's Damon Notes
+# (synthesised) instead of per-turn observer evidence, to compare quality.
+#
+# Trigger: workflow_dispatch (manual button on default branch). 0 DB writes.
+#
+# 🔴 A006-SI safety (defence-in-depth):
+#   1. Script PRE-SCRUBS every note sentence (denylist + forbidden) before the
+#      LLM sees it, and POST-GATES every generated line (J2/J3 gates).
+#   2. Script NEVER writes raw note_text to the report — only gated output + meta.
+#   3. This workflow runs a final SI leak-guard on the report file and DELETES it
+#      before rendering if any SI substring slips through (same 14-pattern set as
+#      SC_STORYBOARD_HIGH_RISK_PATTERNS).
+#   4. Secrets stay in CI (GitHub auto-masks DATABASE_URL / ANTHROPIC_API_KEY).
+
+name: note-to-storyboard-eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      student:
+        description: '單一學員代號 (預設 A006).'
+        required: false
+        type: string
+        default: 'A006'
+      model:
+        description: '綜合用模型.'
+        required: false
+        type: string
+        default: 'claude-sonnet-4-6'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: note-to-storyboard-eval
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (latest main)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --loglevel=warn
+
+      - name: Syntax smoke test
+        run: |
+          node --check scripts/note-to-storyboard-eval.js
+          node --check lib/api/sc-storyboard-gen.js
+          node --check lib/api/student-note-safe.js
+
+      - name: Run note→storyboard eval (read-only)
+        id: eval
+        env:
+          DATABASE_URL:      ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STUDENT:           ${{ inputs.student }}
+          MODEL:             ${{ inputs.model }}
+        run: |
+          set +e
+          if [ -z "$DATABASE_URL" ];      then echo "::error::DATABASE_URL secret not set."; exit 1; fi
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "::error::ANTHROPIC_API_KEY secret not set."; exit 1; fi
+          CLEAN_SID=$(echo "$STUDENT" | tr -cd '[:alnum:]_')
+          CLEAN_MODEL=$(echo "$MODEL" | tr -cd '[:alnum:].-')
+          echo "[workflow] note→storyboard eval student=$CLEAN_SID model=$CLEAN_MODEL"
+          node scripts/note-to-storyboard-eval.js \
+            --student="$CLEAN_SID" \
+            --model="$CLEAN_MODEL" \
+            --report=report.md
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: 🔴 Defence-in-depth — verify report.md 0 SI leak (14 patterns)
+        if: always()
+        run: |
+          set -e
+          if [ ! -f report.md ]; then echo "::warning::no report.md (eval may have failed)"; exit 0; fi
+          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念|傷害自己|傷害我自己|傷害了自己|自我傷害' report.md; then
+            echo "::error::🔴🔴 report.md contains SI substring — defence-in-depth FAILED. File DELETED before render."
+            rm -f report.md
+            exit 1
+          fi
+          echo "✓ defence-in-depth: 0 SI substring in report.md"
+
+      - name: 🔵 Render report.md into $GITHUB_STEP_SUMMARY
+        if: always()
+        run: |
+          if [ -f report.md ]; then
+            cat report.md >> "$GITHUB_STEP_SUMMARY"
+            echo "✓ report.md rendered into Step Summary"
+          else
+            echo "::warning::no report.md to render (leak-guard may have deleted it)"
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: note-to-storyboard-eval-${{ github.run_id }}
+          path: report.md
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Fail workflow if eval errored
+        if: always()
+        run: |
+          EXIT="${{ steps.eval.outputs.exit_code }}"
+          if [ -z "$EXIT" ]; then EXIT="1"; fi
+          if [ "$EXIT" != "0" ]; then echo "::error::eval exit code: $EXIT"; exit 1; fi
+          echo "🟢 eval green — read STEP_SUMMARY"
