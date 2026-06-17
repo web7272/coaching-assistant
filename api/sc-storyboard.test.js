@@ -198,14 +198,14 @@ test('🛑 PR-J1 contract: steps[] = exactly 7, fixed order + locked identity', 
   }
 });
 
-test('🛑 PR-J1 contract: each step = exactly {no, name_zh, name_en, state, brain_state, sovereign_action}', async () => {
+test('🛑 contract: each step = exactly {no, name_zh, name_en, state, brain_state, resistance, benevolent_intent, sovereign_action}', async () => {
   _setStudentSessionReader(STUDENT_SESSION_FOR('A001'));
   _setSqlClient(makeMockSql(() => [{ sc_journey_step: null, sc_journey_evidence: null }]));
   const res = mockRes();
   await handler(mockReq(), res);
   for (const step of res.body.steps) {
     const keys = Object.keys(step).sort();
-    assert.deepEqual(keys, ['brain_state', 'name_en', 'name_zh', 'no', 'sovereign_action', 'state'],
+    assert.deepEqual(keys, ['benevolent_intent', 'brain_state', 'name_en', 'name_zh', 'no', 'resistance', 'sovereign_action', 'state'],
       'per-step keys locked');
   }
 });
@@ -472,6 +472,48 @@ test('🛑 PR-J2 endpoint: empty step → brain_state null even if sc_storyboard
     '🔴 ship-gate: empty step → brain_state null regardless of storyboard contents');
 });
 
+test('🛑 S3 endpoint: from-notes step (state:filled marker) surfaces 大腦現狀/可能阻力/良善動機', () => {
+  const out = buildScStoryboardSteps(
+    null, // no observer evidence
+    {
+      step_1: {
+        state: 'filled',
+        brain_state: { description: '你帶著一個方程式。', quote: null },
+        resistance: '有一個聲音說：沒人需要我我就什麼都不是。',
+        benevolent_intent: '它保護你不必直視那個空。',
+        sovereign_action: null,
+      },
+      step_6: {
+        state: 'filled',
+        brain_state: { description: '對方的選擇不是你的計分板。', quote: null },
+        resistance: null, benevolent_intent: null,
+        sovereign_action: '拿回那個開關。我說了算。',
+      },
+    },
+  );
+  // step_1 filled via state marker (no evidence) → early triple surfaces
+  assert.equal(out[0].state, 'filled');
+  assert.equal(out[0].brain_state.description, '你帶著一個方程式。');
+  assert.equal(out[0].resistance, '有一個聲音說：沒人需要我我就什麼都不是。');
+  assert.equal(out[0].benevolent_intent, '它保護你不必直視那個空。');
+  assert.equal(out[0].sovereign_action, null);
+  // step_6 climax → sovereign surfaces, resistance null
+  assert.equal(out[5].sovereign_action, '拿回那個開關。我說了算。');
+  assert.equal(out[5].resistance, null);
+  // step_2 (no node) → empty
+  assert.equal(out[1].state, 'empty');
+  assert.equal(out[1].resistance, null);
+});
+
+test('🛑 S3 ship-gate: dirty brain_state WITHOUT state marker AND no evidence → still empty', () => {
+  const out = buildScStoryboardSteps(null, {
+    step_3: { brain_state: { description: 'leaked', quote: 'x' }, resistance: 'leaked-r' },
+  });
+  assert.equal(out[2].state, 'empty');
+  assert.equal(out[2].brain_state, null);
+  assert.equal(out[2].resistance, null, 'resistance also gated by filled');
+});
+
 test('🛑 PR-J2 endpoint: brain_state contract = {description, quote} ONLY', async () => {
   // PR-J3 will add sovereign_action — but brain_state's own shape stays
   // strict {description, quote}. Reject any extra fields polluting the column.
@@ -693,5 +735,5 @@ test('🛑 PR-J3 endpoint: contract still strict — brain_state + sovereign_act
   await handler(mockReq(), res);
   const step = res.body.steps[3];
   assert.deepEqual(Object.keys(step).sort(),
-    ['brain_state', 'name_en', 'name_zh', 'no', 'sovereign_action', 'state']);
+    ['benevolent_intent', 'brain_state', 'name_en', 'name_zh', 'no', 'resistance', 'sovereign_action', 'state']);
 });

@@ -75,31 +75,43 @@ export function buildScStoryboardSteps(evidence, storyboard = null) {
   return SC_STORYBOARD_STEPS.map((meta, idx) => {
     const stepKey = `step_${idx + 1}`;
     const arr = Array.isArray(ev[stepKey]) ? ev[stepKey] : [];
-    const state = arr.length > 0 ? 'filled' : 'empty';
-    // PR-J2 wire: pull pre-computed brain_state from sc_storyboard.
-    // PR-J3 wire: pull pre-computed sovereign_action from sc_storyboard.
+    const stepNode = sb[stepKey];
+    // 6/15 S3 — filled trigger: observer evidence OR an INTENTIONAL
+    //   sc_storyboard[step_N].state === 'filled' marker (written by both the
+    //   observer backfill and the from-notes backfill). Dirty/stale storyboard
+    //   data WITHOUT that marker stays empty → ship-gate preserved (a polluted
+    //   brain_state alone never surfaces).
+    const sbFilled = !!(stepNode && typeof stepNode === 'object' && stepNode.state === 'filled');
+    const state = (arr.length > 0 || sbFilled) ? 'filled' : 'empty';
+    // PR-J2/J3 + 6/15 S3 — pull pre-computed content from sc_storyboard.
     // Only surface for filled steps (empty step → null even if column dirty).
-    let brain_state      = null;
-    let sovereign_action = null;
-    if (state === 'filled') {
-      const stepNode = sb[stepKey];
-      if (stepNode && typeof stepNode === 'object') {
-        // J2: brain_state strict shape {description, quote}.
-        if (stepNode.brain_state && typeof stepNode.brain_state === 'object'
-            && typeof stepNode.brain_state.description === 'string'
-            && stepNode.brain_state.description.length > 0) {
-          brain_state = {
-            description: stepNode.brain_state.description,
-            quote:       (typeof stepNode.brain_state.quote === 'string'
-                          && stepNode.brain_state.quote.length > 0)
-                          ? stepNode.brain_state.quote : null,
-          };
-        }
-        // J3: sovereign_action — plain string. Null when not generated yet.
-        if (typeof stepNode.sovereign_action === 'string'
-            && stepNode.sovereign_action.length > 0) {
-          sovereign_action = stepNode.sovereign_action;
-        }
+    let brain_state       = null;
+    let sovereign_action  = null;
+    let resistance        = null;  // 步1–5 可能阻力 (from-notes)
+    let benevolent_intent = null;  // 步1–5 良善動機 (from-notes)
+    if (state === 'filled' && stepNode && typeof stepNode === 'object') {
+      // J2: brain_state strict shape {description, quote}.
+      if (stepNode.brain_state && typeof stepNode.brain_state === 'object'
+          && typeof stepNode.brain_state.description === 'string'
+          && stepNode.brain_state.description.length > 0) {
+        brain_state = {
+          description: stepNode.brain_state.description,
+          quote:       (typeof stepNode.brain_state.quote === 'string'
+                        && stepNode.brain_state.quote.length > 0)
+                        ? stepNode.brain_state.quote : null,
+        };
+      }
+      // J3: sovereign_action — plain string. Null when not generated yet.
+      if (typeof stepNode.sovereign_action === 'string'
+          && stepNode.sovereign_action.length > 0) {
+        sovereign_action = stepNode.sovereign_action;
+      }
+      // 6/15 S3 — 可能阻力 / 良善動機 (note-based 步1–5). Plain strings.
+      if (typeof stepNode.resistance === 'string' && stepNode.resistance.length > 0) {
+        resistance = stepNode.resistance;
+      }
+      if (typeof stepNode.benevolent_intent === 'string' && stepNode.benevolent_intent.length > 0) {
+        benevolent_intent = stepNode.benevolent_intent;
       }
     }
     return {
@@ -108,6 +120,8 @@ export function buildScStoryboardSteps(evidence, storyboard = null) {
       name_en: meta.name_en,
       state,
       brain_state,
+      resistance,
+      benevolent_intent,
       sovereign_action,
     };
   });
