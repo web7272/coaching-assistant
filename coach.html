@@ -118,46 +118,50 @@
         </div>
       </details>
 
-      <h2 class="coach-h2" style="margin-top:20px;">旅程縮圖（21 天）</h2>
-      <div id="coach-journey-grid" class="coach-mini-grid"></div>
-      <div id="coach-grad-cell" style="max-width:480px;margin-top:6px;"></div>
+      <!-- ═══ 6/18 Vivi — 教練後台分兩組: 前端視野 / 教練後端專用 ═══ -->
 
-      <!-- 6/12 Vivi — 教練看「這位學員的 21 天旅程」 (頁Y storyboard).
-           走 /api/sc-storyboard?audience=coach&studentId= (guardCoachOr401);
-           render 走 lib/student/storyboard-render.js 同份 module (學員端故事
-           的單一來源, Patrick: 「絕不可開第 3 份會分歧的故事複製」). 教練端
-           唯讀: 故事直接全展開 + 7 步塊全展開, 不必複製互動 handler. -->
-      <h2 class="coach-h2" style="margin-top:28px;">這位學員的 21 天旅程</h2>
-      <div id="coach-storyboard" class="storyboard-body" style="margin-top:8px;"></div>
+      <!-- ────── 前端視野 (學員實際看得到的) ────── -->
+      <p class="coach-group-label coach-group-label--front">前端視野<span class="coach-group-sub">學員實際看到的</span></p>
 
-      <!-- P5 (PR-4c-green): 週報 retired (spec 09 §10). 5 Phase Reports (spec 09
-           §5.5 / §8) — coach sees un-sanitized 突破彙整 via audience=coach.
-           Vivi 5/25 上架前：教學內容未定 → 標題 + 容器加 hidden、可逆地藏起來.
-           恢復＝拿掉這兩個 hidden 屬性. -->
-      <h2 class="coach-h2" style="margin-top:28px;" hidden>你的寶藏（5 個 Phase Report · 教練看完整版）</h2>
-      <div id="coach-phase-reports" style="display:flex;flex-direction:column;gap:10px;" hidden></div>
+      <!-- B 這位學員的 21 天旅程 — 可收起 (6/18 Vivi).
+           render 走 lib/student/storyboard-render.js 同份 module (單一來源). -->
+      <details class="coach-collapse" open>
+        <summary class="coach-h2 coach-collapse-summary">這位學員的 21 天旅程</summary>
+        <div id="coach-storyboard" class="storyboard-body" style="margin-top:8px;"></div>
+      </details>
 
-      <h2 class="coach-h2" style="margin-top:28px;">展開某天筆記</h2>
-      <div id="coach-day-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
-      <div id="coach-day-note" class="coach-pre" style="min-height:80px;">點上方某一天看當日筆記。</div>
-
-      <!-- 5/26 Vivi — 「前端學員筆記」 獨立 section、跟筆記區/transcript 區同階.
-           顯示 sessions.notebook_page (學員前端那張暖卡), lazy-fetch per-day + cache.
-           studentCard 由 /api/note?audience=coach 在 dd43a8d 起回傳. -->
-      <h2 class="coach-h2" style="margin-top:28px;">前端學員筆記（學員實際收到的卡）</h2>
+      <!-- D 前端學員筆記（學員實際收到的卡）— sessions.notebook_page 那張暖卡. -->
+      <h2 class="coach-h2" style="margin-top:24px;">前端學員筆記（學員實際收到的卡）</h2>
       <div id="coach-card-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
       <button type="button" id="coach-card-copy" class="paper-btn"
               style="padding:6px 12px;font-size:12px;letter-spacing:1px;margin-bottom:10px;display:none;">📋 複製</button>
       <div id="coach-card-body" class="coach-pre" style="min-height:80px;">點上方某一天看學員那天收到的卡。</div>
 
-      <!-- Vivi 5/25 C3 修正 — 完整對話自己有一排天數按鈕、直接點任一天看逐字、
-           不依賴上面的「展開某天筆記」. 鐵律 #2 上鎖、lazy-fetch /api/admin/transcript. -->
+      <!-- ────── 教練後端專用 (只有教練看得到) ────── -->
+      <p class="coach-group-label coach-group-label--coach" style="margin-top:36px;">教練後端專用<span class="coach-group-sub">只有教練看得到</span></p>
+
+      <!-- A 旅程縮圖（21 天）-->
+      <h2 class="coach-h2" style="margin-top:8px;">旅程縮圖（21 天）</h2>
+      <div id="coach-journey-grid" class="coach-mini-grid"></div>
+      <div id="coach-grad-cell" style="max-width:480px;margin-top:6px;"></div>
+
+      <!-- Phase Reports (教學內容未定 → hidden, 可逆). -->
+      <h2 class="coach-h2" style="margin-top:28px;" hidden>你的寶藏（5 個 Phase Report · 教練看完整版）</h2>
+      <div id="coach-phase-reports" style="display:flex;flex-direction:column;gap:10px;" hidden></div>
+
+      <!-- C 展開某天筆記 (damon_notes.note_text 完整教練版) -->
+      <h2 class="coach-h2" style="margin-top:28px;">展開某天筆記</h2>
+      <div id="coach-day-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+      <div id="coach-day-note" class="coach-pre" style="min-height:80px;">點上方某一天看當日筆記。</div>
+
+      <!-- E 完整對話（教練專用）— 鐵律 #2 上鎖、lazy-fetch /api/admin/transcript. -->
       <h2 class="coach-h2" style="margin-top:28px;">完整對話（教練專用）</h2>
       <div id="coach-transcript-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
       <button type="button" id="coach-transcript-copy" class="paper-btn"
               style="padding:6px 12px;font-size:12px;letter-spacing:1px;margin-bottom:10px;display:none;">📋 複製對話</button>
       <div id="coach-transcript-body" class="coach-transcript-box" style="min-height:80px;">點上方某一天看完整逐字對話。</div>
 
+      <!-- F 結業（若已生成）-->
       <h2 class="coach-h2" style="margin-top:28px;">結業（若已生成）</h2>
       <div id="coach-graduation" class="coach-pre" style="min-height:60px;"></div>
     </div>

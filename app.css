@@ -1374,3 +1374,14 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .storyboard-temptation { margin: 6px 0; line-height: 1.9; }
 .storyboard-tempt-label { color: var(--ink-soft); }
 .storyboard-tempt-quote { color: var(--villain); font-weight: 700; }
+
+/* 6/18 Vivi — 教練後台分組標籤 + 21天旅程可收起 */
+.coach-group-label{font-family:var(--font-sans);font-size:13px;font-weight:600;letter-spacing:.1em;padding:7px 14px;border-radius:8px;display:inline-block;margin:24px 0 6px}
+.coach-group-label--front{background:rgba(95,138,99,.13);color:#3f6a44}
+.coach-group-label--coach{background:rgba(154,106,85,.13);color:#8a4a2f}
+.coach-group-label .coach-group-sub{font-weight:400;font-size:11px;letter-spacing:0;margin-left:8px;opacity:.72}
+.coach-collapse{margin-top:8px}
+.coach-collapse summary.coach-collapse-summary{cursor:pointer;list-style:none}
+.coach-collapse summary.coach-collapse-summary::-webkit-details-marker{display:none}
+.coach-collapse summary.coach-collapse-summary::after{content:'▾';margin-left:8px;font-size:13px;color:var(--text-faint)}
+.coach-collapse:not([open]) summary.coach-collapse-summary::after{content:'▸'}
