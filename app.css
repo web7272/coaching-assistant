@@ -1385,3 +1385,13 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .coach-collapse summary.coach-collapse-summary::-webkit-details-marker{display:none}
 .coach-collapse summary.coach-collapse-summary::after{content:'▾';margin-left:8px;font-size:13px;color:var(--text-faint)}
 .coach-collapse:not([open]) summary.coach-collapse-summary::after{content:'▸'}
+
+/* 6/18 Vivi — 教練 list cohort tabs */
+.coach-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--card-line);padding-bottom:0}
+.coach-tab{font-family:var(--font-sans);font-size:12.5px;padding:7px 16px;border-radius:8px 8px 0 0;border:1px solid var(--card-line);border-bottom:none;background:rgba(0,0,0,.02);color:var(--text-secondary);cursor:pointer;transition:background .15s,color .15s;margin-bottom:-1px}
+.coach-tab:hover{background:rgba(198,107,79,.08)}
+.coach-tab--active{background:var(--brand,#E08A3C);color:#fff;border-color:var(--brand,#E08A3C);font-weight:600}
+/* 6/18 Vivi — 各 section 標題群組底色 + 分隔線 */
+.coach-h2--front{background:rgba(95,138,99,.13);color:#3f6a44;padding:6px 12px;border-radius:6px;display:inline-block}
+.coach-h2--coach{background:rgba(154,106,85,.13);color:#8a4a2f;padding:6px 12px;border-radius:6px;display:inline-block}
+.coach-divider{border:0;border-top:1px solid var(--card-line);margin:28px 0}

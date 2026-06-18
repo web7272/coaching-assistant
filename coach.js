@@ -108,33 +108,43 @@ function _matchesCoachFilter(s, filter, now) {
   }
 }
 
+// 6/18 Vivi — cohort (與 op filter 正交). coach.js classic-script 內聯同份.
+function _matchesCoachCohort(s, cohort) {
+  if (!s || typeof s !== 'object') return false;
+  if (!cohort || cohort === 'all') return true;
+  const beta = s.is_beta === true;
+  const plan = typeof s.plan === 'string' ? s.plan : '';
+  switch (cohort) {
+    case 'beta':       return beta;
+    case 'day1_trial': return plan === 'trial';
+    case 'first_paid': return (plan === 'plan_a' || plan === 'plan_b') && !beta;
+    default:           return true;
+  }
+}
+
 // Module-level cache: fetched students + last filter choice.
 let _coachStudentsCache = null;
-let _coachFilterChoice  = 'all';
+let _coachCohort = 'all';
+let _coachOp     = 'all';
 
-const COACH_FILTER_LABELS = {
-  all:       '全部',
-  beta:      '封測者',
-  blocked:   '已停用',
-  active:    '進行中',
-  finished:  '已完成 Day 21',
-  at_risk:   '14+ 天沒動',
-};
+const COACH_COHORT_LABELS = { all: '全部', beta: '封測', day1_trial: 'Day1 trial', first_paid: '第一批付費' };
+const COACH_OP_LABELS     = { all: '全部狀態', active: '進行中', finished: '已完成 Day 21', at_risk: '14+ 天沒動', blocked: '已停用' };
 
-function _renderCoachList(students, filter) {
+function _renderCoachList(students, cohort, op) {
   const list = document.getElementById('coach-students-list');
   const countEl = document.getElementById('coach-list-count');
   const titleEl = document.getElementById('coach-list-title');
   if (!list) return;
   list.innerHTML = '';
-  const filtered = students.filter(s => _matchesCoachFilter(s, filter));
+  const filtered = students.filter(s => _matchesCoachCohort(s, cohort) && _matchesCoachFilter(s, op));
+  const _noFilter = (!cohort || cohort === 'all') && (!op || op === 'all');
   if (countEl) {
-    countEl.textContent = filter === 'all'
+    countEl.textContent = _noFilter
       ? `${filtered.length} 位`
       : `${filtered.length} / ${students.length} 位`;
   }
   if (titleEl) {
-    titleEl.textContent = `學員 · ${COACH_FILTER_LABELS[filter] || '全部'}`;
+    titleEl.textContent = `學員 · ${COACH_COHORT_LABELS[cohort] || '全部'}${op && op !== 'all' ? ' · ' + (COACH_OP_LABELS[op] || '') : ''}`;
   }
   if (filtered.length === 0) {
     list.innerHTML = `<p class="muted" style="padding:14px;">這個分類沒有學員。</p>`;
@@ -199,16 +209,27 @@ async function renderList() {
     list.innerHTML = `<p class="muted" style="padding:14px;">目前沒有學員。</p>`;
     return;
   }
-  // 6/3 Patrick — bind filter dropdown once. onchange 不 re-fetch, 用 cache.
-  const filterSel = document.getElementById('coach-filter');
-  if (filterSel) {
-    filterSel.value = _coachFilterChoice;
-    filterSel.onchange = () => {
-      _coachFilterChoice = filterSel.value || 'all';
-      if (_coachStudentsCache) _renderCoachList(_coachStudentsCache, _coachFilterChoice);
+  // 6/18 Vivi — cohort tabs + op dropdown (2D). 不 re-fetch, 用 cache.
+  const tabWrap = document.getElementById('coach-cohort-tabs');
+  if (tabWrap) {
+    tabWrap.querySelectorAll('.coach-tab').forEach((btn) => {
+      btn.classList.toggle('coach-tab--active', (btn.getAttribute('data-cohort') || 'all') === _coachCohort);
+      btn.onclick = () => {
+        _coachCohort = btn.getAttribute('data-cohort') || 'all';
+        tabWrap.querySelectorAll('.coach-tab').forEach((b) => b.classList.toggle('coach-tab--active', b === btn));
+        if (_coachStudentsCache) _renderCoachList(_coachStudentsCache, _coachCohort, _coachOp);
+      };
+    });
+  }
+  const opSel = document.getElementById('coach-op-filter');
+  if (opSel) {
+    opSel.value = _coachOp;
+    opSel.onchange = () => {
+      _coachOp = opSel.value || 'all';
+      if (_coachStudentsCache) _renderCoachList(_coachStudentsCache, _coachCohort, _coachOp);
     };
   }
-  _renderCoachList(students, _coachFilterChoice);
+  _renderCoachList(students, _coachCohort, _coachOp);
 }
 
 // ─── student detail view ───────────────────────────────────────────
