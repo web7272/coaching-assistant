@@ -23,6 +23,7 @@ import {
   generateSovereignAction,
 } from '../lib/api/sc-storyboard-gen.js';
 import { callAnthropicWithRetry } from '../lib/api/anthropic-retry.js';
+import { regenStoryboardFromNotes } from '../lib/api/note-to-storyboard-gen.js';
 import {
   appendDailyTakeaway, setLastSessionDaySummary, markExportEmailed,
   getUserProfile, setCrisisStateCarryForward,
@@ -937,6 +938,32 @@ export default async function handler(req, res) {
       }));
       // Synthesize empty shape so downstream null-guards work naturally.
       noteResult = { fullNote: null, notebookPage: null };
+    }
+
+    // ⭐ S6 (6/15) — note-based sc_storyboard 全量重生 (flag-gated, best-effort).
+    //   今天的 damon_note 已寫 (generateDamonNote 上一步), 所以重生含當天。
+    //   只覆寫 sc_storyboard; sc_journey_step / sc_journey_evidence 不動。
+    //   任何失敗 → 保留舊 storyboard、絕不 block finalize (regenStoryboardFromNotes
+    //   本身 never throws; 外層再包一層 try/catch 防呆)。
+    //   flag NOTE_STORYBOARD_ENABLED 預設 off → 完全沿用既有 J2/J3 增量, 0 行為改變。
+    if (process.env.NOTE_STORYBOARD_ENABLED === 'true') {
+      const _tNS = Date.now();
+      try {
+        const _stepRows = await sql`SELECT sc_journey_step FROM students WHERE student_id = ${existing.student_id} LIMIT 1`;
+        const _curStep = Number.isInteger(_stepRows?.[0]?.sc_journey_step) ? _stepRows[0].sc_journey_step : 7;
+        const _nsRes = await regenStoryboardFromNotes({
+          studentId: existing.student_id,
+          currentStep: _curStep,
+          pullNotes: (id) => sql`SELECT week, day, note_text, is_week_summary FROM damon_notes WHERE student_id = ${id} ORDER BY week, day, is_week_summary`,
+          writeStoryboard: (id, sb) => sql`UPDATE students SET sc_storyboard = ${JSON.stringify(sb)}::jsonb WHERE student_id = ${id}`,
+          anthropic: getAnthropic(),
+          callAnthropicWithRetry,
+          log: (m) => console.warn(m),
+        });
+        console.warn('[finalize-day][note-storyboard]', JSON.stringify({ wrote: _nsRes.wrote, filled: _nsRes.filled ?? 0, ms: Date.now() - _tNS }));
+      } catch (nsErr) {
+        console.warn('[finalize-day][note-storyboard-failed]', nsErr?.message || nsErr);
+      }
     }
 
     // PR-4c-green 5/24 cleanup — 週報退場、產品改 5 phase reports。
