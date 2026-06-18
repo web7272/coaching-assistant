@@ -1630,9 +1630,22 @@ function renderStoryboardStepBlock(step, isFirst) {
         + '<p class="storyboard-section-text">' + escapeHTMLStoryboard(step.brain_state.description) + '</p>'
         + quoteHTML + '</section>');
     }
+    // 6/15 S4 — 步1–5: 可能阻力 + 良善動機.
+    if (typeof step.resistance === 'string' && step.resistance.length > 0) {
+      parts.push('<section class="storyboard-section storyboard-section--resistance">'
+        + '<h5 class="storyboard-section-title">可能阻力</h5>'
+        + '<p class="storyboard-section-text">' + escapeHTMLStoryboard(step.resistance) + '</p>'
+        + '</section>');
+    }
+    if (typeof step.benevolent_intent === 'string' && step.benevolent_intent.length > 0) {
+      parts.push('<section class="storyboard-section storyboard-section--intent">'
+        + '<h5 class="storyboard-section-title">良善動機</h5>'
+        + '<p class="storyboard-section-text">' + escapeHTMLStoryboard(step.benevolent_intent) + '</p>'
+        + '</section>');
+    }
     if (hasSa) {
       parts.push('<section class="storyboard-section storyboard-section--sovereign">'
-        + '<h5 class="storyboard-section-title">主權建議</h5>'
+        + '<h5 class="storyboard-section-title">主權宣告</h5>'
         + '<p class="storyboard-section-text">' + escapeHTMLStoryboard(step.sovereign_action) + '</p>'
         + '</section>');
     }

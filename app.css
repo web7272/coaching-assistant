@@ -1085,6 +1085,11 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   line-height: 1.7;
   color: var(--text-primary);
 }
+/* 6/15 S4 — 三段/兩段 section title 色彩區分 (可能阻力 / 良善動機 / 主權宣告). */
+.storyboard-section--resistance .storyboard-section-title { color: #9a6a55; }
+.storyboard-section--intent .storyboard-section-title { color: #5f8a63; }
+.storyboard-section--sovereign .storyboard-section-title { color: var(--brand, #E08A3C); }
+
 .storyboard-quote-callout {
   margin: 10px 0 0;
   padding: 8px 14px;
