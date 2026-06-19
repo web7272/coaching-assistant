@@ -93,6 +93,7 @@ function _matchesCoachFilter(s, filter, now) {
     // 6/3 Vivi — active 重定義成「進行中 = !blocked && 至少完成 Day 1 && 沒 finish」.
     // 排除「點了 Day 1 但沒完成」(days_completed=0) 的人.
     case 'active':   return !blocked && daysDone >= 1 && day < _COACH_FINISHED_DAY;
+    case 'in_day1':  return !blocked && daysDone === 0;   // 6/19 Vivi — 正在 Day 1 (註冊未完成 Day 1)
     case 'finished': return day >= _COACH_FINISHED_DAY;
     case 'at_risk': {
       if (blocked || day >= _COACH_FINISHED_DAY) return false;
@@ -128,7 +129,7 @@ let _coachCohort = 'all';
 let _coachOp     = 'all';
 
 const COACH_COHORT_LABELS = { all: '全部', beta: '封測', day1_trial: 'Day1 trial', first_paid: '第一批付費' };
-const COACH_OP_LABELS     = { all: '全部狀態', active: '進行中', finished: '已完成 Day 21', at_risk: '14+ 天沒動', blocked: '已停用' };
+const COACH_OP_LABELS     = { all: '全部狀態', active: '進行中', in_day1: '正在 Day 1', finished: '已完成 Day 21', at_risk: '14+ 天沒動', blocked: '已停用' };
 
 function _renderCoachList(students, cohort, op) {
   const list = document.getElementById('coach-students-list');
@@ -592,11 +593,13 @@ async function renderStudent(sid) {
     };
   }
 
-  // 建自己的天數按鈕（跟筆記 picker 同樣只列 revealed / active-filled 的天）.
+  // 完整對話 picker — Vivi 6/19: 也列「進行中當天」(active-empty), 對話不需完成即可看
+  // (教練要看路人卡在 Day 1 哪裡; sessions.day 在建 session 時就寫好 → 訊息即時可撈).
+  // 只跳 future (那天根本沒對話). 筆記/卡 picker 維持不列 active-empty.
   transcriptPicker.innerHTML = '';
   transcriptBody.textContent = TRANSCRIPT_PLACEHOLDER;
   for (const d of days) {
-    if (d.state === 'future' || d.state === 'active-empty') continue;
+    if (d.state === 'future') continue;
     const tbtn = document.createElement('button');
     tbtn.className = 'paper-btn';
     tbtn.style.cssText = 'padding:6px 12px;font-size:12px;letter-spacing:1px;';
