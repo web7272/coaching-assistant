@@ -2349,6 +2349,28 @@ test('🛑 6/8 PR-d §2.1: 中文化對照表 verbatim in sharp seeingSection', 
   assert.match(fn, /你就是源頭 \/ 你內在的資源[\s\S]{0,80}Reclaim Source/);
 });
 
+test('🛑 Vivi 6/19: 後端三類觀察 (限制性信念 / away-from / 外部認可) 織進 sharp seeingSection (條件式、不獵巫;crisis 段不加)', () => {
+  const fn = _notebookFnBody();
+  // 三類觀察 — 條件式、後端有才點。
+  assert.match(fn, /後端三類觀察 → 前端犀利段必點/);
+  assert.match(fn, /限制性信念 \/ 隱性信念/);              // (1)
+  assert.match(fn, /Away From 語言結構/);                   // (2)
+  assert.match(fn, /從遠離到迎向/);
+  assert.match(fn, /不看價錢/);
+  assert.match(fn, /翻成 Toward/);
+  assert.match(fn, /追求的外部認可/);                       // (3)
+  assert.match(fn, /首席驗證官/);
+  assert.match(fn, /絕不寫 External Locus \/ Chief Validation Officer/);
+  // 不獵巫:沒捕捉到就不寫。
+  assert.match(fn, /三類都「後端有才點」:沒捕捉到就不寫、不硬湊、不獵巫/);
+  // crisis 溫和段不得織入這段犀利點破 (安全)。
+  const gentleStart = fn.indexOf('✦ 我看見的(一個假設)');
+  const sharpStart  = fn.indexOf('✦ 我看見的(一個假設)', gentleStart + 1);
+  const gentleSeg   = fn.slice(gentleStart, sharpStart);
+  assert.equal(/後端三類觀察 → 前端犀利段必點/.test(gentleSeg), false,
+    'crisis(溫和)段不得織入三類犀利點破');
+});
+
 test('🛑 6/8 PR-d §2.1: 不准寫英文體系名 — 每對配對都帶 explicit「不准寫 X」 禁令', () => {
   const fn = _notebookFnBody();
   // Each English brand name must be explicitly forbidden inline with its
