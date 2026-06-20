@@ -1,0 +1,136 @@
+# .github/workflows/regen-notebook-page.yml
+# Vivi 6/19 — 重生「前端學員教練卡」(notebook_page) 套用新 prompt (三類觀察)。
+#
+# ⚠️ 只重生前端卡:沿用 sessions.damon_note 既有後端筆記,只重跑 generateNotebookPage
+#    → 覆寫 sessions.notebook_page。後端 Damon Note 0 動。
+#
+# Trigger: workflow_dispatch.
+#   commit=false (預設) → dry-run:只列會重生哪些 session (meta:day / wasCrisis / 筆記長度)。
+#   commit=true          → 覆寫 prod notebook_page。
+#
+# 🔴 安全:
+#   1. wasCrisis 用 sessionTouchedCrisis(session_state) → crisis 場仍走溫和卡。
+#   2. 報告只含 meta (day / wasCrisis / 長度), 0 筆記 / 0 卡內容 (鐵律 #2)。
+#   3. 報告檔過 14-pattern SI leak-guard + role-marker guard;命中 → 刪檔 + fail (backstop)。
+#   4. Secrets 留 CI。
+#   5. ⚠️ 須先部署「三類觀察」prompt patch,本 workflow 重生的卡才是新版。
+
+name: regen-notebook-page
+
+on:
+  workflow_dispatch:
+    inputs:
+      students:
+        description: 'Space-separated student IDs (預設 = A025).'
+        required: false
+        type: string
+        default: 'A025'
+      module:
+        description: 'module (self / money / partner).'
+        required: false
+        type: string
+        default: 'self'
+      commit:
+        description: 'true = 覆寫 prod notebook_page;false = dry-run 只印報告.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regen-notebook-page
+  cancel-in-progress: false
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (latest main)
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --loglevel=warn
+
+      - name: Syntax smoke test
+        run: |
+          node --check scripts/regen-notebook-page.js
+          node --check api/chat.js
+          node --check lib/api/crisis-session-flag.js
+
+      - name: Run regen
+        id: run
+        env:
+          DATABASE_URL:      ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STUDENTS:          ${{ inputs.students }}
+          MODULE:            ${{ inputs.module }}
+          COMMIT:            ${{ inputs.commit }}
+        run: |
+          set +e
+          if [ -z "$DATABASE_URL" ];      then echo "::error::DATABASE_URL secret not set."; exit 1; fi
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "::error::ANTHROPIC_API_KEY secret not set."; exit 1; fi
+          CLEAN_STUDENTS=$(echo "$STUDENTS" | tr -cd '[:alnum:]_ ')
+          CLEAN_MODULE=$(echo "$MODULE" | tr -cd '[:alpha:]')
+          COMMIT_FLAG=""
+          if [ "$COMMIT" = "true" ]; then COMMIT_FLAG="--commit"; echo "[workflow] COMMIT mode — will overwrite prod notebook_page"; else echo "[workflow] dry-run mode"; fi
+          node scripts/regen-notebook-page.js \
+            --students="$CLEAN_STUDENTS" \
+            --module="$CLEAN_MODULE" \
+            $COMMIT_FLAG \
+            --report=report.md
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: 🔴 Defence-in-depth — verify report.md 0 SI leak (14 patterns)
+        if: always()
+        run: |
+          set -e
+          if [ ! -f report.md ]; then echo "::warning::no report.md"; exit 0; fi
+          if grep -qE '自殺|想死|去死|輕生|自傷|割腕|上吊|跳樓|燒炭|不想活|無所眷念|傷害自己|傷害我自己|傷害了自己|自我傷害' report.md; then
+            echo "::error::🔴🔴 report.md contains SI substring — defence-in-depth FAILED. File DELETED."
+            rm -f report.md
+            exit 1
+          fi
+          echo "✓ 0 SI substring in report.md"
+
+      - name: 🔴 Defence-in-depth — verify report.md 0 conversation role markers
+        if: always()
+        run: |
+          set -e
+          if [ ! -f report.md ]; then exit 0; fi
+          if grep -qiE '\b(role|user|assistant):' report.md; then
+            echo "::error::🔴🔴 report.md contains role markers. File DELETED."
+            rm -f report.md
+            exit 1
+          fi
+          echo "✓ 0 role markers in report.md"
+
+      - name: 🔵 Render report.md into $GITHUB_STEP_SUMMARY
+        if: always()
+        run: |
+          if [ -f report.md ]; then cat report.md >> "$GITHUB_STEP_SUMMARY"; echo "✓ rendered"; else echo "::warning::no report.md to render"; fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regen-notebook-page-${{ github.run_id }}
+          path: report.md
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Fail workflow if run errored
+        if: always()
+        run: |
+          EXIT="${{ steps.run.outputs.exit_code }}"
+          if [ -z "$EXIT" ]; then EXIT="1"; fi
+          if [ "$EXIT" != "0" ]; then echo "::error::run exit code: $EXIT"; exit 1; fi
+          echo "🟢 regen green — read STEP_SUMMARY"
