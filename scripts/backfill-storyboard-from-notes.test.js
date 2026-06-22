@@ -29,7 +29,7 @@ function mockDeps({ commit, step = 6 }) {
   };
 }
 
-test('🛑 runOneStudentFromNotes: commit writes new-shape sc_storyboard, cap by currentStep', async () => {
+test('🛑 runOneStudentFromNotes: commit writes new-shape sc_storyboard, fills per gen (no observer cap)', async () => {
   const { deps, writes } = mockDeps({ commit: true, step: 6 });
   const res = await runOneStudentFromNotes('A006', deps);
   assert.equal(writes.length, 1, 'commit → 1 write');
@@ -41,9 +41,9 @@ test('🛑 runOneStudentFromNotes: commit writes new-shape sc_storyboard, cap by
   assert.equal(sb.step_1.benevolent_intent, '動機1');
   // step6 sovereign
   assert.equal(sb.step_6.sovereign_action, '宣告6。我說了算。');
-  // step7 > currentStep(6) → empty (progress gate) even though gen has it
-  assert.equal(sb.step_7.state, 'empty');
-  assert.equal(res.filled, 2); // steps 1 + 6
+  // Vivi 6/19 A: step7 有 gen 內容 → filled (不再被 observer cap 砍)
+  assert.equal(sb.step_7.state, 'filled');
+  assert.equal(res.filled, 3); // steps 1 + 6 + 7
 });
 
 test('🛑 runOneStudentFromNotes: dryRun does NOT write', async () => {
@@ -64,7 +64,7 @@ test('🛑 formatFromNotesReport: safe (probe + per-step, no raw notes), phase-a
   // 未套 cap 原始生成行:步7 其實生得出來 (腦✓+權✓), 但被 cap=6 擋掉 → sb 裡 Step 7 empty.
   assert.match(rep, /原始生成\(未套 cap\)/);
   assert.match(rep, /步7:腦✓\+權✓/, '原始生成第7步有料 (腦+權)');
-  assert.match(rep, /\*\*Step 7 新的身分\*\* \(empty\)/, '套 cap 後第7步 empty (被擋)');
+  assert.match(rep, /\*\*Step 7 新的身分\*\* \(filled\)/, 'A 後:第7步有 gen 內容 → filled (不再被 cap 砍)');
 });
 
 test('🛑 parseArgs: students / commit / model', () => {
