@@ -61,6 +61,10 @@ test('🛑 formatFromNotesReport: safe (probe + per-step, no raw notes), phase-a
   assert.match(rep, /良善動機:動機1/);
   assert.match(rep, /主權宣告:宣告6/);    // climax step
   assert.equal(/note_text|x。/.test(rep), false, 'no raw note text in report');
+  // 未套 cap 原始生成行:步7 其實生得出來 (腦✓+權✓), 但被 cap=6 擋掉 → sb 裡 Step 7 empty.
+  assert.match(rep, /原始生成\(未套 cap\)/);
+  assert.match(rep, /步7:腦✓\+權✓/, '原始生成第7步有料 (腦+權)');
+  assert.match(rep, /\*\*Step 7 新的身分\*\* \(empty\)/, '套 cap 後第7步 empty (被擋)');
 });
 
 test('🛑 parseArgs: students / commit / model', () => {

@@ -60,6 +60,16 @@ export function formatFromNotesReport({ studentId, currentStep, sb, gen, filled 
   L.push(`currentStep:${currentStep} · filled:${filled}/7 · 筆記:${m.noteCount ?? '?'} 篇 · 預刷:${m.totalDropped ?? '?'}/${m.totalSents ?? '?'}`);
   const probe = gen?.incongruence_probe || {};
   L.push(`內在不一致探針:${probe.detected ? '有' : '無'}${probe.summary ? ` — ${probe.summary}` : ''}`);
+  // 未套 cap 的「原始生成」— 驗證 cap(observer 步數)是否擋掉了已生成的高步.
+  //   只報每步「生出與否」(腦=brain_state、權=sovereign), 不報內容 (鐵律 #2).
+  const rawFill = [];
+  for (let n = 1; n <= 7; n++) {
+    const g = gen?.steps?.[n] || {};
+    const brain = g.brain_state ? '腦✓' : '腦✗';
+    const sov = n >= 6 ? (g.sovereign_action ? '+權✓' : '+權✗') : '';
+    rawFill.push(`步${n}:${brain}${sov}`);
+  }
+  L.push(`原始生成(未套 cap):${rawFill.join(' ')} ← cap=${currentStep};cap 以上若有✓代表被擋掉`);
   for (let n = 1; n <= 7; n++) {
     const s = sb[`step_${n}`] || {};
     L.push(`- **Step ${n} ${zh[n]}** (${s.state})`);
