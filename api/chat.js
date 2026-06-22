@@ -890,6 +890,7 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
       : (Array.isArray(sessionState.values_collected_list) ? sessionState.values_collected_list : []),
     top1: userProfile.top1_value || sessionState.top1_value || null,
     scJourneyEvidence: opts.scJourney?.evidence || null,
+    scJourneyStep: opts.scJourney?.step ?? null,
     primaryMode,
     flagEnabled: opts.scMemoryInjectEnabled === true,
   });
