@@ -956,6 +956,7 @@ export default async function handler(req, res) {
           currentStep: _curStep,
           pullNotes: (id) => sql`SELECT week, day, note_text, is_week_summary FROM damon_notes WHERE student_id = ${id} ORDER BY week, day, is_week_summary`,
           writeStoryboard: (id, sb) => sql`UPDATE students SET sc_storyboard = ${JSON.stringify(sb)}::jsonb WHERE student_id = ${id}`,
+          readStoryboard: async (id) => { const r = await sql`SELECT sc_storyboard FROM students WHERE student_id = ${id} LIMIT 1`; return r?.[0]?.sc_storyboard ?? null; },
           anthropic: getAnthropic(),
           callAnthropicWithRetry,
           log: (m) => console.warn(m),
