@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>21 天身分重塑計畫 ｜ 看見自己</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;600;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Notion / Claude 極簡款 —— 微灰白底 + 純白卡 + 墨黑藍灰字/鈕 + 古銅金點綴 */
+    --bg-top:#F8F8F8; --bg-bot:#F4F4F4; --band:#F4F4F4; --paper:#FFFFFF;
+    --line:#E6E6E6; --ink:#2E333D; --ink-soft:#5A6270; --ink-dim:#9098A6;
+    --gold:#D8B27F;        /* 古銅香檳金 主點綴(圖標/亮點) */
+    --gold-hi:#E2C499;     /* 淺古銅金 */
+    --gold-deep:#B58F5C;   /* 白底專用深古銅金(字體高對比) */
+    --btn-ink:#FFFFFF;     /* 深鈕白字 */
+    --btn-top:#3A414D; --btn-bot:#2E333D;  /* CTA 深藍灰漸層(備用) */
+    /* CTA 金屬古銅金漸層：兩側深、中間淺(香檳光澤) + 深色字確保可讀 */
+    --btn-grad:linear-gradient(90deg,#9C7641 0%,#C7A06B 30%,#E4CEA4 50%,#C7A06B 70%,#9C7641 100%);
+    --btn-txt:#3A2E1C;
+    --sh:rgba(46,51,61,.08); --glow:rgba(46,51,61,.16);
+    /* 編輯型襯線顯示字 + 系統 UI 字 */
+    /* 方案 C：西文 Newsreader/Inter（在前，吃拉丁字）＋ 中文 Noto（在後，吃中日韓字） */
+    --serif:"Newsreader","Noto Serif TC",Georgia,"Songti TC",serif;
+    --sans:"Inter","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+    /* 分層光影：環境陰影 + 主光源 + 內緣高光，營造被打光的紙面質感 */
+    --card-sh:0 1px 2px rgba(46,51,61,.04),0 8px 18px -10px rgba(46,51,61,.12),0 24px 48px -28px rgba(46,51,61,.16);
+    --card-hi:inset 0 1px 0 rgba(255,255,255,.7);
+    --lift:0 2px 4px rgba(46,51,61,.05),0 16px 30px -12px rgba(46,51,61,.18),0 36px 64px -32px rgba(46,51,61,.22);
+    /* 統一緩動曲線 */
+    --ease:cubic-bezier(.2,.7,.2,1); --t:.45s;
+    --maxw:1120px; --r:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  ::selection{background:rgba(216,178,127,.32);color:var(--ink)}
+  body{font-family:var(--sans);
+    background:linear-gradient(180deg,var(--bg-top),var(--bg-bot)) fixed;color:var(--ink);
+    line-height:1.85;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    letter-spacing:.01em;overflow-x:hidden;min-height:100vh}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  .gold{color:var(--gold-deep)}
+  .glow{color:var(--gold-deep)}
+  section{padding:96px 0;position:relative;scroll-margin-top:84px}
+  h1,h2,h3{font-family:var(--serif);font-weight:700;letter-spacing:.005em;line-height:1.32;color:var(--ink);
+    text-wrap:balance}
+  h1,h2{letter-spacing:-.01em}
+  /* 拉丁數字採等寬字形，讓 21 / 01–21 對齊更精緻 */
+  .num,.hero h1,.step .no,.jr-card .n{font-feature-settings:"tnum" 1,"lnum" 1}
+  .eyebrow{font-family:var(--sans);font-size:13px;letter-spacing:.32em;color:var(--gold-deep);font-weight:700;text-transform:uppercase;margin-bottom:22px}
+  .lead{color:var(--ink-soft);font-size:18px}
+  .kicker{color:var(--gold-deep);font-weight:700;letter-spacing:.06em}
+  :focus-visible{outline:2px solid var(--gold-deep);outline-offset:3px;border-radius:6px}
+
+  /* ===== 頂條 + LOGO ===== */
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(248,248,248,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:66px}
+  .brand{display:flex;align-items:center;gap:11px;text-decoration:none}
+  .brand .logo{width:34px;height:34px;flex:0 0 auto}
+  .brand .bt b{font-weight:900;letter-spacing:.08em;font-size:17px;color:var(--ink);display:block;line-height:1}
+  .brand .bt small{font-size:8px;letter-spacing:.32em;color:var(--ink-dim);font-weight:700}
+  .nav-cta{font-size:14px;font-weight:900;color:var(--btn-txt);background:var(--btn-grad);
+    padding:10px 20px;border-radius:999px;text-decoration:none;transition:.2s;white-space:nowrap;box-shadow:0 10px 22px -12px rgba(156,118,65,.5)}
+  .nav-cta:hover{transform:translateY(-1px);filter:brightness(1.03)}
+
+  /* ===== HERO ===== */
+  .hero{padding:88px 0 78px;position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(820px 460px at 82% -8%,rgba(216,178,127,.16),transparent 60%),
+      radial-gradient(620px 480px at 4% 20%,rgba(216,178,127,.12),transparent 62%)}
+  .hero .compass-bg{position:absolute;z-index:0;pointer-events:none;top:50%;left:53%;
+    transform:translate(-50%,-50%);width:min(720px,62vw);height:auto;opacity:.42;color:var(--gold)}
+  @media(max-width:860px){.hero .compass-bg{top:6%;left:50%;transform:translate(-50%,0);width:min(460px,90vw);opacity:.26}}
+  .hero .wrap{position:relative;z-index:1;display:grid;grid-template-columns:1.05fr .95fr;gap:54px;align-items:center}
+  .hero h1{font-size:clamp(34px,5.4vw,60px);line-height:1.18;margin:6px 0 22px}
+  .hero h1 .line2{display:block}
+  .hero h1 .glow{color:var(--ink)}  /* Hero 主標維持深黑(藍只用在重點處) */
+  .hero p.sub{font-size:clamp(16px,2vw,19px);color:var(--ink-soft);max-width:30em;margin-bottom:18px}
+  .hero .claim{font-size:clamp(17px,2.1vw,21px);font-weight:800;color:var(--ink);max-width:24em;margin-bottom:28px;line-height:1.6}
+  .hero .claim b{color:var(--gold-deep)}
+  .hero .signal{display:flex;gap:26px;flex-wrap:wrap;margin-top:30px;color:var(--ink-dim);font-size:13.5px}
+  .hero .signal b{color:var(--ink);font-weight:700}
+  .hero .signal span{display:flex;align-items:center;gap:8px}
+  .hero .signal i{width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block}
+  .hr-mini{width:54px;height:2px;background:var(--gold);margin:26px 0;border-radius:2px}
+  .phases3{display:flex;gap:30px;flex-wrap:wrap;margin-top:4px}
+  .p3{display:flex;gap:11px;align-items:flex-start}
+  .p3 .ic{color:var(--gold);flex:0 0 auto;margin-top:2px}
+  .p3 .ic svg{width:30px;height:30px}
+  .p3 b{font-size:14.5px;font-weight:800;color:var(--ink);display:block}
+  .p3 small{font-size:12px;color:var(--ink-dim);line-height:1.5}
+
+  .cta-card{background:var(--paper);color:var(--ink);border-radius:var(--r);padding:30px 28px;
+    box-shadow:var(--card-sh),var(--card-hi);border:1px solid var(--line)}
+  .cta-card .tag{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--gold-deep);margin-bottom:12px}
+  .cta-card h3{font-size:20px;line-height:1.5;color:var(--ink);margin-bottom:14px;font-weight:900}
+  .cta-card p{font-size:14.5px;line-height:1.95;color:var(--ink-soft);margin-bottom:22px}
+  .btn-primary{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;
+    background:var(--btn-grad);color:var(--btn-txt);
+    border:none;border-radius:14px;padding:15px 18px;cursor:pointer;font-family:var(--sans);text-decoration:none;
+    transition:transform var(--t) var(--ease),box-shadow var(--t) var(--ease),filter var(--t) var(--ease);
+    box-shadow:0 16px 32px -14px rgba(156,118,65,.55),inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(80,55,20,.25)}
+  .btn-primary::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.55) 48%,transparent 66%);
+    transform:translateX(-120%);transition:transform .7s var(--ease)}
+  .btn-primary:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:0 22px 40px -16px rgba(156,118,65,.6),inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(80,55,20,.25)}
+  .btn-primary:hover::after{transform:translateX(120%)}
+  .btn-primary:active{transform:translateY(0)}
+  .btn-primary .main{font-size:18px;font-weight:900;letter-spacing:.02em}
+  .btn-primary .sub{font-size:12px;font-weight:600;color:rgba(58,46,28,.62)}
+  .scarcity{margin-top:16px;background:rgba(216,178,127,.14);border:1px solid rgba(181,143,92,.35);
+    border-radius:12px;padding:12px 14px;font-size:13px;font-weight:700;color:var(--gold-deep);text-align:center}
+
+  .sec-head{max-width:38em}
+  .sec-head h2{font-size:clamp(26px,3.6vw,40px);margin-bottom:18px}
+  .sec-head .lead{margin-bottom:8px}
+  .divider{height:1px;background:var(--line);max-width:var(--maxw);margin:0 auto}
+
+  .vs{background:var(--band)}
+  .vs-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:start;margin-top:8px}
+  .vs-copy p{color:var(--ink-soft);margin-bottom:16px;font-size:16.5px}
+  .vs-copy .pop{color:var(--ink);font-weight:800}
+  .vs-table{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper)}
+  .vs-table .row{display:grid;grid-template-columns:1fr 1fr}
+  .vs-table .row > div{padding:16px 18px;font-size:14.5px;border-bottom:1px solid var(--line)}
+  .vs-table .row > div:first-child{border-right:1px solid var(--line);color:var(--ink-dim)}
+  .vs-table .row > div:last-child{color:var(--gold-deep);font-weight:800}
+  .vs-table .head > div{font-weight:900;font-size:13px;letter-spacing:.05em;background:rgba(216,178,127,.12)}
+  .vs-table .head > div:last-child{color:var(--gold-deep)}
+  .vs-table .row:last-child > div{border-bottom:none}
+
+  .cta-row{margin-top:40px}
+  .link-cta{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:9px;color:var(--btn-txt);
+    background:var(--btn-grad);font-weight:900;font-size:16px;
+    padding:14px 30px;border-radius:999px;text-decoration:none;
+    transition:transform var(--t) var(--ease),box-shadow var(--t) var(--ease),filter var(--t) var(--ease);
+    box-shadow:0 14px 28px -14px rgba(156,118,65,.5),inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(80,55,20,.22)}
+  .link-cta::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.5) 48%,transparent 66%);
+    transform:translateX(-120%);transition:transform .7s var(--ease)}
+  .link-cta:hover{transform:translateY(-2px);filter:brightness(1.04)}
+  .link-cta:hover::after{transform:translateX(120%)}
+  .link-cta .arw{transition:transform var(--t) var(--ease)}
+  .link-cta:hover .arw{transform:translateX(3px)}
+
+  .story .wrap{max-width:760px}
+  .story p{font-size:18px;color:var(--ink-soft);margin-bottom:22px}
+  .story p .pop{color:var(--ink);font-weight:700}
+  .story p .ask{display:inline-block;color:var(--gold-deep);font-weight:800;font-size:1.06em;margin-top:2px}
+  .story .byline{color:var(--ink-dim);font-size:14px;letter-spacing:.04em;margin-top:8px}
+
+  .peek{background:var(--band)}
+  .peek-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:28px;margin-top:46px}
+  .peek-item{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .peek-item img{width:100%;display:block;aspect-ratio:9/16;object-fit:cover;background:#F0EEEA}
+  .peek-item .cap{padding:16px 18px;font-size:14px;color:var(--ink-soft)}
+  .peek-item .cap b{color:var(--ink);font-weight:700}
+
+  .steps{margin-top:46px;display:grid;gap:20px}
+  .step{display:grid;grid-template-columns:64px 1fr;gap:22px;align-items:start;
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:26px 28px;
+    box-shadow:var(--card-sh),var(--card-hi);transition:box-shadow var(--t) var(--ease),border-color var(--t) var(--ease)}
+  .step:hover{border-color:rgba(216,178,127,.45);box-shadow:var(--lift),var(--card-hi)}
+  .step .no{font-family:var(--serif);font-size:38px;font-weight:600;color:var(--gold);line-height:1;
+    font-feature-settings:"lnum" 1}
+  .step h3{font-size:21px;margin-bottom:8px}
+  .step p{color:var(--ink-soft);font-size:15.5px;margin-bottom:10px}
+  .step .out{color:var(--gold-deep);font-weight:700;font-size:15px}
+  .step .out.big{font-size:16.5px;color:var(--gold-deep)}
+  .step.feature{border-color:rgba(216,178,127,.55);background:linear-gradient(180deg,rgba(216,178,127,.16),rgba(216,178,127,.05));
+    box-shadow:0 18px 44px -28px var(--glow),var(--card-hi)}
+  .step.feature .no{color:var(--gold)}
+  .step .step-label{font-size:12px;letter-spacing:.18em;color:var(--gold-deep);font-weight:800;text-transform:uppercase;margin-bottom:8px}
+  .step p .pop{color:var(--ink);font-weight:700}
+
+  .narrative .wrap{max-width:720px}
+  .narrative p{font-size:17.5px;color:var(--ink-soft);margin-bottom:20px}
+  .narrative p .pop{color:var(--ink);font-weight:700}
+
+  .faq .wrap{max-width:820px}
+  details{border-bottom:1px solid var(--line);padding:6px 0}
+  summary{cursor:pointer;list-style:none;padding:18px 4px;font-weight:800;font-size:17px;color:var(--ink);
+    display:flex;justify-content:space-between;align-items:center;gap:16px}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"⌄";color:var(--gold-deep);font-size:22px;font-weight:400;line-height:1;margin-top:-6px;transition:.2s}
+  details[open] summary::after{content:"⌄"}
+  details p{color:var(--ink-soft);font-size:15.5px;padding:0 4px 20px;line-height:1.9}
+  details p b{color:var(--ink)}
+
+  .final{text-align:center;background:radial-gradient(700px 400px at 50% 0%,rgba(216,178,127,.16),transparent 60%),var(--band)}
+  .final h2{font-size:clamp(28px,4vw,44px);margin-bottom:20px}
+  .final p{color:var(--ink-soft);max-width:34em;margin:0 auto 30px;font-size:17px}
+  .final .link-cta{font-size:18px;padding:17px 40px}
+  .final .reassure{margin-top:22px;color:var(--ink-dim);font-size:13px}
+  .final .reassure a{color:var(--gold-deep);text-decoration:none}
+
+  footer{border-top:1px solid var(--line);padding:40px 0;text-align:center;color:var(--ink-dim);font-size:13px}
+  footer .brand{justify-content:center;color:var(--ink)}
+  footer .brand .bt b{font-size:15px}
+
+  .quiz{display:none;margin-top:18px;border-top:1px dashed var(--line);padding-top:20px}
+  .quiz.open{display:block;animation:fade .35s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .quiz .q{font-weight:800;font-size:14.5px;color:var(--ink);margin:16px 0 10px}
+  .quiz .opts{display:grid;gap:8px}
+  .quiz .opts button{text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:11px 14px;font-family:inherit;font-size:13.5px;color:var(--ink-soft);cursor:pointer;transition:.15s}
+  .quiz .opts button:hover,.quiz .opts button.sel{border-color:var(--gold);background:rgba(216,178,127,.14);color:var(--ink);font-weight:700}
+  .quiz input[type=email]{width:100%;margin-top:18px;padding:13px 14px;border-radius:10px;border:1px solid var(--line);
+    font-family:inherit;font-size:15px;background:#fff;color:var(--ink)}
+  .quiz .submit{margin-top:12px}
+  .note{display:block;text-align:center;color:var(--ink-dim);font-size:12px;margin-top:20px}
+
+  @media(max-width:860px){
+    section{padding:64px 0}.hero{padding:56px 0 52px}
+    .hero .wrap{grid-template-columns:1fr;gap:34px;text-align:center}
+    .hero p.sub{margin-left:auto;margin-right:auto}.hero .signal{justify-content:center}
+    .vs-grid{grid-template-columns:1fr;gap:30px}.peek-grid{grid-template-columns:1fr}
+    .sec-head{margin:0 auto;text-align:center}.step{grid-template-columns:1fr;gap:8px;text-align:left}
+    .step .no{font-size:30px}.nav-cta{display:none}
+  }
+
+  /* ===== 21 天旅程總覽 ===== */
+  .jr{background:var(--band)}
+  .jr-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-top:30px}
+  .jr-card{background:#fff;border:1px solid var(--line);border-radius:12px;aspect-ratio:1/.82;position:relative;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 1px 2px rgba(46,51,61,.04);transition:box-shadow var(--t) var(--ease),border-color var(--t) var(--ease)}
+  .jr-card:hover{border-color:rgba(216,178,127,.6);
+    box-shadow:0 10px 22px -10px rgba(46,51,61,.18),var(--card-hi)}
+  .jr-card .n{position:absolute;top:9px;left:11px;font-size:11px;font-weight:900;color:var(--ink-dim);font-feature-settings:"tnum" 1;transition:color var(--t) var(--ease)}
+  .jr-card:hover .n{color:var(--gold-deep)}
+  .jr-card .ic{color:var(--gold);transition:transform var(--t) var(--ease)}
+  .jr-card:hover .ic{transform:scale(1.12)}
+  .jr-card .ic svg{width:46px;height:40px}
+  .jr-phz{margin-top:36px;display:grid;grid-template-columns:repeat(7,1fr);gap:14px;border-top:1px solid var(--line);padding-top:26px}
+  .jr-ph{display:flex;flex-direction:column;gap:5px}
+  .jr-ph .ic{color:var(--gold)}
+  .jr-ph .ic svg{width:26px;height:26px}
+  .jr-ph .rg{font-size:11px;color:var(--ink-dim);font-weight:700}
+  .jr-ph b{font-size:13px;font-weight:800;color:var(--ink)}
+  .jr-ph small{font-size:11px;color:var(--ink-dim);line-height:1.45}
+  @media(max-width:860px){.jr-grid{grid-template-columns:repeat(4,1fr)}.jr-phz{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:480px){.jr-grid{grid-template-columns:repeat(3,1fr)}}
+
+  /* ===== 高級細節：動效層 ===== */
+  /* 頂條捲動後浮起一層陰影 */
+  .topbar{transition:box-shadow var(--t) var(--ease),background var(--t) var(--ease)}
+  .topbar.scrolled{box-shadow:0 1px 0 var(--line),0 8px 24px -16px rgba(46,51,61,.28)}
+  /* 指南針極緩慢飄移，營造氛圍而非搶眼 */
+  .hero .compass-bg{animation:drift 80s linear infinite}
+  @keyframes drift{to{transform:translate(-50%,-50%) rotate(360deg)}}
+  @media(max-width:860px){.hero .compass-bg{animation:driftM 80s linear infinite}@keyframes driftM{to{transform:translate(-50%,0) rotate(360deg)}}}
+  /* 捲動顯現：以動畫驅動，避免與 hover 的 transform 互相干擾 */
+  .reveal{opacity:0}
+  .reveal.in{animation:revealUp .7s var(--ease) both}
+  @keyframes revealUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+  .steps .step.reveal.in{animation-delay:var(--d,0s)}
+  .jr-grid .jr-card{opacity:0}
+  .jr-grid.in .jr-card{animation:revealUp .55s var(--ease) both}
+  /* FAQ 展開符號平滑旋轉 */
+  summary::after{transition:transform var(--t) var(--ease),color var(--t) var(--ease)}
+  details[open] summary::after{transform:rotate(180deg);margin-top:0}
+  details summary:hover::after{color:var(--gold)}
+  /* 尊重使用者的減少動態偏好 */
+  @media(prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+      transition-duration:.001ms!important;scroll-behavior:auto!important}
+    .reveal,.jr-grid .jr-card{opacity:1!important;transform:none!important}
+  }
+</style>
+</head>
+<body>
+
+<!-- 頂條 + LOGO(望遠鏡) -->
+<div class="topbar">
+  <div class="wrap">
+    <a class="brand" href="#start">
+      <span class="logo"><svg viewBox="0 0 100 100" fill="none" stroke="#B58F5C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="60" r="15"/><circle cx="66" cy="60" r="15"/><path d="M28 47 L34 32 H44"/><path d="M56 32 H66 L72 47"/><path d="M84 22 l1.6 4 4 1.6 -4 1.6 -1.6 4 -1.6-4 -4-1.6 4-1.6 z" fill="#D8B27F" stroke="none"/></svg></span>
+      <span class="bt"><b>看見自己</b><small>SEE YOURSELF</small></span>
+    </a>
+    <a href="#start" class="nav-cta">免費開始 Day 1 →</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<header class="hero" id="start">
+  <svg class="compass-bg" viewBox="0 0 400 400" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="200" cy="200" r="186" stroke-width="1.1" opacity=".55"/>
+    <circle cx="200" cy="200" r="150" stroke-width="1" opacity=".4"/>
+    <circle cx="200" cy="200" r="96" stroke-width="1" opacity=".4"/>
+    <circle cx="200" cy="200" r="58" stroke-width="1" opacity=".45"/>
+    <g id="compass-rose">
+      <path d="M200 30 L214 186 L200 200 L186 186 Z" fill="currentColor" stroke="none" opacity=".5"/>
+      <path d="M200 370 L214 214 L200 200 L186 214 Z" fill="currentColor" stroke="none" opacity=".28"/>
+      <path d="M30 200 L186 186 L200 200 L186 214 Z" fill="currentColor" stroke="none" opacity=".28"/>
+      <path d="M370 200 L214 186 L200 200 L214 214 Z" fill="currentColor" stroke="none" opacity=".28"/>
+      <path d="M322 78 L210 190 L200 200 L210 190 Z" stroke-width="1.2" opacity=".4"/>
+      <path d="M78 322 L190 210 L200 200" stroke-width="1.2" opacity=".4"/>
+      <path d="M78 78 L190 190 L200 200" stroke-width="1.2" opacity=".4"/>
+      <path d="M322 322 L210 210 L200 200" stroke-width="1.2" opacity=".4"/>
+    </g>
+    <circle cx="200" cy="200" r="9" fill="currentColor" stroke="none" opacity=".55"/>
+    <g stroke-width="1.4" opacity=".5">
+      <path d="M200 14 v22"/><path d="M200 364 v22"/><path d="M14 200 h22"/><path d="M364 200 h22"/>
+    </g>
+  </svg>
+  <div class="wrap">
+    <div>
+      <h1>21 天，<br>身分重塑計畫</h1>
+      <p class="sub">你不需要成為更好的人，你只需要活出真實的自己。</p>
+      <div class="hr-mini"></div>
+      <div class="phases3">
+        <div class="p3"><span class="ic"><svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="22" cy="22" r="13"/><circle cx="22" cy="22" r="5"/><path d="M22 4v6M22 34v6M4 22h6M34 22h6"/></svg></span>
+          <div><b>看見真相</b><small>看見自動導航<br>與模式</small></div></div>
+        <div class="p3"><span class="ic"><svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="22" cy="22" r="14"/><path d="M22 10l4 12-4 4-4-4z" fill="currentColor" stroke="none"/><path d="M22 22l8-2M22 22l-8 2"/></svg></span>
+          <div><b>拿回主權</b><small>認領身份與<br>內在方向</small></div></div>
+        <div class="p3"><span class="ic"><svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 36l12-22 8 14"/><path d="M28 36l6-11 4 11z"/><path d="M20 14V6h7"/></svg></span>
+          <div><b>定錨未來</b><small>建立系統<br>持續前進</small></div></div>
+      </div>
+    </div>
+    <div class="cta-card">
+      <div class="tag">FOUNDER 限量開放中</div>
+      <h3>教練對話，<br>就是你的臨門一腳。</h3>
+      <p>世界給過你很多答案。是時候停下來，卸下不需要的枷鎖跟信念，透過 21 天系統性對話，挖出自己的資源，嶄新向前。</p>
+      <button class="btn-primary" id="openQuiz">
+        <span class="main">開始對話 →</span>
+      </button>
+      <div class="scarcity">高階對話運算資源有限，故免費名額限時限量</div>
+      <div class="quiz" id="quiz">
+        <div class="q">1. 哪一個最能描述你目前的階段？</div>
+        <div class="opts"><button>職場探索者</button><button>專業人士／小主管</button><button>創業者／高階經理人</button><button>轉向中的自由工作者</button></div>
+        <div class="q">2. 過去你主要靠什麼，想替人生找答案？</div>
+        <div class="opts"><button>YouTube／社群／問 AI</button><button>書籍／PDF 指南</button><button>線上課程／工作坊</button><button>1 對 1 諮商／教練</button></div>
+        <div class="q">3. 那些嘗試，後來「效果」如何？</div>
+        <div class="opts"><button>短暫啟發、很快回原點</button><button>學到理論、不會應用</button><button>被貼標籤、沒有自己的地圖</button><button>還沒真的拿回主導權</button></div>
+        <input type="email" placeholder="你的 email">
+        <button class="btn-primary submit"><span class="main">立刻領取 →</span></button>
+        <span class="note">純視覺預覽 · 漏斗串接後才會真的送出。</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- 21 天旅程總覽 -->
+<section class="jr">
+  <div class="wrap">
+    <div class="sec-head"><h2>21 天旅程總覽</h2>
+      <p class="lead">每天都會有一張身分解析卡，從第 1 天走到第 21 天，記錄你的身分轉化旅程。</p></div>
+    <div class="jr-grid" id="jrGrid"></div>
+    <div class="jr-phz">
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 14s4-7 12-7 12 7 12 7-4 7-12 7-12-7-12-7z"/><circle cx="14" cy="14" r="3"/></svg></span><span class="rg">Step 1</span><b>發現匱乏</b><small>看見自動導航與模式</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 23s-9-5-9-12a4.5 4.5 0 0 1 9-2 4.5 4.5 0 0 1 9 2c0 7-9 12-9 12z"/></svg></span><span class="rg">Step 2</span><b>承認渴望</b><small>允許自己想要更多</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l10 5-10 5-10-5z"/><path d="M4 14l10 5 10-5M4 19l10 5 10-5"/></svg></span><span class="rg">Step 3</span><b>挖掘數據</b><small>看懂模式與故事</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="14" cy="10" r="4"/><path d="M6 24c0-5 4-8 8-8s8 3 8 8"/></svg></span><span class="rg">Step 4</span><b>認領身分</b><small>看見可能</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l8 6-8 14-8-14z"/><path d="M6 10h16M14 4v20"/></svg></span><span class="rg">Step 5</span><b>發現資源</b><small>看見擁有的資源</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 4v20"/><path d="M8 6h13l-3 4 3 4H8"/></svg></span><span class="rg">Step 6</span><b>奪回主權</b><small>我決定什麼是重要</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l2.5 7.5L24 14l-7.5 2.5L14 24l-2.5-7.5L4 14l7.5-2.5z"/></svg></span><span class="rg">Step 7</span><b>新的身分</b><small>成為完整的自己</small></div>
+    </div>
+    <div class="cta-row"><a href="#start" class="link-cta">開始對話 <span class="arw">→</span></a></div>
+  </div>
+</section>
+
+<!-- STORY -->
+<section class="story">
+  <div class="wrap">
+    <div class="sec-head"><h2>為什麼有這個產品</h2></div>
+    <p>真正讓一個人慢慢偏離自己的，通常不是能力不夠。<br>而是一路走來，他滿足了很多期待，完成了很多責任，卻很少停下來問：<br><span class="ask">「什麼對我真的重要？」</span></p>
+    <p>所以，他知道很多方法，也做對很多事。<br>只是有時候會忍不住問自己：<span class="ask">「然後呢？」</span></p>
+    <p>我一直覺得，<span class="pop">改變一個人的，從來不是更多建議。</span><br>而是有人能幫他把那些散落在生命裡的價值觀、信念、經歷和選擇，一點一點整理回來。</p>
+    <p>讓他重新看見：<br>自己真正重視什麼。<br>哪些是自己的聲音。<br>哪些只是一路走來，慢慢接手的期待。</p>
+    <p>問題是，不是每個人都負擔得起長期教練。<br>而且再好的教練，也不可能每天陪在身邊。</p>
+    <p>所以我開始思考：<br>如果能把一個人的故事、價值觀和人生地圖，慢慢整理出來，<br>最後形成一套真正理解他的<span class="pop glow">「人生操作系統」</span>。</p>
+    <p>讓他遇到重要決定時，不再只是問：<span class="ask">「大家覺得怎麼樣？」</span><br>而是能回到自己。<br>知道什麼值得，什麼不值得。<br>知道哪些路，雖然辛苦，但是自己選的。</p>
+    <p>這就是為什麼，我做了<span class="pop glow">「21 天身分重塑計畫」</span>。<br>不是為了讓你變成另一個人。<br>而是讓你重新看見，<span class="pop">你本來就有的資源。</span></p>
+    <div class="byline">— Vivi · Life Coach · NLP Practitioner · Yoga Instructor</div>
+    <div class="cta-row"><a href="#start" class="link-cta">開始對話 <span class="arw">→</span></a></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- VS -->
+<section class="vs" id="vs">
+  <div class="wrap">
+    <div class="sec-head"><h2>大部分 AI，<br>都在替你想答案。</h2>
+      <p class="lead"><span class="kicker">你問的問題，就是你看世界的方式。</span></p></div>
+    <div class="vs-grid">
+      <div class="vs-copy">
+        <p>你問 AI 你「能想到」的問題，拿回來的答案，就永遠困在你已知的範圍裡——換個說法，AI 能回答你所有問題，但回答不了你該問卻沒問的問題。</p>
+        <p class="pop">真正的轉變，不是多一個答案。是你終於能回答，連自己都沒想過的問題。</p>
+        <p>讓教練問你，順著一層一層往內走，走到只屬於你、別人給不了的地方。那裡的答案，才有力量。</p>
+      </div>
+      <div class="vs-table">
+        <div class="row head"><div>一般 AI</div><div>《21天身分重塑計畫》</div></div>
+        <div class="row"><div>你問 → 它答</div><div>它問 → 你答</div></div>
+        <div class="row"><div>解決眼前問題</div><div>看懂問題背後的模式</div></div>
+        <div class="row"><div>給你大眾的標準答案</div><div>挖出你獨有的動機與信念</div></div>
+        <div class="row"><div>替你決定方向</div><div>把主導權還到你手上</div></div>
+      </div>
+    </div>
+    <div class="cta-row"><a href="#start" class="link-cta">開始對話 <span class="arw">→</span></a></div>
+  </div>
+</section>
+
+<!-- STATUS -->
+<section class="narrative">
+  <div class="wrap">
+    <div class="sec-head"><h2>《21天身分重塑計畫》<br>還沒正式對外開放。</h2></div>
+    <p>如果你讀到這裡，代表你心裡那個一直被壓著的「真正的自己」，正在共鳴。</p>
+    <p>為了讓每一份生成的「犀利剖析」都精準對上你的生命脈絡，這套對話引擎需要極高的運算資源與細膩設計。<span class="pop">所以我們不打算對所有人開放</span>——我們更在乎每一位參與者，到底有沒有真的拿回主導權。</p>
+    <p>當產品正式啟動，這張「專屬教練」的門票，會優先發給已經完成 Day 1 對話的人。因為你已經發出了信號，而我們聽見了。</p>
+  </div>
+</section>
+
+<!-- 21 天 -->
+<section class="vs">
+  <div class="wrap">
+    <div class="sec-head"><h2>21 天，你會慢慢拿回什麼？</h2>
+      <p class="lead">一天一點，把你一路交出去的，一樣一樣收回來。</p></div>
+    <div class="steps">
+      <div class="step"><div class="no">01</div><div><h3>拿回定義「什麼值得」的權利</h3><p>不是從清單挑幾個好聽的詞，而是從你的對話裡，找出那些你一違背就整個人不對勁的東西。</p><div class="out">→ 不再什麼都重要。能量不再內耗，全用在你真正想去的地方。</div></div></div>
+      <div class="step"><div class="no">02</div><div><h3>拿回做決定的主控權</h3><p>不是替你設目標逼你達成，而是看清你現在活的這個「我」，是你選的，還是一路被變成的。</p><div class="out">→ 不再一直活在別人的「應該」。做選擇變輕鬆，不再什麼都想抓、什麼都不敢放。</div></div></div>
+      <div class="step"><div class="no">03</div><div><h3>拿回理解自己的能力</h3><p>不是評判你卡在哪，而是辨認那些一直在保護你不受傷的信念，理解它們為什麼還在。</p><div class="out">→ 不再一直責怪自己。看見「為什麼我又這樣」背後，那個一直在保護你的善意。</div></div></div>
+      <div class="step"><div class="no">04</div><div><h3>拿回人生的方向盤</h3><p>不是給你建議該怎麼做，而是看出你在類似情境反覆做的事，讓你自己看見「原來我一直是這樣」。</p><div class="out">→ 不再為別人的期待打防守戰。知道什麼能量是你的、什麼不是，終於敢說「這不是我的」。</div></div></div>
+      <div class="step feature"><div class="no">05</div><div>
+        <div class="step-label">21 天後，你帶走的</div>
+        <h3>留下一套屬於自己的<span class="glow">人生操作系統</span></h3>
+        <p>21 天的對話、價值觀、信念與選擇，會被整理成一份只屬於你的教練檔案——放進任何 AI（ChatGPT、Gemini、Claude、Grok…），就生成一個最懂你的專屬教練。</p>
+        <p>凌晨三點睡不著、面試前、跟伴侶吵完架想不通——<span class="pop">需要就在</span>。它不會用「給普通人的答案」回你，而是用你最在乎什麼、你的盲點跟夢想，跟你對話。</p>
+        <p>再加一份結業的深度分析 PDF：21 天所有的身分解析卡、你的對話旅程，那個你慢慢答出來的「你是誰」——一份可以一直翻回去看的地圖。</p>
+        <div class="out big">→ 讓未來的重要決定，不需要一直向外找答案。</div>
+      </div></div>
+    </div>
+    <div class="cta-row"><a href="#start" class="link-cta">開始對話 <span class="arw">→</span></a></div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq">
+  <div class="wrap">
+    <div class="sec-head"><h2>幾個你可能想問的</h2></div>
+    <details open><summary>21天身分重塑計畫是什麼？</summary><p>一套 21 天的純 App 自我概念教練。每天約 5–10 分鐘的文字對話——它不是陪你聊天的 AI。它問你的每一個問題、都來自一套設計過的系統性教練學，陪你問到你自己想不到的地方。</p></details>
+    <details><summary>這跟我自己找 AI 聊天有什麼不同？</summary><p>一般 AI 是你問、它答；你不問，它不會帶你去任何地方。《21天身分重塑計畫》是反過來的——它問你，而且每一個問題都來自一套設計過的教練學，順著一層一層往內走。它記得你昨天說的話，今天從那裡接著問。<br><br>更重要的是——你問 AI 的問題，就是你看世界的方式。如果你只能問 AI 你想得到的問題，你拿回來的答案就永遠在你已知的範圍裡。讓教練問你，你才會走到你沒看過的地方。</p></details>
+    <details><summary>要花多少時間？</summary><p>每天約 5–10 分鐘、共 21 天。每天結束會收到一張當天的教練筆記；第 21 天結業、會拿到一份「結業大禮包」——一份完整的自我深度剖析，加上你接下來可以怎麼走的方向。</p></details>
+    <details><summary>要看影片、或上課嗎？</summary><p>不用。第一階段是純 App、沒有影片、沒有直播——就是每天一段對話。</p></details>
+    <details><summary>它會直接給我建議嗎？</summary><p>不會。它不替你下結論、也不直接給答案——它用提問、陪你自己看見。</p></details>
+    <details><summary>什麼時候開放？我能先做什麼？</summary><p>《21天身分重塑計畫》還沒正式對外開放。如果你想成為第一波參與者——現在可以開始免費體驗 Day 1。當第一波名額開放時，我們會優先通知已經體驗過的人。</p></details>
+    <details><summary>這不適合誰？</summary><p>想直接拿到答案的人。《21天身分重塑計畫》不會替你下結論——它陪你自己慢慢答出來。如果你要的是「直接告訴我我是誰」、不想花時間面對自己，這個產品幫不了你。</p></details>
+    <details><summary>有沒有產品期限？</summary><p>購買日起算一年。一年內你可以在任何時候開始、跑完 21 個互動單位（不需要連續）。第 21 個單位結束、深度分析 PDF 會自動寄到你的 email、對話轉為唯讀；唯讀到購買滿一年。<br><br>滿一年後對話紀錄會從系統刪除，email 保留。如果你拖到剩一個月才開始、可能跑不完 21 個單位——這是為什麼我們建議早點啟用。</p></details>
+    <details><summary>可以退費嗎？</summary><p>不提供退費。我們用「免費體驗 Day 1」做風險反轉——先免費走完 Day 1、確定這是你要的、再決定要不要付。</p></details>
+    <details><summary>我寫的內容會被誰看到？</summary><p>只有你。你在《21天身分重塑計畫》裡寫下的每一句話，都只屬於你——不分享、不販售給第三方。它存在那裡，只是為了讓教練記得你昨天說的話、陪你走完 21 天，最後整理成你專屬的深度分析 PDF。<br><br><b>購買滿一年後，你的對話紀錄會從我們的系統刪除。</b>我們不留你不再需要我們留的東西。</p></details>
+    <details><summary>教練跟心理諮商有什麼不同？</summary><p>簡單講：諮商從「過去／問題／修復」出發，教練從「未來／方向／前進」出發。21天身分重塑計畫是教練——陪你看見自己的地圖、定方向、往前走。</p></details>
+    <details><summary>這會取代心理諮商或治療嗎？</summary><p>不會、也不打算取代。如果你正在經歷較嚴重的困擾、請優先尋求專業心理諮商或醫療協助。</p></details>
+  </div>
+</section>
+
+<!-- FINAL -->
+<section class="final" id="final">
+  <div class="wrap">
+    <h2>該你了。<br><span class="glow">把主導權拿回來。</span></h2>
+    <p>也許你這輩子，都還沒好好替自己做過決定。<br>「21 天身分重塑計畫」，是最好的開始。</p>
+    <a href="#start" class="link-cta">免費開始 Day 1 <span class="arw">→</span></a>
+    <div class="reassure">你寫的內容只屬於你，不分享、不販售。<br>已經有帳號？<a href="https://seeyourself.now/login.html">點這再寄一次登入連結 →</a></div>
+  </div>
+</section>
+
+<footer>
+  <a class="brand" href="#start" style="display:inline-flex">
+    <span class="logo" style="width:26px;height:26px"><svg viewBox="0 0 100 100" fill="none" stroke="#B58F5C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="60" r="15"/><circle cx="66" cy="60" r="15"/><path d="M28 47 L34 32 H44"/><path d="M56 32 H66 L72 47"/></svg></span>
+    <span class="bt"><b>看見自己</b></span>
+  </a>
+  <div style="margin-top:8px">看見自己團隊 See Yourself · 發現世界</div>
+</footer>
+
+<script>
+  var btn=document.getElementById('openQuiz'),quiz=document.getElementById('quiz');
+  if(btn){btn.addEventListener('click',function(){quiz.classList.toggle('open');if(quiz.classList.contains('open')){quiz.scrollIntoView({behavior:'smooth',block:'nearest'});}});}
+  document.querySelectorAll('.quiz .opts').forEach(function(g){g.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){g.querySelectorAll('button').forEach(function(x){x.classList.remove('sel');});b.classList.add('sel');});});});
+</script>
+<script>
+(function(){
+  var I={
+    sun:'<circle cx="22" cy="23" r="6"/><path d="M22 10v3M12 14l2 2M32 14l-2 2M5 23h3M36 23h3"/><path d="M2 33h40"/><path d="M9 33c3-5 7-5 10 0M22 33c3-5 7-5 10 0"/>',
+    ripple:'<circle cx="22" cy="22" r="4"/><circle cx="22" cy="22" r="10"/><circle cx="22" cy="22" r="16"/><circle cx="22" cy="22" r="1.8" fill="currentColor" stroke="none"/>',
+    sign:'<path d="M22 6v32"/><path d="M22 11h12l3 3-3 3H22z"/><path d="M22 21H10l-3 3 3 3h12z"/>',
+    mtn:'<path d="M2 34l10-16 9 16z"/><path d="M19 34l12-20 9 20z"/><path d="M27 18l4 3 3-3"/>',
+    rain:'<path d="M12 20a7 7 0 0 1 14-1 5 5 0 0 1 4 9H14a6 6 0 0 1-2-8z"/><path d="M14 33l-1 4M22 33l-1 4M30 33l-1 4"/>',
+    bridge:'<path d="M4 30h36"/><path d="M9 30V16M35 30V16"/><path d="M9 18c8 8 18 8 26 0"/><path d="M16 30v-7M28 30v-7"/>',
+    peak:'<path d="M6 34l12-22 8 14"/><path d="M26 34L34 20l6 14z"/><path d="M18 12v-6h6"/>',
+    city:'<path d="M6 34V20h7v14M15 34V14h8v20M25 34V18h8v16"/>',
+    lakemtn:'<path d="M4 19l8-9 7 9 6-6 9 6"/><path d="M4 25h36M9 30h28"/>',
+    radar:'<circle cx="22" cy="22" r="15"/><circle cx="22" cy="22" r="9"/><path d="M22 7v30M7 22h30"/><circle cx="30" cy="14" r="2" fill="currentColor" stroke="none"/>',
+    pair:'<circle cx="17" cy="22" r="9"/><circle cx="27" cy="22" r="9"/>',
+    pin:'<path d="M5 31l32-13"/><path d="M7 25l30-12"/><path d="M29 13a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/>',
+    boat:'<path d="M10 28h24l-4 6H14z"/><path d="M22 8v18M22 8l-9 18M22 12l8 14"/>',
+    horizon:'<circle cx="22" cy="18" r="6"/><path d="M22 6v2M11 12l1.5 1.5M33 12l-1.5 1.5M4 30h36M9 34h26"/>',
+    startree:'<path d="M16 36l5-12 5 12z"/><path d="M21 24v12"/><path d="M31 11l1.6 3.2 3.4 1.6-3.4 1.6L31 22l-1.6-3.4-3.4-1.6 3.4-1.6z"/><circle cx="12" cy="14" r="1.3" fill="currentColor" stroke="none"/><circle cx="35" cy="27" r="1.3" fill="currentColor" stroke="none"/>',
+    river:'<path d="M8 8c10 6-10 12 0 18s-10 12 0 16"/><path d="M6 13h6M30 22h6M10 33h6"/>',
+    stairs:'<path d="M5 35V30h6V25h6V20h6V15h6V10"/><path d="M5 35h6M11 30h6M17 25h6M23 20h6M29 15h6"/>',
+    figure:'<circle cx="22" cy="12" r="5"/><path d="M12 36c0-7 4-12 10-12s10 5 10 12"/><circle cx="22" cy="20" r="13" opacity=".25"/>',
+    worldtree:'<path d="M22 6c-6 4-6 10 0 14 6-4 6-10 0-14z"/><path d="M22 20v8"/><path d="M22 36c-6-2-9-6-9-10M22 36c6-2 9-6 9-10M22 36v-8"/>',
+    net:'<circle cx="10" cy="14" r="2"/><circle cx="34" cy="12" r="2"/><circle cx="22" cy="24" r="2"/><circle cx="14" cy="32" r="2"/><circle cx="32" cy="30" r="2"/><path d="M12 15l8 8M32 13l-9 10M16 31l5-6M30 29l-7-4"/>',
+    compass8:'<circle cx="22" cy="22" r="15" opacity=".45"/><path d="M22 7L24.6 19.4 37 22 24.6 24.6 22 37 19.4 24.6 7 22 19.4 19.4Z" fill="currentColor" stroke="none"/><path d="M13 13l5 5M31 13l-5 5M13 31l5-5M31 31l-5-5"/>'
+  };
+  var DAYS=[['看見起點','sun'],['承認渴望','ripple'],['收路','sign'],['森林','mtn'],['雨季','rain'],['吊橋','bridge'],['遠望','peak'],
+    ['城市','city'],['鏡湖','lakemtn'],['迷路','radar'],['陪伴','pair'],['地圖發光','pin'],['穿越海洋','boat'],['邊界消失','horizon'],
+    ['星之森林','startree'],['時間河流','river'],['巨塔','stairs'],['我也是地圖','figure'],['世界之樹','worldtree'],['所有路徑連接','net'],['完整的我','compass8']];
+  var sv=function(p){return '<svg viewBox="0 0 44 40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';};
+  var g=document.getElementById('jrGrid');if(!g)return;
+  DAYS.forEach(function(d,i){var n=String(i+1).padStart(2,'0');
+    var el=document.createElement('div');el.className='jr-card';el.title=d[0];el.setAttribute('aria-label',d[0]);
+    el.innerHTML='<span class="n">'+n+'</span><div class="ic">'+sv(I[d[1]])+'</div>';
+    g.appendChild(el);});
+})();
+</script>
+<script>
+/* 高級細節：捲動顯現編排 + 頂條浮起 + 旅程卡 stagger（尊重減少動態偏好） */
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* 頂條捲動浮起 */
+  var bar = document.querySelector('.topbar');
+  if(bar){
+    var onScroll = function(){ bar.classList.toggle('scrolled', window.scrollY > 8); };
+    onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+  }
+  if(reduce) return;
+
+  /* 為主要內容掛上 reveal，並為序列卡片設 stagger */
+  var blocks = document.querySelectorAll('.sec-head, .vs-copy, .vs-table, .story p, .narrative p, .byline, .step, details, .peek-item');
+  blocks.forEach(function(el){ el.classList.add('reveal'); });
+  document.querySelectorAll('.steps').forEach(function(s){
+    s.querySelectorAll('.step').forEach(function(st,i){ st.style.setProperty('--d', (i*0.07)+'s'); });
+  });
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, {threshold:0.12, rootMargin:'0px 0px -8% 0px'});
+  document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+
+  /* 旅程卡：整格進場、卡片依序淡入 */
+  var grid = document.getElementById('jrGrid');
+  if(grid){
+    grid.querySelectorAll('.jr-card').forEach(function(c,i){ c.style.transitionDelay = (i*0.035)+'s'; });
+    var gio = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ grid.classList.add('in'); gio.disconnect(); } });
+    }, {threshold:0.1});
+    gio.observe(grid);
+  }
+})();
+</script>
+</body>
+</html>
