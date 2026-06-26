@@ -161,10 +161,10 @@
     h.className = 'hint-italic';
     h.style.fontSize = '15px';
     h.style.marginBottom = '20px';
-    h.textContent = '差最後一步 —— 先讓我認識你一下。';
+    h.textContent = '歡迎 —— 21 天身分重塑計畫,從這裡開始。';
     status.appendChild(h);
 
-    // 6/25 — name + pace 搬到這頁(取代 SPA #/entry、少一個畫面).
+    // 6/25 — 稱呼搬到這頁(取代 SPA #/entry、少一個畫面);6/26 步調移除、只留稱呼.
     const nameLabel = document.createElement('label');
     nameLabel.textContent = '我可以怎麼稱呼你?';
     nameLabel.style.cssText = 'display:block;font-size:14px;margin-bottom:6px;text-align:left;';
@@ -176,13 +176,6 @@
     nameInput.autocomplete = 'given-name';
     nameInput.style.cssText = 'width:100%;box-sizing:border-box;padding:10px 12px;font-size:15px;border:1px solid #d9cfc7;border-radius:8px;margin-bottom:16px;';
     status.appendChild(nameInput);
-    const paceWrap = document.createElement('fieldset');
-    paceWrap.style.cssText = 'border:0;padding:0;margin:0 0 16px;text-align:left;';
-    paceWrap.innerHTML =
-      '<legend style="font-size:14px;margin-bottom:6px;padding:0;">步調</legend>'
-      + '<label style="display:block;margin-bottom:8px;font-size:14px;"><input type="radio" name="pace" value="daily" checked> 一天一輪對話 —— 每天沉澱一晚,隔天再繼續。</label>'
-      + '<label style="display:block;font-size:14px;"><input type="radio" name="pace" value="self-paced"> 依自己的步調 —— 想連著多走幾天,也可以。</label>';
-    status.appendChild(paceWrap);
     const setupErr = document.createElement('p');
     setupErr.style.cssText = 'color:#c0392b;font-size:13px;margin:0 0 12px;display:none;text-align:left;';
     status.appendChild(setupErr);
@@ -205,8 +198,6 @@
         return;
       }
       setupErr.style.display = 'none';
-      const pace = ((paceWrap.querySelector('input[name=\"pace\"]:checked') || {}).value === 'self-paced')
-        ? 'self-paced' : 'daily';
       // Anti-double-click: disable + visual loading state.
       btn.disabled = true;
       btn.textContent = '繼續中…';
@@ -229,10 +220,9 @@
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ studentId: payload.studentId, preferred_name: preferredName, pace }),
+            body: JSON.stringify({ studentId: payload.studentId, preferred_name: preferredName }),
           });
           payload.preferredName = preferredName;
-          payload.pace = pace;
         } catch (e2) { /* best-effort;guard 退路 */ }
         persistStudentSession(payload);
         location.href = '/#/journey';
