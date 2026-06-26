@@ -307,7 +307,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   justify-content: center;
   box-sizing: border-box;
   cursor: default;
-  overflow: hidden;   /* clip the WebP scene to the tile's rounded corners */
+  overflow: hidden;   /* clip the icon glow to the tile's rounded corners */
+  background: #FFFFFF;   /* 6/26 — 白底 + 古銅金線條 icon (對齊 landing 21天總攬) */
   transition: filter 350ms ease-out, border-color 250ms ease-out;
 }
 .day-tile:focus-visible { outline: 2px solid var(--gold-accent); outline-offset: 3px; }
@@ -315,32 +316,25 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 /* Scene WebP — fills the tile via object-fit: cover. Common to all states.
    State-specific filters are applied to the IMG (not the tile) so the day
    number + check + footprint overlays stay full-colour. */
-.day-tile__scene {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;   /* match parent .day-tile border-radius */
+.day-tile__icon {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
   pointer-events: none;
   user-select: none;
-  transition: filter 350ms ease-out, opacity 350ms ease-out;
-  z-index: 1;
+  transition: filter 350ms ease-out, color 250ms ease-out;
 }
+.day-tile__icon svg { width: 56%; height: 56%; }
 
 /* future = LOCKED puzzle piece: warm sepia「未翻開的書頁」(Vivi preview-feedback,
    PR-4c-green Patrick 5/24 — 從深綠黑死黑改成 tan-sepia、放亮、讓「今天」那格 pop).
    Tint is brand-neutral tan (#B9A88C = --neutral-step), NOT green — green is
    reserved for the「走過的路」signal on completed tiles. */
 .day-tile--future        { background: var(--tile-future); cursor: default; }
-.day-tile--future .day-tile__scene {
-  /* 6/2 Vivi sandbox 觀察 — 粉版圖加 sepia 變黃褐, 整體太暗看不清插畫.
-     拿掉 sepia (圖本身已 warm), 亮度 0.78→0.92, 飽和 0.5→0.65, 對比 0.95→0.97.
-     仍能看出「沒到」 但插畫不再悶死. */
-  /* 6/4 Vivi — 0.65/0.92 跟 completed 全彩太接近、做過沒做過分不出來.
-     退到淺米白:「未來=還沒翻開的紙頁、走過的=上了色」. */
-  filter: saturate(0.2) brightness(1.1) contrast(0.92);
-}
+.day-tile--future .day-tile__icon { color: var(--neutral-step); opacity: 0.5; }
 .day-tile--future::after {
   content: '';
   position: absolute;
@@ -393,9 +387,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   font-family: var(--font-sans);
   font-size: 11px;
   z-index: 3;
-  color: #FFFFFF;
+  color: var(--ink-dim);
   pointer-events: none;
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.45);
 }
 /* 6/4 — future 卡米白化後白字+黑影變髒, 改暖灰、拿掉影. */
 .day-tile--future .day-tile__day { color: var(--text-secondary); text-shadow: none; }
@@ -442,8 +435,17 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   animation: day-tile-halo 3s ease-in-out infinite;
 }
 @keyframes day-tile-halo {
-  0%, 100% { box-shadow: 0 0 30px 8px rgba(227, 179, 64, 0.32); }
-  50%      { box-shadow: 0 0 40px 12px rgba(227, 179, 64, 0.58); }
+  0%, 100% { box-shadow: 0 0 26px 6px rgba(216, 178, 127, 0.40); }
+  50%      { box-shadow: 0 0 36px 11px rgba(216, 178, 127, 0.70); }
+}
+.day-tile--active-empty .day-tile__icon,
+.day-tile--active-filled .day-tile__icon {
+  color: var(--gold-soft);
+  animation: day-icon-glow 3s ease-in-out infinite;
+}
+@keyframes day-icon-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(216, 178, 127, 0.65)); }
+  50%      { filter: drop-shadow(0 0 7px rgba(216, 178, 127, 0.95)); }
 }
 
 /* ─── §4.3 TreasureBox — 5 phase boxes ABOVE the 21-day grid (Vivi 5/24).
@@ -1209,6 +1211,13 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   margin: 0 0 24px;
   padding: 0 8px;
 }
+.auth-preview__overview { max-width: 470px; margin: 0 auto; }
+.auth-preview__overview-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.apo-tile { position: relative; aspect-ratio: 1 / 1; background: #FFFFFF; border: 0.5px solid var(--border-line); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--gold); }
+.apo-tile svg { width: 58%; height: 58%; }
+.apo-n { position: absolute; top: 3px; left: 4px; font-size: 8px; color: var(--text-faint); font-family: var(--font-mono, Menlo, monospace); }
+.auth-preview__overview-cap { display: block; text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 14px; }
+@media (max-width: 440px) { .auth-preview__overview-grid { gap: 4px; } .apo-n { font-size: 7px; } }
 .auth-preview__steps {
   list-style: none;
   padding: 0;

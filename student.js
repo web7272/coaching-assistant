@@ -388,10 +388,10 @@ function renderEntrySetup() {
 async function renderJourney() {
   document.getElementById('journey-header-label').textContent = `看見自己 · 第${state.currentDay || 1}天`;
 
-  // P2 (PR-4c-green) §5.2 — personalised title「{name} 的看見自己之旅」(Vivi 拍板)
+  // P2 (PR-4c-green) §5.2 — personalised title「{name} 的身分重塑之旅」(Vivi 拍板)
   const titleEl = document.getElementById('journey-title');
   if (titleEl) {
-    titleEl.textContent = state.preferredName ? `${state.preferredName} 的看見自己之旅` : '你的看見自己之旅';
+    titleEl.textContent = state.preferredName ? `${state.preferredName} 的身分重塑之旅` : '你的身分重塑之旅';
   }
 
   let j;
@@ -460,7 +460,7 @@ function renderDayTile(c) {
   // dark overlay treatment via CSS for the locked-puzzle feel. Old class name
   // .day-tile__plant retired (植物 metaphor is gone) → .day-tile__scene.
   div.innerHTML = `
-    <img class="day-tile__scene" src="/assets/days/day${c.day}.webp" alt="" loading="lazy">
+    ${DAY_ICON_SVG(c.day)}
     <span class="day-tile__day">${c.day}</span>
     ${isFuture ? FOOTPRINT_SVG : ''}
     ${stateName === 'completed' || stateName === 'active-filled'
@@ -594,6 +594,32 @@ function ariaState(s) {
 function escapeText(s) { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; }
 
 // ─── inline SVG icons (zero asset dependency per spec §9) ──────────
+// Patrick 6/26 — 每日格子線條 icon (對齊 landing 21天總攬).
+const DAY_ICONS = [
+  '<circle cx="22" cy="23" r="6"/><path d="M22 10v3M12 14l2 2M32 14l-2 2M5 23h3M36 23h3"/><path d="M2 33h40"/><path d="M9 33c3-5 7-5 10 0M22 33c3-5 7-5 10 0"/>',
+  '<circle cx="22" cy="22" r="4"/><circle cx="22" cy="22" r="10"/><circle cx="22" cy="22" r="16"/><circle cx="22" cy="22" r="1.8" fill="currentColor" stroke="none"/>',
+  '<path d="M22 6v32"/><path d="M22 11h12l3 3-3 3H22z"/><path d="M22 21H10l-3 3 3 3h12z"/>',
+  '<path d="M2 34l10-16 9 16z"/><path d="M19 34l12-20 9 20z"/><path d="M27 18l4 3 3-3"/>',
+  '<path d="M12 20a7 7 0 0 1 14-1 5 5 0 0 1 4 9H14a6 6 0 0 1-2-8z"/><path d="M14 33l-1 4M22 33l-1 4M30 33l-1 4"/>',
+  '<path d="M4 30h36"/><path d="M9 30V16M35 30V16"/><path d="M9 18c8 8 18 8 26 0"/><path d="M16 30v-7M28 30v-7"/>',
+  '<path d="M6 34l12-22 8 14"/><path d="M26 34L34 20l6 14z"/><path d="M18 12v-6h6"/>',
+  '<path d="M6 34V20h7v14M15 34V14h8v20M25 34V18h8v16"/>',
+  '<path d="M4 19l8-9 7 9 6-6 9 6"/><path d="M4 25h36M9 30h28"/>',
+  '<circle cx="22" cy="22" r="15"/><circle cx="22" cy="22" r="9"/><path d="M22 7v30M7 22h30"/><circle cx="30" cy="14" r="2" fill="currentColor" stroke="none"/>',
+  '<circle cx="17" cy="22" r="9"/><circle cx="27" cy="22" r="9"/>',
+  '<path d="M5 31l32-13"/><path d="M7 25l30-12"/><path d="M29 13a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/>',
+  '<path d="M10 28h24l-4 6H14z"/><path d="M22 8v18M22 8l-9 18M22 12l8 14"/>',
+  '<circle cx="22" cy="18" r="6"/><path d="M22 6v2M11 12l1.5 1.5M33 12l-1.5 1.5M4 30h36M9 34h26"/>',
+  '<path d="M16 36l5-12 5 12z"/><path d="M21 24v12"/><path d="M31 11l1.6 3.2 3.4 1.6-3.4 1.6L31 22l-1.6-3.4-3.4-1.6 3.4-1.6z"/><circle cx="12" cy="14" r="1.3" fill="currentColor" stroke="none"/><circle cx="35" cy="27" r="1.3" fill="currentColor" stroke="none"/>',
+  '<path d="M8 8c10 6-10 12 0 18s-10 12 0 16"/><path d="M6 13h6M30 22h6M10 33h6"/>',
+  '<path d="M5 35V30h6V25h6V20h6V15h6V10"/><path d="M5 35h6M11 30h6M17 25h6M23 20h6M29 15h6"/>',
+  '<circle cx="22" cy="12" r="5"/><path d="M12 36c0-7 4-12 10-12s10 5 10 12"/><circle cx="22" cy="20" r="13" opacity=".25"/>',
+  '<path d="M22 6c-6 4-6 10 0 14 6-4 6-10 0-14z"/><path d="M22 20v8"/><path d="M22 36c-6-2-9-6-9-10M22 36c6-2 9-6 9-10M22 36v-8"/>',
+  '<circle cx="10" cy="14" r="2"/><circle cx="34" cy="12" r="2"/><circle cx="22" cy="24" r="2"/><circle cx="14" cy="32" r="2"/><circle cx="32" cy="30" r="2"/><path d="M12 15l8 8M32 13l-9 10M16 31l5-6M30 29l-7-4"/>',
+  '<circle cx="22" cy="22" r="15" opacity=".45"/><path d="M22 7L24.6 19.4 37 22 24.6 24.6 22 37 19.4 24.6 7 22 19.4 19.4Z" fill="currentColor" stroke="none"/><path d="M13 13l5 5M31 13l-5 5M13 31l5-5M31 31l-5-5"/>',
+];
+const DAY_ICON_SVG = (day) => `<span class="day-tile__icon" aria-hidden="true"><svg viewBox="0 0 44 40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${DAY_ICONS[((day - 1) % 21 + 21) % 21]}</svg></span>`;
+
 const FOOTPRINT_SVG = `
 <svg class="day-tile__footprint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
   <ellipse cx="12" cy="14" rx="4" ry="6" fill="currentColor" opacity="0.55" stroke="none"/>

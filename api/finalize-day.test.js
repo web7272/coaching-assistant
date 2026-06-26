@@ -1165,3 +1165,25 @@ test('🛑 6/13: safeNoteForStudent(null) 流經產品 fallback (「教練筆記
     /notebookPage:\s*safeNoteForStudent\(noteResult\.notebookPage/,
     '200 response 必須繼續走 safeNoteForStudent(noteResult.notebookPage) 路徑');
 });
+
+test('🛑 day1-card: import sendDailyCardEmail', () => {
+  assert.match(finalizeDaySrc, /import\s*\{[^}]*sendDailyCardEmail[^}]*\}\s*from\s*'\.\.\/lib\/email\/brevo\.js'/);
+});
+test('🛑 day1-card: day1 UPDATE RETURNING email + 首次旗標', () => {
+  assert.match(finalizeDaySrc, /AND day1_completed_at IS NULL\s*\n\s*RETURNING email/);
+  assert.match(finalizeDaySrc, /day1JustCompleted\s*=\s*true/);
+});
+test('🛑 day1-card: 只在 day1JustCompleted && day1Email 才寄', () => {
+  assert.match(finalizeDaySrc, /if\s*\(\s*day1JustCompleted\s*&&\s*day1Email\s*\)/);
+});
+test('🛑 day1-card: 內容走 safeNoteForStudent(notebook_page)', () => {
+  assert.match(finalizeDaySrc, /sendDailyCardEmail\(\s*day1Email\s*,\s*cardText\s*\)/);
+  assert.match(finalizeDaySrc, /const\s+cardText\s*=\s*safeNoteForStudent\(noteResult\.notebookPage/);
+});
+test('🛑 day1-card: fail-soft try/catch', () => {
+  assert.match(finalizeDaySrc, /try\s*\{[\s\S]{0,400}sendDailyCardEmail[\s\S]{0,200}\}\s*catch\s*\([^)]*\)\s*\{[\s\S]{0,200}daily-card-email-failed/);
+});
+test('🛑 day1-card: 寄信在 alreadyDone early-return 之後', () => {
+  const a=finalizeDaySrc.indexOf('alreadyDone: true'); const b=finalizeDaySrc.indexOf('sendDailyCardEmail(day1Email');
+  assert.ok(a>0 && b>0 && b>a);
+});

@@ -31,7 +31,7 @@ import {
 } from '../lib/state/state-manager.js';
 // 6/13 Stage B — shared observer-driver (also used by Stage A eval harness).
 import { runObserverOverSession } from '../lib/api/observer-driver.js';
-import { sendExportEmail } from '../lib/email/brevo.js';
+import { sendExportEmail, sendDailyCardEmail } from '../lib/email/brevo.js';
 import {
   sanitizeStudentNote, containsForbiddenContent, safeNoteForStudent,
 } from '../lib/api/student-note-safe.js';
@@ -731,14 +731,21 @@ export default async function handler(req, res) {
     //   Re-finalize 不覆蓋 (IS NULL guard). Day ≥ 2 不動 (day===1 guard).
     //   Fail-soft: 寫失敗 log 但不擋 finalize (UX 不能因為 metadata 寫不進去
     //   就讓學員 Day 1 結業流程當掉).
+    let day1JustCompleted = false;
+    let day1Email = null;
     if (day === 1) {
       try {
-        await sql`
+        const day1Rows = await sql`
           UPDATE students
              SET day1_completed_at = NOW()
            WHERE student_id = ${existing.student_id}
              AND day1_completed_at IS NULL
+          RETURNING email
         `;
+        if (Array.isArray(day1Rows) && day1Rows.length > 0) {
+          day1JustCompleted = true;
+          day1Email = day1Rows[0]?.email || null;
+        }
       } catch (day1WriteErr) {
         console.warn('[finalize-day][day1_completed_at-write-failed]',
           day1WriteErr?.message || day1WriteErr);
@@ -1202,6 +1209,19 @@ export default async function handler(req, res) {
       was_crisis: wasCrisis,
       graduation,
     }));
+    // ⭐ Patrick 6/26 — Day1 完成寄「身分解析卡」email (Vivi). 只在首次完成寄一次.
+    //   Re-finalize 走 alreadyDone early-return、到不了這裡 → 不重寄.
+    //   只放 safeNoteForStudent — 絕不 raw note/PII. Fail-soft, 永不擋 finalize.
+    if (day1JustCompleted && day1Email) {
+      try {
+        const cardText = safeNoteForStudent(noteResult.notebookPage, {
+          observe: (label) => console.warn(`[finalize-day daily-card] ${label} (session=${sessionId})`),
+        });
+        if (cardText) await sendDailyCardEmail(day1Email, cardText);
+      } catch (cardEmailErr) {
+        console.warn('[finalize-day][daily-card-email-failed]', cardEmailErr?.message || cardEmailErr);
+      }
+    }
     // Patrick 5/25 leak fix — see「alreadyDone」 branch comment above.
     // damonNotePublic removed; notebookPage runs through fail-closed sanitizer.
     return res.status(200).json({
