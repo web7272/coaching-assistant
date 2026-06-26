@@ -212,6 +212,14 @@
   .quiz input[type=email]{width:100%;margin-top:18px;padding:13px 14px;border-radius:10px;border:1px solid var(--line);
     font-family:inherit;font-size:15px;background:#fff;color:var(--ink)}
   .quiz .submit{margin-top:12px}
+  .quiz .opts .opt{display:flex;align-items:center;gap:8px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 14px;font-size:13.5px;color:var(--ink-soft);cursor:pointer;transition:.15s}
+  .quiz .opts .opt:hover{border-color:var(--gold)}
+  .quiz .opts .opt:has(input:checked){border-color:var(--gold);background:rgba(216,178,127,.14);color:var(--ink);font-weight:700}
+  .quiz .opts .opt input{accent-color:var(--gold);margin:0}
+  .quiz .opts.row{grid-template-columns:1fr 1fr}
+  .quiz .qmsg{margin-top:10px;font-size:13px;text-align:center}
+  .quiz .qmsg.err{color:#a33}
+  .quiz .qmsg.ok{color:var(--gold-deep)}
   .note{display:block;text-align:center;color:var(--ink-dim);font-size:12px;margin-top:20px}
 
   @media(max-width:860px){
@@ -329,17 +337,32 @@
         <span class="main">開始對話 →</span>
       </button>
       <div class="scarcity">高階對話運算資源有限，故免費名額限時限量</div>
-      <div class="quiz" id="quiz">
-        <div class="q">1. 哪一個最能描述你目前的階段？</div>
-        <div class="opts"><button>職場探索者</button><button>專業人士／小主管</button><button>創業者／高階經理人</button><button>轉向中的自由工作者</button></div>
-        <div class="q">2. 過去你主要靠什麼，想替人生找答案？</div>
-        <div class="opts"><button>YouTube／社群／問 AI</button><button>書籍／PDF 指南</button><button>線上課程／工作坊</button><button>1 對 1 諮商／教練</button></div>
-        <div class="q">3. 那些嘗試，後來「效果」如何？</div>
-        <div class="opts"><button>短暫啟發、很快回原點</button><button>學到理論、不會應用</button><button>被貼標籤、沒有自己的地圖</button><button>還沒真的拿回主導權</button></div>
-        <input type="email" placeholder="你的 email">
-        <button class="btn-primary submit"><span class="main">立刻領取 →</span></button>
-        <span class="note">純視覺預覽 · 漏斗串接後才會真的送出。</span>
-      </div>
+      <form class="quiz" id="quiz">
+        <div class="q">1. 你的性別？</div>
+        <div class="opts row">
+          <label class="opt"><input type="radio" name="q1" data-qkey="性別" value="男"><span>男</span></label>
+          <label class="opt"><input type="radio" name="q1" data-qkey="性別" value="女"><span>女</span></label>
+        </div>
+        <div class="q">2. 你現在最卡關的地方是？</div>
+        <div class="opts">
+          <label class="opt"><input type="radio" name="q2" data-qkey="卡關領域" value="婚姻伴侶"><span>婚姻伴侶</span></label>
+          <label class="opt"><input type="radio" name="q2" data-qkey="卡關領域" value="金錢事業"><span>金錢事業</span></label>
+          <label class="opt"><input type="radio" name="q2" data-qkey="卡關領域" value="家庭親子"><span>家庭親子</span></label>
+          <label class="opt"><input type="radio" name="q2" data-qkey="卡關領域" value="身體健康"><span>身體健康</span></label>
+          <label class="opt"><input type="radio" name="q2" data-qkey="卡關領域" value="自我關係"><span>自我關係</span></label>
+        </div>
+        <div class="q">3. 在這之前，你試過哪些方式想解決它？（可複選）</div>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" name="q3" data-qkey="試過的方式" value="看 YouTube／社群影音"><span>看 YouTube／社群影音</span></label>
+          <label class="opt"><input type="checkbox" name="q3" data-qkey="試過的方式" value="問 AI"><span>問 AI</span></label>
+          <label class="opt"><input type="checkbox" name="q3" data-qkey="試過的方式" value="讀書"><span>讀書</span></label>
+          <label class="opt"><input type="checkbox" name="q3" data-qkey="試過的方式" value="上線上課程／工作坊"><span>上線上課程／工作坊</span></label>
+          <label class="opt"><input type="checkbox" name="q3" data-qkey="試過的方式" value="找 1 對 1 諮商／教練"><span>找 1 對 1 諮商／教練</span></label>
+        </div>
+        <input type="email" id="quizEmail" placeholder="你的 email">
+        <button type="submit" class="btn-primary submit"><span class="main">立刻領取 →</span></button>
+        <p class="qmsg" id="quizMsg" aria-live="polite"></p>
+      </form>
     </div>
   </div>
 </header>
@@ -478,7 +501,36 @@
 <script>
   var btn=document.getElementById('openQuiz'),quiz=document.getElementById('quiz');
   if(btn){btn.addEventListener('click',function(){quiz.classList.toggle('open');if(quiz.classList.contains('open')){quiz.scrollIntoView({behavior:'smooth',block:'nearest'});}});}
-  document.querySelectorAll('.quiz .opts').forEach(function(g){g.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){g.querySelectorAll('button').forEach(function(x){x.classList.remove('sel');});b.classList.add('sel');});});});
+  function validEmail(v){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((v||'').trim());}
+  function collectQuiz(form){
+    var a={};
+    form.querySelectorAll('input[type=radio][data-qkey]:checked').forEach(function(r){a[r.dataset.qkey]=r.value;});
+    form.querySelectorAll('input[type=checkbox][data-qkey]:checked').forEach(function(c){(a[c.dataset.qkey]=a[c.dataset.qkey]||[]).push(c.value);});
+    return a;
+  }
+  if(quiz){quiz.addEventListener('submit',function(e){
+    e.preventDefault();
+    var form=e.target;
+    var emailInput=document.getElementById('quizEmail');
+    var submit=form.querySelector('.submit');
+    var msg=document.getElementById('quizMsg');
+    if(!validEmail(emailInput.value)){msg.textContent='email 看起來不太對、再確認一下。';msg.className='qmsg err';return;}
+    var answers=collectQuiz(form);
+    if(Object.keys(answers).length<3){msg.textContent='幫教練更認識你——3 個問題都選一下喔。';msg.className='qmsg err';return;}
+    var payload={email:emailInput.value.trim(),option:3,answers:answers};
+    var origLabel=submit.innerHTML;
+    submit.disabled=true;submit.textContent='送出中…';
+    msg.textContent='';msg.className='qmsg';
+    fetch('/api/request-guide',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(){
+      msg.innerHTML='Day 1 體驗連結已寄到信箱。<br>沒看到信? 找一下垃圾信／促銷匣。';
+      msg.className='qmsg ok';
+      submit.textContent='已寄出 ✓';
+      form.querySelectorAll('input,button').forEach(function(el){el.disabled=true;});
+    }).catch(function(){
+      msg.textContent='網路好像斷了、再試一次。';msg.className='qmsg err';
+      submit.disabled=false;submit.innerHTML=origLabel;
+    });
+  });}
 </script>
 <script>
 (function(){
