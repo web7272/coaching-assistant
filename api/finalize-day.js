@@ -974,6 +974,26 @@ export default async function handler(req, res) {
       }
     }
 
+    // ⭐ Patrick 6/26 — 每日「我的故事」快照存檔 (Vivi: 結業 PDF 要看 21 天進度).
+    //   把當下整個 sc_storyboard 拍一張、按 day_N 存進 sc_storyboard_history (append).
+    //   - 在所有 sc_storyboard 寫入 (J2/J3 增量 + S6 重生) 之後 → 抓到的是當天最終版。
+    //   - 同一天 re-finalize → 覆寫該天快照為最新 (jsonb_set create_missing=true)。
+    //   - Fail-soft: 寫失敗只 log、絕不擋 finalize (migration 039 沒跑時這支也只是 no-op 報錯)。
+    try {
+      await sql`
+        UPDATE students
+           SET sc_storyboard_history = jsonb_set(
+             COALESCE(sc_storyboard_history, '{}'::jsonb),
+             ARRAY['day_' || ${day}::text],
+             COALESCE(sc_storyboard, '{}'::jsonb),
+             true
+           )
+         WHERE student_id = ${existing.student_id}
+      `;
+    } catch (snapErr) {
+      console.warn('[finalize-day][storyboard-snapshot-failed]', snapErr?.message || snapErr);
+    }
+
     // PR-4c-green 5/24 cleanup — 週報退場、產品改 5 phase reports。
     // 原 Day 7/14 generateWeekSummary 寫 is_week_summary=true row 的呼叫 +
     // function 本身已移除（function 定義原在檔尾、一併刪）。

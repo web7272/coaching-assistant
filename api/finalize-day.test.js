@@ -1187,3 +1187,18 @@ test('🛑 day1-card: 寄信在 alreadyDone early-return 之後', () => {
   const a=finalizeDaySrc.indexOf('alreadyDone: true'); const b=finalizeDaySrc.indexOf('sendDailyCardEmail(day1Email');
   assert.ok(a>0 && b>0 && b>a);
 });
+
+// ═════════════════════════════════════════════════════════
+// 🛑 Patrick 6/26 — 每日「我的故事」快照存檔 (sc_storyboard_history)
+// ═════════════════════════════════════════════════════════
+test('🛑 storyboard-snapshot: 每天把 sc_storyboard 按 day_N append 進 sc_storyboard_history', () => {
+  assert.match(finalizeDaySrc, /sc_storyboard_history\s*=\s*jsonb_set/);
+  assert.match(finalizeDaySrc, /ARRAY\['day_'\s*\|\|\s*\$\{day\}::text\]/);
+  assert.match(finalizeDaySrc, /COALESCE\(sc_storyboard,\s*'\{\}'::jsonb\)/);
+});
+test('🛑 storyboard-snapshot: 快照在 S6 重生之後 (抓當天最終版) + fail-soft', () => {
+  const s6 = finalizeDaySrc.indexOf('note-storyboard-failed');
+  const snap = finalizeDaySrc.indexOf('sc_storyboard_history = jsonb_set');
+  assert.ok(s6 > 0 && snap > 0 && snap > s6, '快照必須在 S6 重生之後');
+  assert.match(finalizeDaySrc, /try\s*\{[\s\S]{0,400}sc_storyboard_history[\s\S]{0,400}\}\s*catch\s*\([^)]*\)\s*\{[\s\S]{0,200}storyboard-snapshot-failed/);
+});
