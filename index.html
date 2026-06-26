@@ -72,7 +72,7 @@
          Lives OUTSIDE #journey-grid (above .journey-grid-wrap) so it
          survives renderJourney's innerHTML clear, mirroring the same
          positional choice as the journey-path SVG. -->
-    <a class="storyboard-minimap" href="#/storyboard" aria-label="打開我的人生旅途">
+    <a class="storyboard-minimap" href="#/storyboard" aria-label="打開我的故事">
       <span class="storyboard-minimap__icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
              stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
@@ -82,7 +82,7 @@
           <path d="M15 6 V20"/>
         </svg>
       </span>
-      <span class="storyboard-minimap__text">看看你的人生旅途</span>
+      <span class="storyboard-minimap__text">看看我的故事</span>
       <span class="storyboard-minimap__arrow" aria-hidden="true">→</span>
     </a>
 
@@ -162,7 +162,7 @@
 
   <!-- ─────────── §5.4 身分解析卡 — green sweep + new copy ─────────── -->
   <section id="view-note" class="view paper-page" aria-label="身分解析卡">
-    <header class="note-topbar"><button class="note-nav-btn" data-nav="journey" aria-label="返回旅程"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><span class="label" id="note-header-label">看見自己 · 第N天</span><a class="note-nav-btn" href="#/storyboard" aria-label="看看你的人生旅途"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></a></header>
+    <header class="note-topbar"><button class="note-nav-btn" data-nav="journey" aria-label="返回旅程"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><span class="label" id="note-header-label">看見自己 · 第N天</span><a class="note-nav-btn" href="#/storyboard" aria-label="看看我的故事"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></a></header>
     <div style="height:52px"></div>
     <!-- PR-4c-green Patrick 5/24 — day hero scene above the paper card (set by renderNote) -->
     <figure class="day-hero day-hero--note">
@@ -184,7 +184,7 @@
     <div class="btn-row note-bottom" id="note-btn-row">
       <button class="paper-btn" data-nav="journey">回到旅程</button>
       <button class="paper-btn" data-nav="journey" id="note-btn-tomorrow">明天見</button>
-      <a href="#/storyboard" class="note-map-btn" aria-label="看看你的人生旅途"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></a>
+      <a href="#/storyboard" class="note-map-btn" aria-label="看看我的故事"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></a>
     </div>
   </section>
 
@@ -314,12 +314,12 @@
     </div>
   </section>
 
-  <!-- ─────────── §5.7 (v5.3 件3 PR-J4) — 頁 Y「我的人生旅途」 七步故事頁
+  <!-- ─────────── §5.7 (v5.3 件3 PR-J4) — 頁 Y「我的故事」 七步故事頁
        SPA 入口: #/storyboard ; renderStoryboard() in student.js fetches
        /api/sc-storyboard (J1+J2+J3 contract) and fills #storyboard-body.
-       Patrick spec: 地圖 icon + 「你的 21 天旅途」 title.
+       Patrick spec: 地圖 icon + 「我的故事」 title.
        ─────────── -->
-  <section id="view-storyboard" class="view paper-page" aria-label="你的 21 天旅途">
+  <section id="view-storyboard" class="view paper-page" aria-label="我的故事">
     <header class="storyboard-header">
       <!-- 6/14 Vivi — 頂部「回到旅程」(左上), 與底部按鈕同 data-nav. -->
       <div class="storyboard-topbar">
@@ -335,7 +335,7 @@
           <path d="M15 6 V20"/>
         </svg>
       </span>
-      <h1 class="storyboard-title">你的 21 天旅途</h1>
+      <h1 class="storyboard-title">我的故事</h1>
       <p class="storyboard-sub">你的21天旅程，是一條屬於自己的故事線。你從懷疑自己出發，在失望與渴望中仍選擇相信希望，一路擊退限制性信念與對外在認可的依賴，逐步奪回人生主權。最終你發現：你的價值從來不是別人說了算。當你做出新的決定，你的身分就開始轉變。</p>
     </header>
     <div id="storyboard-body" class="storyboard-body">
