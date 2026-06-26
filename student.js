@@ -1221,7 +1221,7 @@ async function startClosureTransition() {
   // fail-closed; this is the same property enforced at the last possible
   // moment before the DOM render.
   const FORBIDDEN_RE = /【(深度層次|SC 觀察|還沒碰到的|關鍵句|今天的模式|採集追蹤|Scope 證據|賦予新角色狀態|確定類別 \+ Scope|Transfer 結果|微證據|宣言)|Layer\s?[1-5]\b|\bL[1-5]\b|工具[一二三四1234]/u;
-  const SAFE_FALLBACK = '（教練筆記稍後送達）';
+  const SAFE_FALLBACK = '（身分解析卡稍後送達）';
   let closureBody = SAFE_FALLBACK;
   if (finalizeResult && finalizeResult.ok && typeof finalizeResult.notebookPage === 'string') {
     closureBody = FORBIDDEN_RE.test(finalizeResult.notebookPage)

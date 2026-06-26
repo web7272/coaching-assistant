@@ -469,12 +469,12 @@ async function renderStudent(sid) {
     try {
       const n = await api(`/api/note?studentId=${encodeURIComponent(sid)}&module=self&day=${day}&audience=coach`);
       const hasCard = !!n.studentCard;
-      const text = hasCard ? n.studentCard : `（Day ${day} 還沒有教練卡。）`;
+      const text = hasCard ? n.studentCard : `（Day ${day} 還沒有身分解析卡。）`;
       cardCache.set(day, { text, hasCard });
       cardBody.textContent = text;
       if (cardCopyBtn) cardCopyBtn.style.display = hasCard ? 'inline-block' : 'none';
     } catch (e) {
-      cardBody.textContent = '沒能取回教練卡：' + (e?.message || '');
+      cardBody.textContent = '沒能取回身分解析卡：' + (e?.message || '');
       if (cardCopyBtn) cardCopyBtn.style.display = 'none';
     }
   }
