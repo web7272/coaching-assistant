@@ -126,7 +126,7 @@ test('buildDynamicContext: surfaces top1_value + gap_days', () => {
     3,
   );
   assert.match(txt, /top1_value：勇敢/);
-  assert.match(txt, /gap_days：3/);
+  assert.match(txt, /距上次對話：3 天/);
   assert.match(txt, /session_day_count：4/);
 });
 

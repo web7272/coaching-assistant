@@ -804,7 +804,7 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
   if (Array.isArray(modeRead.paused_modes) && modeRead.paused_modes.length > 0) {
     lines.push(`paused_modes：${modeRead.paused_modes.join(', ')}`);
   }
-  lines.push(`session_day_count：${userProfile.session_day_count ?? 0}｜gap_days：${gapDays}`);
+  lines.push(`session_day_count：${userProfile.session_day_count ?? 0}｜距上次對話：${gapDays} 天`);
   if (top1) lines.push(`top1_value：${top1}`);
   if (ranking.length) {
     lines.push(`values_ranking（Top 3）：${ranking.slice(0, 3).map(r => r?.value || r).join('、')}`);
