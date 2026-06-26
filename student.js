@@ -464,7 +464,7 @@ function renderDayTile(c) {
     <span class="day-tile__day">${c.day}</span>
     ${isFuture ? FOOTPRINT_SVG : ''}
     ${stateName === 'completed' || stateName === 'active-filled'
-      ? `<span class="day-tile__check" aria-hidden="true">${CHECK_SVG}</span>`
+      ? `<span class="day-tile__check" aria-hidden="true"></span>`
       : ''}
     ${stateName === 'active-empty'
       ? `<span class="day-tile__start-pill">開始</span>`
@@ -655,8 +655,7 @@ async function renderConversation() {
   const day = state.currentDay || 1;
   scroll.insertAdjacentHTML('beforeend', `
     <figure class="day-hero">
-      <img class="day-hero__img" src="/assets/days/hero/day${day}.webp"
-           alt="" loading="eager" decoding="async">
+      <span class="day-hero__icon" aria-hidden="true"><svg viewBox="0 0 44 40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${DAY_ICONS[((day - 1) % 21 + 21) % 21]}</svg></span>
     </figure>
   `);
   // Re-render persisted conversation (localStorage survives refresh)
@@ -1276,8 +1275,8 @@ async function renderNote(day) {
   // CSS-capped max-width so it sits naturally above the note (paper-aesthetic
   // "title image of the day"). Same asset as the conversation hero — 1-to-1
   // illustration N = 第 N 天.
-  const heroImg = document.getElementById('note-hero-img');
-  if (heroImg) heroImg.src = `/assets/days/hero/day${day}.webp`;
+  const heroIcon = document.getElementById('note-hero-icon');
+  if (heroIcon) heroIcon.innerHTML = `<svg viewBox="0 0 44 40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${DAY_ICONS[((day - 1) % 21 + 21) % 21]}</svg>`;
   const body = document.getElementById('note-body');
   body.innerHTML = '';
 

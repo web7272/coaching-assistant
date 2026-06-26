@@ -56,7 +56,9 @@
   /* 腳印 / locked / 中性 icon — 本來就是暖棕、保留 */
   --neutral-step:   #B9A88C;
   /* 卡片 (筆記 / 報告) — 保持 solid 米白 (紙感鐵則, 不換成 glass) */
-  --paper-card:     #FBF6EC;
+  --paper-card:     #FAF9F6;            /* 6/26 微暖白 (去橘粉) */
+  --brand:          var(--gold);          /* 6/26 補定義 — 原 undefined fallback 到橘 #E08A3C */
+  --bg-paper:       #F4F4F4;              /* 6/26 補定義 — 原 undefined fallback 到桃 #FBF6EE */
   /* 用戶泡泡 — 淺薄荷 → 淺珊瑚 */
   --bubble-user:    #EFE7D8;
   /* 微分隔線 — 綠 hairline → 赤陶 hairline */
@@ -153,7 +155,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   transition: background-color 200ms ease-out, border-color 200ms ease-out;
 }
 .btn-paper:hover,
-.paper-btn:hover { background: #f4e0d3; }    /* 5/30 — warm peach hover (was light cream #F4ECDA) */
+.paper-btn:hover { background: rgba(216, 178, 127, 0.16); }    /* 6/26 — 金 hover */
 /* Vivi 5/24: coach day-note picker active-day visual mark. Tiny ring so the
    coach knows which day is currently shown + clicking the same day again
    toggles the note collapsed. */
@@ -396,19 +398,15 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 /* Completed ✓ — gold disc top-right with white check */
 .day-tile__check {
   position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 16px;
-  height: 16px;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--gold-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: var(--gold-soft);
   z-index: 3;
   pointer-events: none;
 }
-.day-tile__check svg { width: 9px; height: 9px; color: #FFFFFF; }
 
 /* Active 「開始」 pill — only active-empty (today, still going) */
 .day-tile__start-pill {
@@ -520,22 +518,13 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
    paper-card on the note view. 1:1 square asset; max-width caps the visual so
    it doesn't swallow a mobile screen. Subtle paper aesthetic, no shadow. */
 .day-hero {
-  margin: 0 auto 24px;
-  max-width: 360px;       /* ~92vw on a 390px viewport — roomy not overwhelming */
-  width: 100%;
-  border-radius: 14px;
-  overflow: hidden;
-  border: 0.5px solid var(--border-line);
-  background: var(--paper-card);
+  margin: 0 auto 20px;
+  display: flex;
+  justify-content: center;
+  color: var(--gold);
 }
-.day-hero__img {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  user-select: none;
-}
+.day-hero__icon { display: flex; }
+.day-hero__icon svg { width: 60px; height: 54px; }
 /* On the note (paper-page) view the hero sits above the paper-card with a bit
    more breathing room and centered within the page's narrower column. */
 .day-hero--note { margin: 0 auto 18px; }
@@ -806,12 +795,19 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   text-align: left;
   margin-bottom: 12px;
 }
+.storyboard-titlerow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 0 6px;
+}
 .storyboard-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--brand, #E08A3C);
-  margin-bottom: 8px;
+  color: var(--gold-deep);
+  flex: 0 0 auto;
 }
 .storyboard-title {
   font-family: var(--font-serif, Georgia, "Noto Serif TC", serif);
@@ -852,8 +848,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .storyboard-quote {
   margin: 0 0 22px;
   padding: 10px 16px;
-  background: rgba(224, 138, 60, 0.06);
-  border-left: 3px solid rgba(224, 138, 60, 0.4);
+  background: rgba(216, 178, 127, 0.06);
+  border-left: 3px solid rgba(216, 178, 127, 0.4);
   border-radius: 6px;
   color: var(--text-primary);
   font-style: italic;
@@ -943,7 +939,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 }
 .storyboard-story-toggle:hover,
 .storyboard-story-toggle:focus-visible {
-  background: rgba(224, 138, 60, 0.08);
+  background: rgba(216, 178, 127, 0.08);
   outline: none;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -982,11 +978,11 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 }
 .storyboard-nav-item:hover,
 .storyboard-nav-item:focus {
-  background: rgba(224, 138, 60, 0.06);
+  background: rgba(216, 178, 127, 0.06);
   color: var(--text-primary);
 }
 .storyboard-nav-item--current {
-  background: rgba(224, 138, 60, 0.12);
+  background: rgba(216, 178, 127, 0.12);
   color: var(--brand, #E08A3C);
   font-weight: 600;
 }
@@ -1058,7 +1054,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   transform: rotate(180deg);
 }
 .storyboard-step-toggle[aria-expanded="true"] {
-  background: rgba(224, 138, 60, 0.05);
+  background: rgba(216, 178, 127, 0.05);
 }
 
 .storyboard-step-body {
@@ -1095,7 +1091,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .storyboard-quote-callout {
   margin: 10px 0 0;
   padding: 8px 14px;
-  background: rgba(224, 138, 60, 0.08);
+  background: rgba(216, 178, 127, 0.08);
   border-left: 3px solid var(--brand, #E08A3C);
   border-radius: 4px;
   color: var(--text-primary);
@@ -1162,8 +1158,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   /* 6/12 Vivi — 上下 margin 收緊 (8→4 / 20→14), pill 跟標題+grid 更貼. */
   margin: 4px auto 14px;
   padding: 10px 16px;
-  background: rgba(224, 138, 60, 0.08);
-  border: 1px solid rgba(224, 138, 60, 0.2);
+  background: rgba(216, 178, 127, 0.08);
+  border: 1px solid rgba(216, 178, 127, 0.2);
   border-radius: 999px;
   color: var(--brand, #E08A3C);
   text-decoration: none;
@@ -1173,8 +1169,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 }
 .storyboard-minimap:hover,
 .storyboard-minimap:focus {
-  background: rgba(224, 138, 60, 0.14);
-  border-color: rgba(224, 138, 60, 0.4);
+  background: rgba(216, 178, 127, 0.14);
+  border-color: rgba(216, 178, 127, 0.4);
 }
 .storyboard-minimap:active { transform: scale(0.98); }
 .storyboard-minimap__icon {
@@ -1259,8 +1255,8 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
   border: 1px dashed rgba(0, 0, 0, 0.18);
 }
 .auth-preview__frame--icon {
-  background: rgba(224, 138, 60, 0.08);
-  border: 1px solid rgba(224, 138, 60, 0.3);
+  background: rgba(216, 178, 127, 0.08);
+  border: 1px solid rgba(216, 178, 127, 0.3);
   color: var(--brand, #E08A3C);
 }
 /* 6/12 — ①-④ real APP webp screenshots (Vivi 6/12 +Patrick 壓 webp ~30KB).
@@ -1292,7 +1288,7 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 /* ───────────── 頁Y 門面改版 (Vivi 6/14) — 頂部數字圓圈進度條 + 過場句 + 標籤 ───────────── */
 .storyboard-progress {
   position: sticky; top: 0; z-index: 20;
-  background: rgba(247,235,229,.94); backdrop-filter: blur(8px);
+  background: rgba(244,244,244,.94); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--card-line);
   padding: 9px 4px; margin: 0 -4px 18px;
 }

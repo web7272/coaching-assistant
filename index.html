@@ -77,9 +77,7 @@
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
              stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
              stroke-linejoin="round" aria-hidden="true">
-          <path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/>
-          <path d="M9 4 V18"/>
-          <path d="M15 6 V20"/>
+          <path d="M12 8.3C9.2 6.4 5.8 6.1 2.8 6.8V16.9"/><path d="M2.8 16.9C5.6 16.2 9.2 16.5 12 18.5"/><path d="M12 8.3C14.8 6.4 18.2 6.1 21.2 6.8V16.9"/><path d="M21.2 16.9C18.7 16.3 15.7 16.4 13.2 17.7"/><path d="M12 8.3V18.5"/><path d="M19.8 4.4C17.8 6.6 16.6 9.6 16.3 12.8"/><path d="M19.8 4.4C20.2 6.8 19.7 9.2 18.2 11.2"/><path d="M16.3 12.8C17.2 12.4 17.9 11.9 18.2 11.2"/><path d="M16.3 12.8L15.2 14.8"/>
         </svg>
       </span>
       <span class="storyboard-minimap__text">我的故事</span>
@@ -104,7 +102,7 @@
                6/2 二輪: 線改深藍 #243f79 — 跟 day card 區隔 (Day 1/12 等夜空
                illustration 中心色), 不再 var(--brand-green) terracotta. -->
           <path id="journey-path-line"
-                stroke="#243f79" stroke-width="4"
+                stroke="#D8B27F" stroke-width="2.5"
                 stroke-linecap="round" fill="none" />
         </svg>
         <div class="journey-grid" id="journey-grid" role="list">
@@ -162,11 +160,11 @@
 
   <!-- ─────────── §5.4 身分解析卡 — green sweep + new copy ─────────── -->
   <section id="view-note" class="view paper-page" aria-label="身分解析卡">
-    <header class="note-topbar"><button class="note-nav-btn" data-nav="journey" aria-label="返回旅程"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><span class="label" id="note-header-label">看見自己 · 第N天</span><a class="note-nav-btn" href="#/storyboard" aria-label="我的故事"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></a></header>
+    <header class="note-topbar"><button class="note-nav-btn" data-nav="journey" aria-label="返回旅程"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><span class="label" id="note-header-label">看見自己 · 第N天</span><a class="note-nav-btn" href="#/storyboard" aria-label="我的故事"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8.3C9.2 6.4 5.8 6.1 2.8 6.8V16.9"/><path d="M2.8 16.9C5.6 16.2 9.2 16.5 12 18.5"/><path d="M12 8.3C14.8 6.4 18.2 6.1 21.2 6.8V16.9"/><path d="M21.2 16.9C18.7 16.3 15.7 16.4 13.2 17.7"/><path d="M12 8.3V18.5"/><path d="M19.8 4.4C17.8 6.6 16.6 9.6 16.3 12.8"/><path d="M19.8 4.4C20.2 6.8 19.7 9.2 18.2 11.2"/><path d="M16.3 12.8C17.2 12.4 17.9 11.9 18.2 11.2"/><path d="M16.3 12.8L15.2 14.8"/></svg></a></header>
     <div style="height:52px"></div>
     <!-- PR-4c-green Patrick 5/24 — day hero scene above the paper card (set by renderNote) -->
     <figure class="day-hero day-hero--note">
-      <img id="note-hero-img" class="day-hero__img" src="" alt="" loading="eager" decoding="async">
+      <span id="note-hero-icon" class="day-hero__icon" aria-hidden="true"></span>
     </figure>
     <article class="paper-card">
       <div class="paper-card__header">
@@ -184,7 +182,7 @@
     <div class="btn-row note-bottom" id="note-btn-row">
       <button class="paper-btn" data-nav="journey">回到旅程</button>
       <button class="paper-btn" data-nav="journey" id="note-btn-tomorrow">明天見</button>
-      <a href="#/storyboard" class="note-map-btn" aria-label="我的故事"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><path d="M9 4 V18"/><path d="M15 6 V20"/></svg></a>
+      <a href="#/storyboard" class="note-map-btn" aria-label="我的故事"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8.3C9.2 6.4 5.8 6.1 2.8 6.8V16.9"/><path d="M2.8 16.9C5.6 16.2 9.2 16.5 12 18.5"/><path d="M12 8.3C14.8 6.4 18.2 6.1 21.2 6.8V16.9"/><path d="M21.2 16.9C18.7 16.3 15.7 16.4 13.2 17.7"/><path d="M12 8.3V18.5"/><path d="M19.8 4.4C17.8 6.6 16.6 9.6 16.3 12.8"/><path d="M19.8 4.4C20.2 6.8 19.7 9.2 18.2 11.2"/><path d="M16.3 12.8C17.2 12.4 17.9 11.9 18.2 11.2"/><path d="M16.3 12.8L15.2 14.8"/></svg></a>
     </div>
   </section>
 
@@ -325,17 +323,12 @@
       <div class="storyboard-topbar">
         <button class="paper-btn" data-nav="journey">回到旅程</button>
       </div>
-      <span class="storyboard-icon" aria-hidden="true">
-        <!-- 地圖 SVG (folded paper map). Stroke-only, currentColor. -->
-        <svg viewBox="0 0 24 24" width="32" height="32" fill="none"
-             stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
-             stroke-linejoin="round" aria-hidden="true">
-          <path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/>
-          <path d="M9 4 V18"/>
-          <path d="M15 6 V20"/>
-        </svg>
-      </span>
-      <h1 class="storyboard-title">我的故事</h1>
+      <div class="storyboard-titlerow">
+        <span class="storyboard-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8.3C9.2 6.4 5.8 6.1 2.8 6.8V16.9"/><path d="M2.8 16.9C5.6 16.2 9.2 16.5 12 18.5"/><path d="M12 8.3C14.8 6.4 18.2 6.1 21.2 6.8V16.9"/><path d="M21.2 16.9C18.7 16.3 15.7 16.4 13.2 17.7"/><path d="M12 8.3V18.5"/><path d="M19.8 4.4C17.8 6.6 16.6 9.6 16.3 12.8"/><path d="M19.8 4.4C20.2 6.8 19.7 9.2 18.2 11.2"/><path d="M16.3 12.8C17.2 12.4 17.9 11.9 18.2 11.2"/><path d="M16.3 12.8L15.2 14.8"/></svg>
+        </span>
+        <h1 class="storyboard-title">我的故事</h1>
+      </div>
       <p class="storyboard-sub">你的21天旅程，是一條屬於自己的故事線。你從懷疑自己出發，在失望與渴望中仍選擇相信希望，一路擊退限制性信念與對外在認可的依賴，逐步奪回人生主權。最終你發現：你的價值從來不是別人說了算。當你做出新的決定，你的身分就開始轉變。</p>
     </header>
     <div id="storyboard-body" class="storyboard-body">
