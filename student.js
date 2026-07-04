@@ -125,7 +125,7 @@ async function hydrateFromCookie() {
 // 因 VIEWS 不含 'storyboard',view-storyboard 永遠沒被加 active,#/storyboard
 // 整頁空白. 防再犯 test: lib/student/views-coverage.test.js 鎖 VIEWS ↔ index.html
 // view-* id 必須一致).
-const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report', 'upgrade', 'blocked', 'storyboard'];
+const VIEWS = ['entry', 'journey', 'conversation', 'note', 'graduation', 'phase-report', 'upgrade', 'blocked', 'storyboard', 'story-pdf'];
 
 function showView(name) {
   for (const v of VIEWS) {
@@ -205,6 +205,7 @@ async function route() {
     case 'blocked':      showView('blocked');      /* purely static, view-blocked HTML carries copy */ break;
     // v5.3 件3 PR-J4 — 頁 Y「我的人生旅途」 (七步故事頁).
     case 'storyboard':   showView('storyboard');   await renderStoryboard(); break;
+    case 'story-pdf':    showView('story-pdf');    await renderStoryPdf(); break;
     default:             location.hash = '#/entry';
   }
 }
@@ -1831,4 +1832,78 @@ async function renderStoryboard() {
   }
   bodyEl.innerHTML = buildStoryboardBodyHTML(apiResp);
   attachStoryboardToggleHandlers(bodyEl);
+}
+
+// ─── Patrick 6/26 — 我的故事 PDF 列印視圖 (P2, 瀏覽器版) ───────────
+function pdfTimelineHTML(history) {
+  const h = (history && typeof history === 'object') ? history : {};
+  const items = STORYBOARD_STEP_META_INLINE.map(function (meta) {
+    var stepKey = 'step_' + parseInt(meta.no, 10);
+    var firstDay = null;
+    for (var day = 1; day <= 21; day++) {
+      var snap = h['day_' + day];
+      var st = snap && snap[stepKey];
+      if (st && ((st.brain_state && st.brain_state.description) || st.sovereign_action)) { firstDay = day; break; }
+    }
+    var tag = firstDay ? ('第 ' + firstDay + ' 天點亮') : '尚未';
+    var cls = firstDay ? 'pdf-tl-item pdf-tl-item--lit' : 'pdf-tl-item';
+    return '<li class="' + cls + '"><span class="pdf-tl-no">' + escapeHTMLStoryboard(meta.no) + '</span>'
+      + '<span class="pdf-tl-name">' + escapeHTMLStoryboard(meta.name_zh) + '</span>'
+      + '<span class="pdf-tl-day">' + escapeHTMLStoryboard(tag) + '</span></li>';
+  }).join('');
+  return '<ol class="pdf-timeline">' + items + '</ol>';
+}
+function pdfStepsHTML(steps) {
+  var arr = Array.isArray(steps) ? steps : [];
+  return arr.map(function (st) {
+    if (!st) return '';
+    var bs = st.brain_state || {};
+    var parts = '<article class="pdf-step"><h3 class="pdf-step__h">' + escapeHTMLStoryboard(st.no || '') + ' · ' + escapeHTMLStoryboard(st.name_zh || '') + '</h3>';
+    if (bs.description) parts += '<p class="pdf-p"><span class="pdf-label">大腦現狀</span>' + escapeHTMLStoryboard(bs.description) + '</p>';
+    if (bs.quote) parts += '<blockquote class="pdf-quote">「' + escapeHTMLStoryboard(bs.quote) + '」</blockquote>';
+    if (st.sovereign_action) parts += '<p class="pdf-p"><span class="pdf-label">主權建議</span>' + escapeHTMLStoryboard(st.sovereign_action) + '</p>';
+    return parts + '</article>';
+  }).join('');
+}
+var BOOK_QUILL_PDF_SVG = '<svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8.3C9.2 6.4 5.8 6.1 2.8 6.8V16.9"/><path d="M2.8 16.9C5.6 16.2 9.2 16.5 12 18.5"/><path d="M12 8.3C14.8 6.4 18.2 6.1 21.2 6.8V16.9"/><path d="M21.2 16.9C18.7 16.3 15.7 16.4 13.2 17.7"/><path d="M12 8.3V18.5"/><path d="M19.8 4.4C17.8 6.6 16.6 9.6 16.3 12.8"/><path d="M19.8 4.4C20.2 6.8 19.7 9.2 18.2 11.2"/><path d="M16.3 12.8C17.2 12.4 17.9 11.9 18.2 11.2"/><path d="M16.3 12.8L15.2 14.8"/></svg>';
+function buildStoryPdfHTML(data) {
+  var d = (data && typeof data === 'object') ? data : {};
+  if (!d.ready) return '<div class="pdf-notready">完整的「我的故事」會在你走完 21 天、結業之後開放下載。</div>';
+  var name = escapeHTMLStoryboard(d.name || '你');
+  var grad = (d.graduation && typeof d.graduation === 'object') ? d.graduation : {};
+  var values = (d.values && typeof d.values === 'object') ? d.values : {};
+  var cards = Array.isArray(d.dailyCards) ? d.dailyCards : [];
+  var html = '<div class="pdf-doc">';
+  html += '<section class="pdf-cover"><div class="pdf-cover__logo">' + BOOK_QUILL_PDF_SVG + '</div>'
+    + '<h1 class="pdf-cover__title">' + name + ' 的身分重塑之旅</h1>'
+    + '<p class="pdf-cover__sub">21 天身分重塑計畫 · 我的故事</p></section>';
+  if (grad.declaration) html += '<section class="pdf-section pdf-section--decl"><p class="pdf-decl">' + escapeHTMLStoryboard(grad.declaration) + '</p></section>';
+  if (grad.coachLetter) html += '<section class="pdf-section"><h2 class="pdf-h2">教練見證信</h2>'
+    + grad.coachLetter.split(/\n+/).map(function (x) { return '<p class="pdf-p">' + escapeHTMLStoryboard(x) + '</p>'; }).join('')
+    + '<p class="pdf-sig">— 教練</p></section>';
+  html += '<section class="pdf-section pdf-page-break"><h2 class="pdf-h2">我的故事</h2>' + pdfStepsHTML(d.storyboard) + '</section>';
+  html += '<section class="pdf-section pdf-page-break"><h2 class="pdf-h2">21 天進度</h2><p class="pdf-p pdf-muted">每一步在第幾天被點亮:</p>' + pdfTimelineHTML(d.history) + '</section>';
+  var ranking = Array.isArray(values.ranking) ? values.ranking : [];
+  var rankItems = ranking.slice(0, 10).map(function (r) { var v = typeof r === 'string' ? r : (r && r.value) || ''; return v ? '<li>' + escapeHTMLStoryboard(v) + '</li>' : ''; }).join('');
+  if (values.top1 || rankItems) html += '<section class="pdf-section"><h2 class="pdf-h2">你的價值觀</h2>'
+    + (values.top1 ? '<p class="pdf-p">最重要的:<strong>' + escapeHTMLStoryboard(values.top1) + '</strong></p>' : '')
+    + (rankItems ? '<ol class="pdf-values">' + rankItems + '</ol>' : '') + '</section>';
+  if (cards.length) html += '<section class="pdf-section pdf-page-break"><h2 class="pdf-h2">每日身分解析卡</h2>'
+    + cards.map(function (c) { return '<article class="pdf-card"><div class="pdf-card__day">第 ' + escapeHTMLStoryboard(String(c.day)) + ' 天</div><div class="pdf-card__body">'
+        + (c.card || '').split(/\n+/).map(function (x) { return '<p>' + escapeHTMLStoryboard(x) + '</p>'; }).join('') + '</div></article>'; }).join('')
+    + '</section>';
+  return html + '</div>';
+}
+async function renderStoryPdf() {
+  const bodyEl = document.getElementById('story-pdf-body');
+  if (!bodyEl) return;
+  bodyEl.innerHTML = '<p class="storyboard-loading">載入中…</p>';
+  let data = null;
+  try {
+    const r = await fetch('/api/storyboard-pdf-data?module=self', { credentials: 'include', headers: { 'accept': 'application/json' } });
+    if (r.ok) data = await r.json();
+  } catch (_err) { /* fail-soft */ }
+  bodyEl.innerHTML = buildStoryPdfHTML(data || { ready: false });
+  const btn = document.getElementById('story-pdf-print');
+  if (btn) { btn.hidden = !(data && data.ready); btn.onclick = function () { window.print(); }; }
 }

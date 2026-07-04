@@ -1401,3 +1401,41 @@ b, strong, h1, h2, h3, h4, h5, h6 { font-weight: 400; }
 .coach-h2--front{background:rgba(95,138,99,.13);color:#3f6a44;padding:6px 12px;border-radius:6px;display:inline-block}
 .coach-h2--coach{background:rgba(154,106,85,.13);color:#8a4a2f;padding:6px 12px;border-radius:6px;display:inline-block}
 .coach-divider{border:0;border-top:1px solid var(--card-line);margin:28px 0}
+
+/* ─── Patrick 6/26 — 我的故事 PDF 列印視圖 (P2) ─── */
+.pdf-doc { max-width: 720px; margin: 0 auto; color: var(--ink); font-family: var(--font-serif, Georgia, "Noto Serif TC", serif); }
+.pdf-notready { max-width: 480px; margin: 60px auto; text-align: center; color: var(--text-secondary); line-height: 1.9; }
+.pdf-cover { text-align: center; padding: 48px 0 40px; }
+.pdf-cover__logo { color: var(--gold-deep); margin-bottom: 16px; }
+.pdf-cover__title { font-size: 26px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px; }
+.pdf-cover__sub { font-size: 13px; letter-spacing: 3px; color: var(--gold-deep); }
+.pdf-section { margin: 0 auto 32px; max-width: 600px; }
+.pdf-h2 { font-size: 18px; font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--card-line); padding-bottom: 8px; margin: 0 0 16px; }
+.pdf-p { font-size: 14.5px; line-height: 1.95; color: var(--text-secondary); margin: 0 0 12px; }
+.pdf-muted { color: var(--text-faint); font-size: 13px; }
+.pdf-label { display: inline-block; font-size: 12px; color: var(--gold-deep); margin-right: 6px; }
+.pdf-quote { font-style: italic; color: var(--gold-deep); border-left: 2px solid var(--gold); padding-left: 12px; margin: 8px 0 14px; }
+.pdf-sig { text-align: right; font-style: italic; color: var(--text-faint); font-size: 13px; }
+.pdf-section--decl { text-align: center; padding: 24px 0; }
+.pdf-decl { font-size: 20px; font-weight: 600; color: var(--text-primary); line-height: 1.7; }
+.pdf-step { margin: 0 0 22px; }
+.pdf-step__h { font-size: 15px; font-weight: 600; color: var(--gold-deep); margin: 0 0 8px; }
+.pdf-timeline { list-style: none; padding: 0; margin: 8px 0 0; }
+.pdf-tl-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 0.5px dashed var(--card-line); font-size: 13.5px; color: var(--text-faint); }
+.pdf-tl-item--lit { color: var(--text-primary); }
+.pdf-tl-no { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--gold-deep); width: 22px; }
+.pdf-tl-name { flex: 1; }
+.pdf-tl-day { font-size: 12px; }
+.pdf-values { padding-left: 22px; }
+.pdf-values li { font-size: 14px; color: var(--text-secondary); margin: 4px 0; }
+.pdf-card { margin: 0 0 18px; padding-bottom: 14px; border-bottom: 0.5px solid var(--card-line); }
+.pdf-card__day { font-size: 12px; color: var(--gold-deep); margin-bottom: 6px; }
+.pdf-card__body p { font-size: 13.5px; line-height: 1.9; color: var(--text-secondary); margin: 0 0 8px; }
+
+@media print {
+  .topbar, .app-header, .note-topbar, .storyboard-topbar, #story-pdf-print, .paper-btn { display: none !important; }
+  body, #app, .view, .paper-page { background: #fff !important; padding: 0 !important; }
+  .pdf-page-break { page-break-before: always; }
+  .pdf-cover { page-break-after: always; }
+  .pdf-step, .pdf-card, .pdf-tl-item { page-break-inside: avoid; }
+}
