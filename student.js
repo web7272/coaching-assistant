@@ -1832,6 +1832,15 @@ async function renderStoryboard() {
   }
   bodyEl.innerHTML = buildStoryboardBodyHTML(apiResp);
   attachStoryboardToggleHandlers(bodyEl);
+  // P3 (Patrick 6/26) — Day21 結業後才顯示「下載 PDF」入口 (連 #/story-pdf).
+  const pdfLink = document.getElementById('storyboard-pdf-link');
+  if (pdfLink) {
+    pdfLink.hidden = true;
+    try {
+      const gr = await fetch('/api/graduation?module=self', { credentials: 'include', headers: { 'accept': 'application/json' } });
+      if (gr.ok) { const g = await gr.json(); if (g && g.exists) pdfLink.hidden = false; }
+    } catch (_e) { /* fail-soft: 未結業/失敗 → 保持隱藏 */ }
+  }
 }
 
 // ─── Patrick 6/26 — 我的故事 PDF 列印視圖 (P2, 瀏覽器版) ───────────
