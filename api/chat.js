@@ -57,6 +57,8 @@ import { buildActiveContextSummaryInject } from '../lib/session/active-context-s
 // v5.3 Stage C (6/13) — 記憶餵回 inject (止 Day8 / A009 鬼打牆). Flag-gated;
 // 預設 OFF (SC_MEMORY_INJECT_ENABLED env 未設 → 完全不 inject, 0-facing).
 import { buildScMemoryInject } from '../lib/session/sc-memory-inject.js';
+// ⭐ 6/26 fable Q3 — Day-1 限定「原話排列照鏡」inject (免費體驗日製造 aha).
+import { DAY1_MIRROR_INJECT } from '../lib/prompt-sections/conditional/day1-mirror-inject.js';
 // ⭐ v5.2 第四塊 PR-b — Onboarding intercept (new students, before Mode routing).
 import { onboardingFlowHandler } from '../lib/detector-handlers/onboarding-flow.js';
 // ⭐ v5.2 第二塊 PR-b — cross-context handler (case 3 reminder lock).
@@ -899,6 +901,14 @@ export function buildDynamicContext(sessionState = {}, userProfile = {}, gapDays
     lines.push(scMemoryInject);
   }
 
+  // ⭐ 6/26 fable Q3 — Day-1 限定「原話排列照鏡」(免費體驗日 aha; NOT cached).
+  //   gate 在 caller (day1MirrorActive = sessionDay===1 && plan==='trial').
+  //   self-limiting:每場最多一次、缺條件不做、碰危機即放棄 (inject 文內明定).
+  if (opts.day1MirrorActive === true) {
+    lines.push('');
+    lines.push(DAY1_MIRROR_INJECT);
+  }
+
   // {{current_mode_context}} — v5.1 Step 4 PR-23s4b:
   //   modeContextFor 取代 contextFor. elicitation mode router_phase-aware variant
   //   (opening 含起手式 / elicitation 鏈式追問) for transitional dual-write compat.
@@ -941,9 +951,10 @@ export function buildSystemPromptArrayV5({
   activeContext = null,   // ⭐ v5.2 第二塊 PR-a — threaded through to dynamic block
   scJourney = null,       // ⭐ v5.2 七步 PR-3 — same dynamic-only positioning as activeContext
   scMemoryInjectEnabled = false,  // ⭐ v5.3 Stage C — 記憶餵回 flag (預設 OFF)
+  day1MirrorActive = false,       // ⭐ 6/26 fable Q3 — Day-1 照鏡 (sessionDay===1 && trial)
 }) {
   const dynamicText = buildDynamicContext(sessionState, userProfile, gapDays, {
-    activeContext, scJourney, scMemoryInjectEnabled,
+    activeContext, scJourney, scMemoryInjectEnabled, day1MirrorActive,
   }) + (conditionalInjects.length ? '\n\n' + conditionalInjects.join('\n\n') : '');
 
   if (!cachingEnabled) {
@@ -1830,6 +1841,8 @@ export default async function handler(req, res) {
     // ⭐ v5.3 Stage C (6/13) — 記憶餵回 env flag. 預設 OFF (env 未設 / 非 'true'
     //   字串 → 完全不 inject, 0-facing). Vivi sandbox 過稿 → set 'true' 全開.
     const scMemoryInjectEnabled = process.env.SC_MEMORY_INJECT_ENABLED === 'true';
+    // ⭐ 6/26 fable Q3 — Day-1 免費體驗日照鏡 gate (sessionDay===1 && plan==='trial').
+    const day1MirrorActive = (Number(sess?.sessionDay) === 1) && (plan === 'trial');
     const systemParam = buildSystemPromptArrayV5({
       sessionState: stateForPrompt,
       userProfile: userProfile || {},
@@ -1839,6 +1852,7 @@ export default async function handler(req, res) {
       activeContext,
       scJourney,
       scMemoryInjectEnabled,
+      day1MirrorActive,
     });
 
     // Step 9 — Anthropic Sonnet call (with 429 backoff + 5xx 1-retry, 6/3 burst protection).
