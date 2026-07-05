@@ -705,6 +705,32 @@ async function renderStudent(sid) {
       sbHost.innerHTML = `<p class="muted">沒能取回旅程：${escapeText(e.message)}</p>`;
     }
   }
+
+  // Patrick 6/26 (P4) — 教練看/下載這位學員的「我的故事」PDF. audience=coach → 放寬 Day21 gate.
+  const pdfHost = document.getElementById('coach-story-pdf');
+  if (pdfHost) {
+    pdfHost.innerHTML = '<p class="muted">載入中…</p>';
+    try {
+      const pd = await api(`/api/storyboard-pdf-data?audience=coach&studentId=${encodeURIComponent(sid)}&module=self`);
+      if (window.StoryboardRender && typeof window.StoryboardRender.renderStoryPdfHTML === 'function') {
+        pdfHost.innerHTML = window.StoryboardRender.renderStoryPdfHTML(pd);
+      } else {
+        pdfHost.innerHTML = '<p class="muted">PDF 模組未載入。請重新整理頁面。</p>';
+      }
+    } catch (e) {
+      pdfHost.innerHTML = `<p class="muted">沒能取回 PDF：${escapeText(e.message)}</p>`;
+    }
+    const pbtn = document.getElementById('coach-pdf-print');
+    if (pbtn) {
+      pbtn.onclick = function () {
+        const w = window.open('', '_blank');
+        if (!w) return;
+        w.document.write('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/app.css"><title>我的故事</title>' + pdfHost.innerHTML);
+        w.document.close(); w.focus();
+        setTimeout(function () { w.print(); }, 300);
+      };
+    }
+  }
 }
 
 // ─── router ────────────────────────────────────────────────────────

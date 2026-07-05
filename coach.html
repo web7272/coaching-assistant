@@ -137,6 +137,16 @@
         <div id="coach-storyboard" class="storyboard-body" style="margin-top:8px;"></div>
       </details>
 
+      <!-- P4 (Patrick 6/26) — 教練看/下載這位學員的「我的故事」PDF (audience=coach, 隨時可看進度). -->
+      <details class="coach-collapse">
+        <summary class="coach-h2 coach-h2--front coach-collapse-summary">這位學員的「我的故事」PDF</summary>
+        <div style="margin-top:8px;">
+          <button type="button" id="coach-pdf-print" class="paper-btn"
+                  style="padding:6px 12px;font-size:12px;letter-spacing:1px;margin-bottom:10px;">🖨 列印 / 存 PDF</button>
+          <div id="coach-story-pdf" class="pdf-doc-wrap"></div>
+        </div>
+      </details>
+
       <!-- D 前端學員筆記（學員實際收到的卡）— sessions.notebook_page 那張暖卡. -->
       <h2 class="coach-h2 coach-h2--front" style="margin-top:24px;">前端身分解析卡</h2>
       <div id="coach-card-picker" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
@@ -186,6 +196,7 @@
     const mod = await import('/lib/student/storyboard-render.js');
     window.StoryboardRender = {
       renderStoryboardBodyHTML: mod.renderStoryboardBodyHTML,
+      renderStoryPdfHTML: mod.renderStoryPdfHTML,
     };
   } catch (err) {
     console.warn('[coach] storyboard-render module load failed:', err);

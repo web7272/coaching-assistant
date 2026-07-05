@@ -18,7 +18,7 @@ test('🛑 pdf-data: 重用既有 read 元件 (storyboard/poem/safeNote/profile/
   assert.match(src, /guardStudentOr401|guardCoachOr401/);
 });
 test('🛑 pdf-data: Day21 gate — 沒 coachLetter && 沒 declaration → ready:false (不吐內容)', () => {
-  assert.match(src, /if \(!coachLetter && !declaration\)\s*\{\s*\n?\s*return res\.status\(200\)\.json\(\{ ready: false \}\)/);
+  assert.match(src, /if \(audience !== 'coach' && !coachLetter && !declaration\)\s*\{\s*\n?\s*return res\.status\(200\)\.json\(\{ ready: false \}\)/);
 });
 test('🛑 pdf-data: 讀 21 天進度 sc_storyboard_history', () => {
   assert.match(src, /sc_storyboard_history/);

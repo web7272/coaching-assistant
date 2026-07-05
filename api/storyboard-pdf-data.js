@@ -46,8 +46,8 @@ export default async function handler(req, res) {
     const coachLetter = grad?.coach_letter || null;
     const declaration = grad?.declaration  || null;
 
-    // 🔴 Day 21 結業 gate — 未結業不給故事內容.
-    if (!coachLetter && !declaration) {
+    // 🔴 Day 21 結業 gate — 學員端未結業不給故事內容;教練端隨時可看進度 (progress-so-far).
+    if (audience !== 'coach' && !coachLetter && !declaration) {
       return res.status(200).json({ ready: false });
     }
 
