@@ -13,6 +13,7 @@ import {
   buildExportPersonalCoachPrompt,
   buildGraduationSystemPrompt,
   parseGraduationResponse,
+  planFinalizeTailRepair,            // 6/26 A006 修 — 修復感知幂等
   computeScJourneyStep,            // v5.2 七步 PR-4 Path B
   writeScJourneyStepFailSoft,      // v5.2 七步 PR-4 Path B
   writeBrainStateFailSoft,         // v5.3 件3 PR-J2
@@ -1201,4 +1202,60 @@ test('🛑 storyboard-snapshot: 快照在 S6 重生之後 (抓當天最終版) +
   const snap = finalizeDaySrc.indexOf('sc_storyboard_history = jsonb_set');
   assert.ok(s6 > 0 && snap > 0 && snap > s6, '快照必須在 S6 重生之後');
   assert.match(finalizeDaySrc, /try\s*\{[\s\S]{0,400}sc_storyboard_history[\s\S]{0,400}\}\s*catch\s*\([^)]*\)\s*\{[\s\S]{0,200}storyboard-snapshot-failed/);
+});
+
+// ─────────────────────────────────────────────────────────
+// planFinalizeTailRepair — 6/26 (A006 修): note 已存在時「還缺什麼 tail」判斷
+// ─────────────────────────────────────────────────────────
+
+test('planFinalizeTailRepair: takeaway 已存在該天 → takeawayMissing=false', () => {
+  const r = planFinalizeTailRepair({
+    dailyTakeaways: [{ day: 10, term: 'x' }, { day: 15, term: 'y' }],
+    day: 15, isGraduation: false,
+  });
+  assert.equal(r.takeawayMissing, false);
+  assert.equal(r.needsRepair, false);
+});
+
+test('planFinalizeTailRepair: 該天無 takeaway → takeawayMissing=true → needsRepair', () => {
+  const r = planFinalizeTailRepair({
+    dailyTakeaways: [{ day: 1, term: 'a' }, { day: 10, term: 'b' }],
+    day: 15, isGraduation: false,
+  });
+  assert.equal(r.takeawayMissing, true);
+  assert.equal(r.graduationMissing, false);   // 非結業日
+  assert.equal(r.needsRepair, true);
+});
+
+test('planFinalizeTailRepair: Day21 結業日 + 無結業內容 → graduationMissing=true', () => {
+  const r = planFinalizeTailRepair({
+    dailyTakeaways: [{ day: 21, term: 'z' }],  // takeaway 有
+    day: 21, isGraduation: true, graduationContent: null,
+  });
+  assert.equal(r.takeawayMissing, false);
+  assert.equal(r.graduationMissing, true);
+  assert.equal(r.needsRepair, true);
+});
+
+test('planFinalizeTailRepair: Day21 + 有 coach_letter → graduationMissing=false', () => {
+  const r = planFinalizeTailRepair({
+    dailyTakeaways: [{ day: 21, term: 'z' }],
+    day: 21, isGraduation: true,
+    graduationContent: { coach_letter: '親愛的…', declaration: '' },
+  });
+  assert.equal(r.graduationMissing, false);
+  assert.equal(r.needsRepair, false);
+});
+
+test('planFinalizeTailRepair: 空 graduationContent 物件 (兩欄皆空) 仍算缺', () => {
+  const r = planFinalizeTailRepair({
+    dailyTakeaways: [{ day: 21, term: 'z' }],
+    day: 21, isGraduation: true, graduationContent: { coach_letter: '', declaration: '' },
+  });
+  assert.equal(r.graduationMissing, true);
+});
+
+test('planFinalizeTailRepair: dailyTakeaways 非陣列 / 缺 → takeawayMissing=true', () => {
+  assert.equal(planFinalizeTailRepair({ day: 5, isGraduation: false }).takeawayMissing, true);
+  assert.equal(planFinalizeTailRepair({ dailyTakeaways: null, day: 5 }).takeawayMissing, true);
 });

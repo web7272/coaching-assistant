@@ -641,6 +641,25 @@ export function parseGraduationResponse(raw) {
   return { coach_letter: obj.coach_letter, declaration: obj.declaration };
 }
 
+// 🔧 6/26 (A006 修) — 修復感知幂等的「還缺什麼 tail-work」判斷 (pure, 可測).
+//   finalize 的幂等 early-return 在 Damon Note 已存在時直接 return,但
+//   daily_takeaways append + Day21 結業生成都在那之後 → 若某天寫完 note 後
+//   timeout/中斷,tail 沒跑完,之後每次 finalize 都在 early-return 短路 →
+//   takeaway/結業永久補不回來 (連程式碼註解說的「重跑會補上」都被擋死)。
+//   此函式判斷該天還缺哪些 tail-work,讓 handler 在短路前補回。
+export function planFinalizeTailRepair({ dailyTakeaways, day, isGraduation, graduationContent } = {}) {
+  const dayNum = Number(day);
+  const takeawayMissing = !(Array.isArray(dailyTakeaways)
+    && dailyTakeaways.some(t => Number(t?.day) === dayNum));
+  const gc = (graduationContent && typeof graduationContent === 'object') ? graduationContent : null;
+  const graduationMissing = !!isGraduation
+    && !(gc && (
+      (typeof gc.coach_letter === 'string' && gc.coach_letter.length > 0)
+      || (typeof gc.declaration === 'string' && gc.declaration.length > 0)
+    ));
+  return { takeawayMissing, graduationMissing, needsRepair: takeawayMissing || graduationMissing };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -710,6 +729,57 @@ export default async function handler(req, res) {
       //   Day 3 it shipped 【深度層次】 + Layer 1-5 to the student SPA.
       //   notebookPage now runs through safeNoteForStudent (sanitize +
       //   fail-closed: if forbidden survives, returns safe fallback).
+
+      // 🔧 6/26 (A006 修) — 修復感知幂等:note 已存在但 finalize tail 沒跑完
+      //   (寫完 note 後 timeout/中斷 → takeaway/結業沒寫;之後每次 finalize 都在
+      //   此 early-return 短路 → 永久補不回來)。短路前先把缺的 tail-work 補齊,
+      //   結業從「已存的 Day 21 note」重生。全程 fail-soft:補失敗不擋 alreadyDone。
+      try {
+        const _rp = (await getUserProfile(existing.student_id)) || {};
+        const _grad = _rp.last_session_day_summary?.graduation || null;
+        const _plan = planFinalizeTailRepair({
+          dailyTakeaways: _rp.daily_takeaways, day, isGraduation: graduation, graduationContent: _grad,
+        });
+        if (_plan.needsRepair) {
+          const _nrows = await sql`
+            SELECT note_text FROM damon_notes
+            WHERE student_id = ${existing.student_id} AND module = ${module}
+              AND week = ${week} AND day = ${day} AND is_week_summary = false
+            LIMIT 1`;
+          const _storedNote = _nrows[0]?.note_text || null;
+          if (_storedNote) {
+            if (_plan.takeawayMissing) {
+              const _kp = extractKeyPhrase(_storedNote);
+              const _term = extractTakeawayAnchor(_storedNote) || _kp;
+              if (_term) {
+                await appendDailyTakeaway(existing.student_id, { day: Number(day), term: _term });
+                await setLastSessionDaySummary(existing.student_id, {
+                  last_takeaway_term: _kp || _term, last_takeaway_day: Number(day),
+                });
+                console.info('[finalize-day][tail-repair] takeaway backfilled',
+                  JSON.stringify({ day: Number(day) }));
+              }
+            }
+            if (_plan.graduationMissing) {
+              const _dt = Array.isArray(_rp.daily_takeaways) ? _rp.daily_takeaways : [];
+              const _gp = buildGraduationSystemPrompt(module, _dt);
+              const _gr = await getAnthropic().messages.create({
+                model: 'claude-sonnet-4-6', max_tokens: 1024, system: _gp,
+                messages: [{ role: 'user', content: `Day 21 Damon Note 全文：\n\n${_storedNote}` }],
+              });
+              const _gc = parseGraduationResponse(_gr.content?.[0]?.text || '');
+              if (_gc) {
+                await setLastSessionDaySummary(existing.student_id, { graduation: _gc });
+                console.info('[finalize-day][tail-repair] graduation regenerated',
+                  JSON.stringify({ day: Number(day) }));
+              }
+            }
+          }
+        }
+      } catch (_e) {
+        console.error('[finalize-day][tail-repair] failed (fail-soft):', _e?.message || _e);
+      }
+
       return res.status(200).json({
         ok: true,
         alreadyDone: true,
