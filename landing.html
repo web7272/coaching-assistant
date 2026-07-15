@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>21 天身分重塑計畫 ｜ 看見自己</title>
+<title>看見自己 ｜ 21 天教練對話</title>
 <meta name="description" content="每天 5–10 分鐘的引導式教練對話，21 天陪你把定義、決定、理解自己的主導權一樣一樣拿回來。免費體驗 Day 1。">
 <link rel="canonical" href="https://seeyourself.now/landing">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="看見自己">
 <meta property="og:locale" content="zh_TW">
 <meta property="og:url" content="https://seeyourself.now/landing">
-<meta property="og:title" content="21 天身分重塑計畫 ｜ 看見自己">
+<meta property="og:title" content="看見自己 ｜ 21 天教練對話">
 <meta property="og:description" content="每天 5–10 分鐘的引導式教練對話，21 天陪你把定義、決定、理解自己的主導權一樣一樣拿回來。免費體驗 Day 1。">
 <meta property="og:image" content="https://seeyourself.now/assets/logo.png">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="21 天身分重塑計畫 ｜ 看見自己">
+<meta name="twitter:title" content="看見自己 ｜ 21 天教練對話">
 <meta name="twitter:description" content="每天 5–10 分鐘的引導式教練對話，21 天陪你把定義、決定、理解自己的主導權一樣一樣拿回來。免費體驗 Day 1。">
 <meta name="twitter:image" content="https://seeyourself.now/assets/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,16 +24,20 @@
   :root{
     /* Notion / Claude 極簡款 —— 微灰白底 + 純白卡 + 墨黑藍灰字/鈕 + 古銅金點綴 */
     --bg-top:#F8F8F8; --bg-bot:#F4F4F4; --band:#F4F4F4; --paper:#FFFFFF;
-    --line:#E6E6E6; --ink:#2E333D; --ink-soft:#5A6270; --ink-dim:#9098A6;
+    --line:#E4E5E8; --line-soft:#EDEEF0; --ink:#2E333D; --ink-soft:#5A6270; --ink-dim:#9098A6;
     --gold:#D8B27F;        /* 古銅香檳金 主點綴(圖標/亮點) */
-    --gold-hi:#E2C499;     /* 淺古銅金 */
     --gold-deep:#B58F5C;   /* 白底專用深古銅金(字體高對比) */
-    --btn-ink:#FFFFFF;     /* 深鈕白字 */
-    --btn-top:#3A414D; --btn-bot:#2E333D;  /* CTA 深藍灰漸層(備用) */
-    /* CTA 金屬古銅金漸層：兩側深、中間淺(香檳光澤) + 深色字確保可讀 */
-    --btn-grad:linear-gradient(90deg,#9C7641 0%,#C7A06B 30%,#E4CEA4 50%,#C7A06B 70%,#9C7641 100%);
-    --btn-txt:#3A2E1C;
-    --sh:rgba(46,51,61,.08); --glow:rgba(46,51,61,.16);
+        /* CTA：墨黑實色(與 --ink 同色系,不引入新顏色) */
+    --btn-grad:#2E333D;
+    --btn-txt:#FFFFFF;
+    --sh:rgba(46,51,61,.08);
+    --ink-hover:#3A414D;
+    --btn-sh:0 1px 2px rgba(46,51,61,.08),0 8px 20px -12px rgba(46,51,61,.28);
+    --btn-sh-hi:0 1px 2px rgba(46,51,61,.10),0 10px 24px -12px rgba(46,51,61,.32);
+    --card-sh-hi:0 2px 4px rgba(46,51,61,.05),0 12px 28px -16px rgba(46,51,61,.16);
+    --gold-tint:rgba(216,178,127,.10);
+    --gold-line:rgba(181,143,92,.35);
+    --gold-brd:rgba(181,143,92,.40);
     /* 編輯型襯線顯示字 + 系統 UI 字 */
     /* 方案 C：西文 Newsreader/Inter（在前，吃拉丁字）＋ 中文 Noto（在後，吃中日韓字） */
     --serif:"Newsreader","Noto Serif TC",Georgia,"Songti TC",serif;
@@ -41,241 +45,229 @@
     /* 分層光影：環境陰影 + 主光源 + 內緣高光，營造被打光的紙面質感 */
     --card-sh:0 1px 2px rgba(46,51,61,.04),0 8px 18px -10px rgba(46,51,61,.12),0 24px 48px -28px rgba(46,51,61,.16);
     --card-hi:inset 0 1px 0 rgba(255,255,255,.7);
-    --lift:0 2px 4px rgba(46,51,61,.05),0 16px 30px -12px rgba(46,51,61,.18),0 36px 64px -32px rgba(46,51,61,.22);
     /* 統一緩動曲線 */
     --ease:cubic-bezier(.2,.7,.2,1); --t:.45s;
-    --maxw:1120px; --r:18px;
+    --maxw:1120px; --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+    --s7:48px; --s8:64px; --s9:96px; --s10:128px;
+    /* Type scale — 以 Hero 內文為錨(--fs-body 17.5px 上限) */
+    --fs-xs:12px;                        /* eyebrow / badge / note */
+    --fs-sm:14px;                        /* 註腳 / cred / signal */
+    --fs-cap:clamp(14px,1.6vw,15px);     /* 卡片內文 */
+    --fs-body:clamp(15px,1.75vw,17.5px); /* 內文基準 ← Hero manifesto */
+    --fs-lead:clamp(16px,1.9vw,19px);    /* 強調段 / lead */
+    --fs-quote:clamp(17px,2.1vw,21px);   /* 襯線引句 */
+    --fs-display:clamp(19px,2.4vw,24px); /* 襯線 display */
+    --fs-h2:clamp(26px,3.6vw,40px);      /* section 標題 */
+    --fs-h2-lg:clamp(28px,4vw,44px);     /* 收尾 / 大結語 */
+    --fs-h1:clamp(34px,5.4vw,60px);
+    --lh-tight:1.32; --lh-head:1.45; --lh-quote:1.65; --lh-body:1.85; --lh-loose:1.95;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
-  ::selection{background:rgba(216,178,127,.32);color:var(--ink)}
+  ::selection{background:rgba(216,178,127,.25);color:var(--ink)}
   body{font-family:var(--sans);
     background:linear-gradient(180deg,var(--bg-top),var(--bg-bot)) fixed;color:var(--ink);
-    line-height:1.85;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
-    letter-spacing:.01em;overflow-x:hidden;min-height:100vh}
-  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
-  .gold{color:var(--gold-deep)}
-  .glow{color:var(--gold-deep)}
-  section{padding:96px 0;position:relative;scroll-margin-top:84px}
-  h1,h2,h3{font-family:var(--serif);font-weight:700;letter-spacing:.005em;line-height:1.32;color:var(--ink);
+    line-height:var(--lh-body);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    letter-spacing:.01em;overflow-x:hidden;min-height:100vh;hanging-punctuation:allow-end;text-spacing-trim:trim-start}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--s5)}
+  .gold,.glow{color:var(--gold-deep)}
+  section{padding:var(--s9) 0;position:relative;scroll-margin-top:84px}
+  h1,h2,h3{font-family:var(--serif);font-weight:700;letter-spacing:0;line-height:var(--lh-head);color:var(--ink);
     text-wrap:balance}
-  h1,h2{letter-spacing:-.01em}
+  h1{letter-spacing:.01em}
   /* 拉丁數字採等寬字形，讓 21 / 01–21 對齊更精緻 */
   .num,.hero h1,.step .no,.jr-card .n{font-feature-settings:"tnum" 1,"lnum" 1}
-  .eyebrow{font-family:var(--sans);font-size:13px;letter-spacing:.32em;color:var(--gold-deep);font-weight:700;text-transform:uppercase;margin-bottom:22px}
-  .lead{color:var(--ink-soft);font-size:18px}
+  .eyebrow{font-family:var(--sans);font-size:var(--fs-xs);letter-spacing:.16em;color:var(--gold-deep);font-weight:600;text-transform:uppercase;margin-bottom:var(--s5)}
+  .lead{color:var(--ink-soft);font-size:var(--fs-body);line-height:var(--lh-body)}
   .kicker{color:var(--gold-deep);font-weight:700;letter-spacing:.06em}
-  :focus-visible{outline:2px solid var(--gold-deep);outline-offset:3px;border-radius:6px}
+  :focus-visible{outline:2px solid var(--gold-deep);outline-offset:3px;border-radius:var(--r-sm)}
 
   /* ===== 頂條 + LOGO ===== */
   .topbar{position:sticky;top:0;z-index:50;background:rgba(248,248,248,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
   .topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:66px}
-  .brand{display:flex;align-items:center;gap:11px;text-decoration:none}
+  .brand{display:flex;align-items:center;gap:var(--s3);text-decoration:none}
   .brand .logo{width:34px;height:34px;flex:0 0 auto}
-  .brand .bt b{font-weight:900;letter-spacing:.08em;font-size:17px;color:var(--ink);display:block;line-height:1}
-  .brand .bt small{font-size:8px;letter-spacing:.32em;color:var(--ink-dim);font-weight:700}
-  .nav-cta{font-size:14px;font-weight:900;color:var(--btn-txt);background:var(--btn-grad);
-    padding:10px 20px;border-radius:999px;text-decoration:none;transition:.2s;white-space:nowrap;box-shadow:0 10px 22px -12px rgba(156,118,65,.5)}
-  .nav-cta:hover{transform:translateY(-1px);filter:brightness(1.03)}
+  .brand .bt b{font-weight:700;letter-spacing:.08em;font-size:17px;color:var(--ink);display:block;line-height:1}
+  .brand .bt small{font-size:8px;letter-spacing:.18em;color:var(--ink-dim);font-weight:700}
+  .nav-cta{font-size:var(--fs-sm);font-weight:600;color:var(--btn-txt);background:var(--btn-grad);
+    padding:var(--s2) var(--s4);border-radius:var(--r-md);text-decoration:none;transition:background var(--t) var(--ease),box-shadow var(--t) var(--ease);white-space:nowrap;box-shadow:var(--btn-sh)}
+  .nav-cta:hover{background:var(--ink-hover);box-shadow:var(--btn-sh-hi)}
 
   /* ===== HERO ===== */
-  .hero{padding:88px 0 78px;position:relative;overflow:hidden}
+  .hero{padding:var(--s8) 0 var(--s7);position:relative;overflow:hidden}
   .hero::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
-    background:radial-gradient(820px 460px at 82% -8%,rgba(216,178,127,.16),transparent 60%),
-      radial-gradient(620px 480px at 4% 20%,rgba(216,178,127,.12),transparent 62%)}
+    background:radial-gradient(820px 460px at 82% -8%,rgba(216,178,127,.10),transparent 60%),
+      radial-gradient(620px 480px at 4% 20%,rgba(216,178,127,.07),transparent 62%)}
   .hero .compass-bg{position:absolute;z-index:0;pointer-events:none;top:50%;left:53%;
-    transform:translate(-50%,-50%);width:min(720px,62vw);height:auto;opacity:.42;color:var(--gold)}
+    transform:translate(-50%,-50%);width:min(720px,62vw);height:auto;opacity:.26;color:var(--gold)}
   @media(max-width:860px){.hero .compass-bg{top:6%;left:50%;transform:translate(-50%,0);width:min(460px,90vw);opacity:.26}}
-  .hero .wrap{position:relative;z-index:1;display:grid;grid-template-columns:1.05fr .95fr;gap:54px;align-items:center}
-  .hero h1{font-size:clamp(34px,5.4vw,60px);line-height:1.18;margin:6px 0 22px}
+  .hero .wrap{position:relative;z-index:1;display:grid;grid-template-columns:1.05fr .95fr;gap:var(--s7);align-items:center}
+  .hero h1{font-size:var(--fs-h1);line-height:var(--lh-tight);margin:var(--s1) 0 var(--s5)}
   .hero h1 .line2{display:block}
   .hero h1 .glow{color:var(--ink)}  /* Hero 主標維持深黑(藍只用在重點處) */
-  .hero p.sub{font-size:clamp(16px,2vw,19px);color:var(--ink-soft);max-width:30em;margin-bottom:18px}
-  .hero .claim{font-size:clamp(17px,2.1vw,21px);font-weight:800;color:var(--ink);max-width:24em;margin-bottom:28px;line-height:1.6}
+  .hero p.sub{font-size:var(--fs-lead);color:var(--ink-soft);max-width:30em;margin-bottom:var(--s4)}
+  .hero .claim{font-size:var(--fs-quote);font-weight:700;color:var(--ink);max-width:24em;margin-bottom:var(--s5);line-height:var(--lh-quote)}
   .hero .claim b{color:var(--gold-deep)}
-  .hero .signal{display:flex;gap:26px;flex-wrap:wrap;margin-top:30px;color:var(--ink-dim);font-size:13.5px}
+  .hero .signal{display:flex;gap:var(--s5);flex-wrap:wrap;margin-top:var(--s6);color:var(--ink-dim);font-size:var(--fs-sm)}
   .hero .signal b{color:var(--ink);font-weight:700}
-  .hero .signal span{display:flex;align-items:center;gap:8px}
+  .hero .signal span{display:flex;align-items:center;gap:var(--s2)}
   .hero .signal i{width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block}
-  .hr-mini{width:54px;height:2px;background:var(--gold);margin:26px 0;border-radius:2px}
-  .phases3{display:flex;gap:30px;flex-wrap:wrap;margin-top:4px}
-  .p3{display:flex;gap:11px;align-items:flex-start}
+    .hr-mini{width:40px;height:2px;background:var(--gold);margin:var(--s5) 0;border-radius:2px}
+  .phases3{display:flex;gap:var(--s6);flex-wrap:wrap;margin-top:var(--s1)}
+  .p3{display:flex;gap:var(--s3);align-items:flex-start}
   .p3 .ic{color:var(--gold);flex:0 0 auto;margin-top:2px}
   .p3 .ic svg{width:30px;height:30px}
-  .p3 b{font-size:14.5px;font-weight:800;color:var(--ink);display:block}
-  .p3 small{font-size:12px;color:var(--ink-dim);line-height:1.5}
+  .p3 b{font-size:var(--fs-cap);font-weight:700;color:var(--ink);display:block}
+  .p3 small{font-size:var(--fs-xs);color:var(--ink-dim);line-height:var(--lh-head)}
 
-  .cta-card{background:var(--paper);color:var(--ink);border-radius:var(--r);padding:30px 28px;
+  .cta-card{background:var(--paper);color:var(--ink);border-radius:var(--r-lg);padding:var(--s6) var(--s5);
     box-shadow:var(--card-sh),var(--card-hi);border:1px solid var(--line)}
-  .cta-card .tag{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--gold-deep);margin-bottom:12px}
-  .cta-card h3{font-size:20px;line-height:1.5;color:var(--ink);margin-bottom:14px;font-weight:900}
-  .cta-card p{font-size:14.5px;line-height:1.95;color:var(--ink-soft);margin-bottom:22px}
-  .btn-primary{position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;
+  .cta-card .tag{font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;color:var(--gold-deep);margin-bottom:var(--s3)}
+  .cta-card h3{font-size:var(--fs-quote);line-height:var(--lh-head);color:var(--ink);margin-bottom:var(--s3);font-weight:700}
+  .cta-card p{font-size:var(--fs-cap);line-height:var(--lh-loose);color:var(--ink-soft);margin-bottom:var(--s5)}
+  .btn-primary{position:relative;display:flex;flex-direction:column;align-items:center;gap:var(--s1);width:100%;
     background:var(--btn-grad);color:var(--btn-txt);
-    border:none;border-radius:14px;padding:15px 18px;cursor:pointer;font-family:var(--sans);text-decoration:none;
-    transition:transform var(--t) var(--ease),box-shadow var(--t) var(--ease),filter var(--t) var(--ease);
-    box-shadow:0 16px 32px -14px rgba(156,118,65,.55),inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(80,55,20,.25)}
-  .btn-primary::after{content:"";position:absolute;inset:0;pointer-events:none;
-    background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.55) 48%,transparent 66%);
-    transform:translateX(-120%);transition:transform .7s var(--ease)}
-  .btn-primary:hover{transform:translateY(-2px);filter:brightness(1.05);box-shadow:0 22px 40px -16px rgba(156,118,65,.6),inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 0 rgba(80,55,20,.25)}
-  .btn-primary:hover::after{transform:translateX(120%)}
-  .btn-primary:active{transform:translateY(0)}
-  .btn-primary .main{font-size:18px;font-weight:900;letter-spacing:.02em}
-  .btn-primary .sub{font-size:12px;font-weight:600;color:rgba(58,46,28,.62)}
-  .scarcity{margin-top:16px;background:rgba(216,178,127,.14);border:1px solid rgba(181,143,92,.35);
-    border-radius:12px;padding:12px 14px;font-size:13px;font-weight:700;color:var(--gold-deep);text-align:center}
+    border:none;border-radius:var(--r-md);padding:var(--s4) var(--s4);cursor:pointer;font-family:var(--sans);text-decoration:none;
+    transition:background var(--t) var(--ease),box-shadow var(--t) var(--ease);
+    box-shadow:var(--btn-sh)}
+  .btn-primary:hover{background:var(--ink-hover);box-shadow:var(--btn-sh-hi)}
+  .btn-primary:active{transform:translateY(1px)}
+  .btn-primary .main{font-size:var(--fs-lead);font-weight:600;letter-spacing:.02em}
+  .btn-primary .sub{font-size:var(--fs-xs);font-weight:600;color:rgba(255,255,255,.62)}
+  .scarcity{margin-top:var(--s4);background:var(--gold-tint);border:1px solid var(--gold-line);
+    border-radius:var(--r-md);padding:var(--s3) var(--s3);font-size:var(--fs-sm);font-weight:700;color:var(--gold-deep);text-align:center}
 
-  .sec-head{max-width:38em}
-  .sec-head h2{font-size:clamp(26px,3.6vw,40px);margin-bottom:18px}
-  .sec-head .lead{margin-bottom:8px}
+  .sec-head{max-width:30em}
+  .sec-head h2{font-size:var(--fs-h2);margin-bottom:var(--s4)}
+  .sec-head .lead{margin-bottom:var(--s2)}
   .divider{height:1px;background:var(--line);max-width:var(--maxw);margin:0 auto}
 
-  .vs{background:var(--band)}
-  .vs-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:start;margin-top:8px}
-  .vs-copy p{color:var(--ink-soft);margin-bottom:16px;font-size:16.5px}
-  .vs-copy .pop{color:var(--ink);font-weight:800}
-  .vs-table{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper)}
+  .band{background:var(--band)}
+  .vs-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:var(--s7);align-items:start;margin-top:var(--s2)}
+  .vs-copy p{color:var(--ink-soft);margin-bottom:var(--s4);font-size:var(--fs-body);line-height:var(--lh-body)}
+  .vs-copy .pop{color:var(--ink);font-weight:700}
+  .vs-table{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--paper)}
   .vs-table .row{display:grid;grid-template-columns:1fr 1fr}
-  .vs-table .row > div{padding:16px 18px;font-size:14.5px;border-bottom:1px solid var(--line)}
-  .vs-table .row > div:first-child{border-right:1px solid var(--line);color:var(--ink-dim)}
-  .vs-table .row > div:last-child{color:var(--gold-deep);font-weight:800}
-  .vs-table .head > div{font-weight:900;font-size:13px;letter-spacing:.05em;background:rgba(216,178,127,.12)}
+  .vs-table .row > div{padding:var(--s4) var(--s4);font-size:var(--fs-cap);border-bottom:1px solid var(--line-soft)}
+  .vs-table .row > div:first-child{border-right:1px solid var(--line-soft);color:var(--ink-dim)}
+  .vs-table .row > div:last-child{color:var(--gold-deep);font-weight:700}
+  .vs-table .head > div{font-weight:600;font-size:var(--fs-sm);letter-spacing:.05em;background:var(--gold-tint)}
   .vs-table .head > div:last-child{color:var(--gold-deep)}
   .vs-table .row:last-child > div{border-bottom:none}
 
-  .cta-row{margin-top:40px}
-  .link-cta{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:9px;color:var(--btn-txt);
-    background:var(--btn-grad);font-weight:900;font-size:16px;
-    padding:14px 30px;border-radius:999px;text-decoration:none;
-    transition:transform var(--t) var(--ease),box-shadow var(--t) var(--ease),filter var(--t) var(--ease);
-    box-shadow:0 14px 28px -14px rgba(156,118,65,.5),inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(80,55,20,.22)}
-  .link-cta::after{content:"";position:absolute;inset:0;pointer-events:none;
-    background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.5) 48%,transparent 66%);
-    transform:translateX(-120%);transition:transform .7s var(--ease)}
-  .link-cta:hover{transform:translateY(-2px);filter:brightness(1.04)}
-  .link-cta:hover::after{transform:translateX(120%)}
+  .cta-row{margin-top:var(--s6)}
+  .link-cta{position:relative;display:inline-flex;align-items:center;gap:var(--s2);color:var(--btn-txt);
+    background:var(--btn-grad);font-weight:600;font-size:var(--fs-lead);
+    padding:var(--s4) var(--s6);border-radius:var(--r-md);text-decoration:none;
+    transition:background var(--t) var(--ease),box-shadow var(--t) var(--ease);
+    box-shadow:var(--btn-sh)}
+  .link-cta:hover{background:var(--ink-hover);box-shadow:var(--btn-sh-hi)}
   .link-cta .arw{transition:transform var(--t) var(--ease)}
   .link-cta:hover .arw{transform:translateX(3px)}
 
-  .story .wrap{max-width:760px}
-  .story p{font-size:18px;color:var(--ink-soft);margin-bottom:22px}
+  .story p{font-size:var(--fs-body);line-height:var(--lh-quote);color:var(--ink-soft);margin-bottom:var(--s5)}
   .story p .pop{color:var(--ink);font-weight:700}
-  .story p .ask{display:inline-block;color:var(--gold-deep);font-weight:800;font-size:1.06em;margin-top:2px}
-  .story .byline{color:var(--ink-dim);font-size:14px;letter-spacing:.04em;margin-top:8px}
 
   .peek{background:var(--band)}
-  .peek-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:28px;margin-top:46px}
-  .peek-item{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .peek-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--s5);margin-top:var(--s7)}
+  .peek-item{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
   .peek-item img{width:100%;display:block;aspect-ratio:9/16;object-fit:cover;background:#F0EEEA}
-  .peek-item .cap{padding:16px 18px;font-size:14px;color:var(--ink-soft)}
+  .peek-item .cap{padding:var(--s4) var(--s4);font-size:var(--fs-cap);color:var(--ink-soft)}
   .peek-item .cap b{color:var(--ink);font-weight:700}
 
-  .steps{margin-top:46px;display:grid;gap:20px}
-  .step{display:grid;grid-template-columns:64px 1fr;gap:22px;align-items:start;
-    background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:26px 28px;
+  .steps{margin-top:var(--s7);display:grid;gap:var(--s4)}
+  .step{display:grid;grid-template-columns:64px 1fr;gap:var(--s5);align-items:start;
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5) var(--s5);
     box-shadow:var(--card-sh),var(--card-hi);transition:box-shadow var(--t) var(--ease),border-color var(--t) var(--ease)}
-  .step:hover{border-color:rgba(216,178,127,.45);box-shadow:var(--lift),var(--card-hi)}
+  .step:hover{border-color:var(--gold-brd);box-shadow:var(--card-sh-hi),var(--card-hi)}
   .step .no{font-family:var(--serif);font-size:38px;font-weight:600;color:var(--gold);line-height:1;
     font-feature-settings:"lnum" 1}
-  .step h3{font-size:21px;margin-bottom:8px}
-  .step p{color:var(--ink-soft);font-size:15.5px;margin-bottom:10px}
-  .step .out{color:var(--gold-deep);font-weight:700;font-size:15px}
-  .step .out.big{font-size:16.5px;color:var(--gold-deep)}
-  .step.feature{border-color:rgba(216,178,127,.55);background:linear-gradient(180deg,rgba(216,178,127,.16),rgba(216,178,127,.05));
-    box-shadow:0 18px 44px -28px var(--glow),var(--card-hi)}
+  .step h3{font-size:var(--fs-quote);margin-bottom:var(--s2)}
+  .step p{color:var(--ink-soft);font-size:var(--fs-cap);margin-bottom:var(--s2)}
+  .step .out{color:var(--gold-deep);font-weight:700;font-size:var(--fs-cap)}
+  .step .out.big{font-size:var(--fs-body);color:var(--gold-deep)}
+  .step.feature{border-color:var(--gold);background:var(--paper);
+    box-shadow:var(--card-sh),var(--card-hi)}
   .step.feature .no{color:var(--gold)}
-  .step .step-label{font-size:12px;letter-spacing:.18em;color:var(--gold-deep);font-weight:800;text-transform:uppercase;margin-bottom:8px}
+  .step .step-label{font-size:var(--fs-xs);letter-spacing:.18em;color:var(--gold-deep);font-weight:600;text-transform:uppercase;margin-bottom:var(--s2)}
   .step p .pop{color:var(--ink);font-weight:700}
 
-  .narrative .wrap{max-width:720px}
-  .narrative p{font-size:17.5px;color:var(--ink-soft);margin-bottom:20px}
+  .narrative .wrap{max-width:660px}
+  .narrative p{font-size:var(--fs-body);line-height:var(--lh-body);color:var(--ink-soft);margin-bottom:var(--s4)}
   .narrative p .pop{color:var(--ink);font-weight:700}
 
   .faq .wrap{max-width:820px}
-  details{border-bottom:1px solid var(--line);padding:6px 0}
-  summary{cursor:pointer;list-style:none;padding:18px 4px;font-weight:800;font-size:17px;color:var(--ink);
-    display:flex;justify-content:space-between;align-items:center;gap:16px}
+  details{border-bottom:1px solid var(--line);padding:var(--s1) 0}
+  summary{cursor:pointer;list-style:none;padding:var(--s5) var(--s1);font-weight:600;font-size:var(--fs-cap);color:var(--ink);
+    display:flex;justify-content:space-between;align-items:center;gap:var(--s4)}
   summary::-webkit-details-marker{display:none}
-  summary::after{content:"⌄";color:var(--gold-deep);font-size:22px;font-weight:400;line-height:1;margin-top:-6px;transition:.2s}
-  details[open] summary::after{content:"⌄"}
-  details p{color:var(--ink-soft);font-size:15.5px;padding:0 4px 20px;line-height:1.9}
+  summary::after{content:"";width:9px;height:9px;flex:0 0 auto;border-right:1.5px solid var(--gold-deep);border-bottom:1.5px solid var(--gold-deep);transform:rotate(45deg) translateY(-2px);transition:transform var(--t) var(--ease),border-color var(--t) var(--ease)}
+  details p{color:var(--ink-soft);font-size:var(--fs-cap);padding:0 var(--s1) var(--s4);line-height:var(--lh-body)}
   details p b{color:var(--ink)}
 
-  .final{text-align:center;background:radial-gradient(700px 400px at 50% 0%,rgba(216,178,127,.16),transparent 60%),var(--band)}
-  .final h2{font-size:clamp(28px,4vw,44px);margin-bottom:20px}
-  .final p{color:var(--ink-soft);max-width:34em;margin:0 auto 30px;font-size:17px}
-  .final .link-cta{font-size:18px;padding:17px 40px}
-  .final .reassure{margin-top:22px;color:var(--ink-dim);font-size:13px}
+  .final{text-align:center;padding:var(--s10) 0;background:radial-gradient(700px 400px at 50% 0%,rgba(216,178,127,.06),transparent 65%),var(--paper);border-top:1px solid var(--gold-line)}
+  .final h2{font-size:var(--fs-h2-lg);margin-bottom:var(--s4)}
+  .final p{color:var(--ink-soft);max-width:28em;margin:0 auto var(--s6);font-size:var(--fs-body);line-height:var(--lh-body)}
+  .final .link-cta{padding:var(--s4) var(--s7)}
+  .final .reassure{margin-top:var(--s5);color:var(--ink-dim);font-size:var(--fs-sm)}
   .final .reassure a{color:var(--gold-deep);text-decoration:none}
 
-  footer{border-top:1px solid var(--line);padding:40px 0;text-align:center;color:var(--ink-dim);font-size:13px}
+  footer{border-top:1px solid var(--line);padding:var(--s6) 0;text-align:center;color:var(--ink-dim);font-size:var(--fs-sm)}
   footer .brand{justify-content:center;color:var(--ink)}
   footer .brand .bt b{font-size:15px}
 
-  .quiz{display:none;margin-top:18px;border-top:1px dashed var(--line);padding-top:20px}
+  .quiz{display:none;margin-top:var(--s4);border-top:1px dashed var(--line);padding-top:var(--s4)}
   .quiz.open{display:block;animation:fade .35s ease}
   @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  .quiz .q{font-weight:800;font-size:14.5px;color:var(--ink);margin:16px 0 10px}
-  .quiz .opts{display:grid;gap:8px}
-  .quiz .opts button{text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;
-    padding:11px 14px;font-family:inherit;font-size:13.5px;color:var(--ink-soft);cursor:pointer;transition:.15s}
-  .quiz .opts button:hover,.quiz .opts button.sel{border-color:var(--gold);background:rgba(216,178,127,.14);color:var(--ink);font-weight:700}
-  .quiz input[type=email]{width:100%;margin-top:18px;padding:13px 14px;border-radius:10px;border:1px solid var(--line);
-    font-family:inherit;font-size:15px;background:#fff;color:var(--ink)}
-  .quiz .submit{margin-top:12px}
-  .quiz .opts .opt{display:flex;align-items:center;gap:8px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 14px;font-size:13.5px;color:var(--ink-soft);cursor:pointer;transition:.15s}
-  .quiz .opts .opt:hover{border-color:var(--gold)}
-  .quiz .opts .opt:has(input:checked){border-color:var(--gold);background:rgba(216,178,127,.14);color:var(--ink);font-weight:700}
-  .quiz .opts .opt input{accent-color:var(--gold);margin:0}
-  .quiz .opts.row{grid-template-columns:1fr 1fr}
-  .quiz .qmsg{margin-top:10px;font-size:13px;text-align:center}
-  .quiz .qmsg.err{color:#a33}
-  .quiz .qmsg.ok{color:var(--gold-deep)}
-  .note{display:block;text-align:center;color:var(--ink-dim);font-size:12px;margin-top:20px}
+  .quiz .q{font-weight:600;font-size:var(--fs-cap);color:var(--ink);margin:var(--s4) 0 var(--s2)}
+  .quiz .opts{display:grid;gap:var(--s2)}
+  .quiz .opts button{text-align:left;background:#fff;border:1px solid var(--line);border-radius:var(--r-md);
+    padding:var(--s3) var(--s4);font-family:inherit;font-size:var(--fs-sm);color:var(--ink-soft);cursor:pointer;transition:.15s}
+  .quiz .opts button:hover,.quiz .opts button.sel{border-color:var(--gold-brd);background:var(--gold-tint);color:var(--ink);font-weight:700}
+  .quiz input[type=email]{width:100%;margin-top:var(--s4);padding:var(--s3) var(--s3);border-radius:var(--r-md);border:1px solid var(--line);
+    font-family:inherit;font-size:var(--fs-cap);background:#fff;color:var(--ink)}
+  .quiz .submit{margin-top:var(--s3)}
+  .note{display:block;text-align:center;color:var(--ink-dim);font-size:var(--fs-xs);margin-top:var(--s4)}
 
   @media(max-width:860px){
-    section{padding:64px 0}.hero{padding:56px 0 52px}
-    .hero .wrap{grid-template-columns:1fr;gap:34px;text-align:center}
-    .hero p.sub{margin-left:auto;margin-right:auto}.hero .signal{justify-content:center}
-    .vs-grid{grid-template-columns:1fr;gap:30px}.peek-grid{grid-template-columns:1fr}
-    .sec-head{margin:0 auto;text-align:center}.step{grid-template-columns:1fr;gap:8px;text-align:left}
+    section{padding:var(--s8) 0}.hero{padding:var(--s7) 0 var(--s6)}
+    .hero .wrap{grid-template-columns:1fr;gap:var(--s6);text-align:left}
+    .hero .signal{justify-content:flex-start}
+    .vs-grid{grid-template-columns:1fr;gap:var(--s6)}.peek-grid{grid-template-columns:1fr}
+    .sec-head{text-align:left}.step{grid-template-columns:1fr;gap:var(--s2);text-align:left}
     .step .no{font-size:30px}.nav-cta{display:none}
   }
 
   /* ===== 21 天旅程總覽 ===== */
-  .jr{background:var(--band)}
-  .jr-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-top:30px}
-  .jr-card{background:#fff;border:1px solid var(--line);border-radius:12px;aspect-ratio:1/.82;position:relative;display:flex;align-items:center;justify-content:center;
+  .jr{background:var(--paper);padding:var(--s10) 0}
+  .jr-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:var(--s3);margin-top:var(--s6)}
+  .jr-card{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);aspect-ratio:1/.82;position:relative;display:flex;align-items:center;justify-content:center;
     box-shadow:0 1px 2px rgba(46,51,61,.04);transition:box-shadow var(--t) var(--ease),border-color var(--t) var(--ease)}
-  .jr-card:hover{border-color:rgba(216,178,127,.6);
-    box-shadow:0 10px 22px -10px rgba(46,51,61,.18),var(--card-hi)}
-  .jr-card .n{position:absolute;top:9px;left:11px;font-size:11px;font-weight:900;color:var(--ink-dim);font-feature-settings:"tnum" 1;transition:color var(--t) var(--ease)}
+  .jr-card:hover{border-color:var(--gold-brd);
+    box-shadow:var(--card-sh-hi),var(--card-hi)}
+  .jr-card .n{position:absolute;top:9px;left:11px;font-size:11px;font-weight:700;color:var(--ink-dim);font-feature-settings:"tnum" 1;transition:color var(--t) var(--ease)}
   .jr-card:hover .n{color:var(--gold-deep)}
   .jr-card .ic{color:var(--gold);transition:transform var(--t) var(--ease)}
   .jr-card:hover .ic{transform:scale(1.12)}
   .jr-card .ic svg{width:46px;height:40px}
-  .jr-card--free{border:1.5px solid var(--gold);box-shadow:0 0 0 3px rgba(216,178,127,.18),0 1px 2px rgba(46,51,61,.04)}
-  .jr-card--free .n{color:var(--gold-deep)}
-  .jr-free{position:absolute;top:8px;right:8px;background:var(--gold);color:#fff;font-size:9px;font-weight:800;letter-spacing:1px;padding:2px 7px;border-radius:999px;line-height:1.4}
-  .jr-phz{margin-top:36px;display:grid;grid-template-columns:repeat(7,1fr);gap:14px;border-top:1px solid var(--line);padding-top:26px}
-  .jr-ph{display:flex;flex-direction:column;gap:5px}
+  .jr-phz{margin-top:var(--s6);display:grid;grid-template-columns:repeat(7,1fr);gap:var(--s3);border-top:1px solid var(--line);padding-top:var(--s5)}
+  .jr-ph{display:flex;flex-direction:column;gap:var(--s1)}
   .jr-ph .ic{color:var(--gold)}
   .jr-ph .ic svg{width:26px;height:26px}
   .jr-ph .rg{font-size:11px;color:var(--ink-dim);font-weight:700}
-  .jr-ph b{font-size:13px;font-weight:800;color:var(--ink)}
-  .jr-ph small{font-size:11px;color:var(--ink-dim);line-height:1.45}
+  .jr-ph b{font-size:var(--fs-sm);font-weight:700;color:var(--ink)}
+  .jr-ph small{font-size:11px;color:var(--ink-dim);line-height:var(--lh-head)}
   @media(max-width:860px){.jr-grid{grid-template-columns:repeat(4,1fr)}.jr-phz{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:480px){.jr-grid{grid-template-columns:repeat(3,1fr)}}
 
   /* ===== 高級細節：動效層 ===== */
   /* 頂條捲動後浮起一層陰影 */
   .topbar{transition:box-shadow var(--t) var(--ease),background var(--t) var(--ease)}
-  .topbar.scrolled{box-shadow:0 1px 0 var(--line),0 8px 24px -16px rgba(46,51,61,.28)}
+  .topbar.scrolled{box-shadow:0 1px 0 var(--line),var(--btn-sh)}
   /* 指南針極緩慢飄移，營造氛圍而非搶眼 */
-  .hero .compass-bg{animation:drift 80s linear infinite}
-  @keyframes drift{to{transform:translate(-50%,-50%) rotate(360deg)}}
-  @media(max-width:860px){.hero .compass-bg{animation:driftM 80s linear infinite}@keyframes driftM{to{transform:translate(-50%,0) rotate(360deg)}}}
+  .hero .compass-bg{animation:drift 14s ease-in-out infinite}
+  @keyframes drift{0%,100%{opacity:.22}50%{opacity:.30}}
   /* 捲動顯現：以動畫驅動，避免與 hover 的 transform 互相干擾 */
   .reveal{opacity:0}
   .reveal.in{animation:revealUp .7s var(--ease) both}
@@ -285,14 +277,117 @@
   .jr-grid.in .jr-card{animation:revealUp .55s var(--ease) both}
   /* FAQ 展開符號平滑旋轉 */
   summary::after{transition:transform var(--t) var(--ease),color var(--t) var(--ease)}
-  details[open] summary::after{transform:rotate(180deg);margin-top:0}
-  details summary:hover::after{color:var(--gold)}
+  details[open] summary::after{transform:rotate(-135deg) translateY(2px)}
+  details summary:hover::after{border-color:var(--gold)}
   /* 尊重使用者的減少動態偏好 */
   @media(prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
       transition-duration:.001ms!important;scroll-behavior:auto!important}
     .reveal,.jr-grid .jr-card{opacity:1!important;transform:none!important}
   }
+
+  /* ===== 喜歡自己版：Hero manifesto + 鏡子卡 + 金色區塊 ===== */
+  .hero-copy .eyebrow{letter-spacing:.16em;margin-bottom:var(--s3)}
+  .hero h1 em{font-style:normal;color:var(--gold-deep)}
+  .hero .manifesto{margin-top:var(--s1)}
+  .manifesto p{font-size:var(--fs-body);color:var(--ink-soft);line-height:var(--lh-body);margin-bottom:var(--s4)}
+  .manifesto p b{color:var(--ink);font-weight:700}
+  .manifesto .m-q{font-family:var(--serif);font-size:var(--fs-quote);color:var(--ink);font-weight:600;margin-bottom:var(--s4)}
+  .manifesto .m-close{color:var(--ink);font-size:var(--fs-lead);font-weight:700;margin:var(--s5) 0 0}
+  .manifesto .m-close b{color:var(--gold-deep)}
+  /* 右側鏡子卡（沿用 .cta-card 白卡質感） */
+  .mirror-card{align-self:center}
+  .mirror-card .m-lead{font-family:var(--serif);font-size:var(--fs-lead);font-weight:600;color:var(--ink);line-height:var(--lh-quote);margin-bottom:var(--s4)}
+  .mirror-card p{font-size:var(--fs-cap);color:var(--ink-soft);line-height:var(--lh-loose);margin-bottom:var(--s4)}
+  .mirror-card .m-doubt{color:var(--ink);font-weight:700;font-size:var(--fs-lead);margin:2px 0 0}
+  /* 金色區塊 pivot */
+  .pivot{padding:var(--s10) 0;text-align:center;
+    background:radial-gradient(900px 400px at 50% 0%,rgba(216,178,127,.06),transparent 65%),var(--paper);
+    border-top:1px solid var(--gold-line);border-bottom:1px solid var(--line)}
+  .pivot-inner{max-width:660px;margin:0 auto}
+  .pivot-lead{font-family:var(--serif);font-size:var(--fs-display);line-height:var(--lh-quote);color:var(--ink);font-weight:600;margin-bottom:var(--s5)}
+  .pivot-lead b{color:var(--gold-deep);font-weight:700}
+  .pivot-brand{font-size:var(--fs-body);color:var(--ink-soft);line-height:var(--lh-body);margin-bottom:var(--s6)}
+  .pivot-brand .sy{display:block;font-family:var(--serif);font-size:22px;font-weight:700;letter-spacing:.08em;color:var(--gold-deep);margin-bottom:var(--s2)}
+  .pivot-reassure{margin-top:var(--s4);color:var(--ink-dim);font-size:var(--fs-sm);font-weight:600}
+  @media(max-width:860px){.pivot,.convert,.jr{padding:var(--s8) 0}.narrative{padding:var(--s6) 0}}
+  /* Day 1 金邊 + 免費 badge（對齊 live） */
+  .jr-card--free{border:1.5px solid var(--gold);box-shadow:0 0 0 3px var(--gold-tint),0 1px 2px rgba(46,51,61,.04)}
+  .jr-card--free .n{color:var(--gold-deep)}
+  .jr-free{position:absolute;top:8px;right:8px;background:var(--gold);color:#fff;font-size:9px;font-weight:700;letter-spacing:1px;padding:2px var(--s2);border-radius:var(--r-pill);line-height:var(--lh-head)}
+  /* ===== 創辦人故事（長信排版） ===== */
+  .story .wrap{max-width:720px}
+  .story .lead-in{font-family:var(--serif);font-size:var(--fs-display);color:var(--ink);font-weight:600;line-height:var(--lh-head);margin-bottom:var(--s5)}
+  .story .turn{font-family:var(--serif);font-size:var(--fs-quote);font-weight:700;color:var(--ink);line-height:var(--lh-quote);margin:var(--s7) 0 var(--s4)}
+  .story .turn::before{content:"";display:block;width:40px;height:2px;background:var(--gold);border-radius:2px;margin-bottom:var(--s4)}
+  .story .beat{font-family:var(--serif);font-size:var(--fs-quote);color:var(--ink);font-weight:700;line-height:var(--lh-quote);margin:var(--s1) 0 var(--s5)}
+  .story .key{font-family:var(--serif);font-size:var(--fs-quote);color:var(--ink);font-weight:700;line-height:var(--lh-quote);margin:var(--s6) 0 var(--s5)}
+  .story p.ask{font-family:var(--serif);color:var(--gold-deep);font-weight:700;font-size:var(--fs-quote);line-height:var(--lh-quote);margin:var(--s2) 0 var(--s5)}
+  .story .close{font-family:var(--serif);font-size:var(--fs-display);font-weight:700;color:var(--ink);line-height:var(--lh-head);margin:var(--s4) 0 var(--s2)}
+  .story .close b{color:var(--gold-deep)}
+  .story .sy{font-family:var(--serif);font-weight:700;color:var(--gold-deep);letter-spacing:.02em}
+  .story .byline{margin-top:var(--s6);color:var(--ink);font-family:var(--serif);font-size:var(--fs-lead);font-weight:600;letter-spacing:.02em}
+  .story .byline .cred{display:block;font-family:var(--sans);font-size:var(--fs-sm);font-weight:600;color:var(--ink-dim);letter-spacing:.06em;margin-top:var(--s1)}
+  .story .cta-row{margin-top:var(--s7)}
+  /* ===== VS：AI vs 教練 ===== */
+  .vs-copy .q-you{color:var(--ink);font-weight:700}
+  .vs-copy .q-coach{display:inline-block;color:var(--gold-deep);font-family:var(--serif);font-weight:700;font-size:1.08em;line-height:var(--lh-head);margin-top:2px}
+  .vs .vs-quote{max-width:32em;margin:var(--s7) auto 0;padding-top:var(--s7);border-top:1px solid var(--line);text-align:center;font-family:var(--serif);font-size:var(--fs-display);font-weight:700;color:var(--ink);line-height:var(--lh-quote)}
+  .vs .vs-quote b{color:var(--gold-deep)}
+  /* ===== Section 7：21 天 OUTCOME ===== */
+  .outcome-close{text-align:center;margin-top:var(--s7);padding-top:var(--s7);border-top:1px solid var(--line)}
+  .outcome-close p{color:var(--ink-soft);font-size:var(--fs-body);line-height:var(--lh-body);max-width:30em;margin:0 auto var(--s6)}
+  .outcome-close .big-line{font-family:var(--serif);font-size:var(--fs-h2);font-weight:700;color:var(--ink);line-height:var(--lh-head);max-width:22em;margin:var(--s2) auto 0}
+  .outcome-close .big-line b{color:var(--gold-deep)}
+  .cta-row.center{text-align:center}
+  /* ===== Section 8：Insight Cards（金句 + 展開看全文） ===== */
+  .insights{max-width:820px;margin:var(--s7) auto 0;display:flex;flex-direction:column;gap:var(--s5)}
+  .insight-card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--card-sh),var(--card-hi);overflow:hidden;padding:0}
+  .insight-card>summary{list-style:none;cursor:pointer;display:block;padding:var(--s6);font-weight:400;font-size:inherit;color:inherit}
+  .insight-card>summary::-webkit-details-marker{display:none}
+  .insight-card>summary::after{content:none;display:none}
+  .insight-card>summary::before{content:"";display:block;width:40px;height:2px;background:var(--gold);border-radius:2px;margin:0 0 var(--s4)}
+  .insight-card .quote{font-family:var(--serif);font-size:var(--fs-quote);line-height:var(--lh-quote);color:var(--ink);font-weight:600;padding:0;margin:0}
+  .insight-card .quote .em{color:var(--gold-deep);font-weight:700}
+  .insight-card .who{margin:var(--s4) 0 0;padding:0;display:flex;align-items:center;justify-content:space-between;gap:var(--s3);color:var(--ink-dim);font-size:var(--fs-xs);letter-spacing:.06em;font-weight:600}
+  .insight-card .more{color:var(--gold-deep);font-weight:700;white-space:nowrap;transition:color .2s}
+  .insight-card .more::after{content:"展開看全文 ↓"}
+  .insight-card[open] .more::after{content:"收合 ↑"}
+  .insight-card>summary:hover .more{color:var(--gold)}
+  .insight-card .full{padding:var(--s5) var(--s6) var(--s6);border-top:1px solid var(--line)}
+  .insight-card .full p{font-size:var(--fs-cap);line-height:var(--lh-loose);color:var(--ink-soft);margin:var(--s4) 0 0;padding:0}
+  .insight-card .full p:first-child{margin-top:0}
+  .insight-card .full b{color:var(--ink);font-weight:700}
+  @media(max-width:860px){.insights{gap:var(--s4)}.insight-card>summary,.insight-card .full{padding-left:var(--s5);padding-right:var(--s5)}}
+  /* ===== 架構重排：主轉換區 + 合併 proof + 限量餘波 + 標點 ===== */
+  .convert{background:var(--paper);padding:var(--s10) 0;text-align:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .convert .pivot-inner{max-width:560px}
+  .convert-h{font-size:var(--fs-h2);line-height:var(--lh-head);margin-bottom:var(--s5)}
+  .convert .btn-primary{max-width:340px;margin:0 auto}
+  .convert .quiz{max-width:520px;margin:var(--s5) auto 0;text-align:left}
+  .quiz .email-block{opacity:.35;pointer-events:none;transition:opacity .3s var(--ease)}
+  .quiz.ready .email-block{opacity:1;pointer-events:auto}
+  /* ===== 對齊紀律 =====
+     規則:一個 section 只能有一種對齊。
+     靠左 section:sec-head / 內文 / 卡片 / cta-row 全部靠左。
+     置中 section:全部置中,但「中文長段落」與「卡片內文」永遠靠左。 */
+
+  /* 1) 置中 section 的標題:跟著版面置中,且收窄避免長行 */
+  .pivot .sec-head,.convert .sec-head,.proof-testi .sec-head,
+  .final .sec-head{max-width:24em;margin:0 auto}
+
+  /* 2) 見證區:屬於置中版面(insights 820px 置中) */
+  .proof-testi{margin-top:var(--s8);text-align:center}
+  .proof-testi .insight-card{text-align:left}   /* 卡片內文永遠靠左 */
+
+  /* 3) 靠左 section 的 cta-row 靠左;置中 section 的置中 */
+  .cta-row{text-align:left}
+  .pivot .cta-row,.convert .cta-row,.final .cta-row,.cta-row.center{text-align:center}
+
+  /* 4) outcome-close / vs-quote 是靠左 section 裡的置中結語 ——
+        用一條分隔線宣告「這裡換了層級」,置中才不會像沒對齊 */
+  .narrative{padding:var(--s7) 0}
+  p,.lead,.manifesto p,.pivot-lead,.narrative p,.story p,.outcome-close p,.mirror-card p{text-wrap:pretty}
 </style>
 </head>
 <body>
@@ -316,7 +411,7 @@
 <!-- 頂條 + LOGO(望遠鏡) -->
 <div class="topbar">
   <div class="wrap">
-    <a class="brand" href="#start">
+    <a class="brand" href="#top">
       <span class="logo"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="58" r="16" stroke="#D8B27F" stroke-width="5.5"/><circle cx="66" cy="58" r="16" stroke="#D8B27F" stroke-width="5.5"/><path d="M26 44 L32 28 H44" stroke="#D8B27F" stroke-width="5"/><path d="M56 28 H68 L74 44" stroke="#D8B27F" stroke-width="5"/><path d="M42 58 Q50 54 58 58" stroke="#D8B27F" stroke-width="4.5"/><path d="M82 20 L84.5 26 L91 28.5 L84.5 31 L82 37 L79.5 31 L73 28.5 L79.5 26 Z" fill="#D8B27F"/></svg></span>
       <span class="bt"><b>看見自己</b><small>SEE YOURSELF</small></span>
     </a>
@@ -325,7 +420,7 @@
 </div>
 
 <!-- HERO -->
-<header class="hero" id="start">
+<header class="hero" id="top">
   <svg class="compass-bg" viewBox="0 0 400 400" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <circle cx="200" cy="200" r="186" stroke-width="1.1" opacity=".55"/>
     <circle cx="200" cy="200" r="150" stroke-width="1" opacity=".4"/>
@@ -347,27 +442,192 @@
     </g>
   </svg>
   <div class="wrap">
-    <div>
-      <h1>21 天，<br>身分重塑計畫</h1>
-      <p class="sub">你不需要成為更好的人，你只需要活出真實的自己。</p>
+    <div class="hero-copy">
+      <div class="eyebrow">21 天教練對話</div>
+      <h1>21 天，<br><span class="line2">從看見自己，到<em>喜歡自己</em>。</span></h1>
       <div class="hr-mini"></div>
-      <div class="phases3">
-        <div class="p3"><span class="ic"><svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="22" cy="22" r="13"/><circle cx="22" cy="22" r="5"/><path d="M22 4v6M22 34v6M4 22h6M34 22h6"/></svg></span>
-          <div><b>看見真相</b><small>看見自動導航<br>與模式</small></div></div>
-        <div class="p3"><span class="ic"><svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="22" cy="22" r="14"/><path d="M22 10l4 12-4 4-4-4z" fill="currentColor" stroke="none"/><path d="M22 22l8-2M22 22l-8 2"/></svg></span>
-          <div><b>拿回主權</b><small>認領身份與<br>內在方向</small></div></div>
-        <div class="p3"><span class="ic"><svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 36l12-22 8 14"/><path d="M28 36l6-11 4 11z"/><path d="M20 14V6h7"/></svg></span>
-          <div><b>定錨未來</b><small>建立系統<br>持續前進</small></div></div>
+      <div class="manifesto">
+        <p class="m-q">喜歡自己的力量有多大？</p>
+        <p>大到你不再需要每個人都認同你。<br>不再小心翼翼管理所有人的情緒。<br>敢說<b>「我受傷了」</b>，<br>也敢說<b>「我不要」</b>。</p>
+        <p>你會畫界線。<br>也會有界線沒畫好的時候。<br>但你不再因為不完美，<br>就站到自己的對立面。</p>
+        <p class="m-close">21 天，練習<b>重新站回自己這邊</b>。</p>
       </div>
     </div>
-    <div class="cta-card">
-      <div class="tag">FOUNDER 限量開放中</div>
-      <h3>教練對話，<br>就是你的臨門一腳。</h3>
-      <p>世界給過你很多答案。是時候停下來，卸下不需要的枷鎖跟信念，透過 21 天系統性對話，挖出自己的資源，嶄新向前。</p>
-      <button class="btn-primary" id="openQuiz">
-        <span class="main">開始對話 →</span>
-      </button>
-      <div class="scarcity">高階對話運算資源有限，故免費名額限時限量</div>
+    <div class="cta-card mirror-card">
+      <div class="tag">此刻的你</div>
+      <p class="m-lead">你很努力。<br>運動。冥想。寫日記。<br>心理學。自我成長。Podcast。</p>
+      <p>進步不是沒有。<br>但總像進五步、退三步。<br>而且，很辛苦。</p>
+      <p class="m-doubt">你開始懷疑，<br>真正的改變，<br>都一定要這麼用力嗎？</p>
+    </div>
+  </div>
+</header>
+
+<!-- Pivot（精簡：轉折 + 單一 CTA，錨到主轉換區） -->
+<section class="pivot">
+  <div class="wrap">
+    <div class="pivot-inner">
+      <p class="pivot-lead">你不缺更多答案。<br>也不缺更多學習。<br><b>你缺的，可能是一場對話。</b><br>陪你看見真實的自己。</p>
+      <p class="pivot-brand"><span class="sy">See&nbsp;Yourself</span>透過一連串教練系統設計過的問題，<br>陪你一層一層，走進自己。</p>
+      <a href="#start" class="link-cta">免費開始 Day 1 <span class="arw">→</span></a>
+      <div class="pivot-reassure">Day 1 免費 · 不需要信用卡</div>
+    </div>
+  </div>
+</section>
+
+<!-- STORY：創辦人故事 -->
+<section class="story">
+  <div class="wrap">
+    <div class="sec-head"><h2>為什麼有這個產品</h2></div>
+
+    <p class="lead-in">這個產品，一開始是做給我自己的。</p>
+
+    <p>那一年，健康檢查出現異常。婚姻亮起紅燈。疫情剛開始。我們才剛跨州搬家，我和孩子都在適應一個完全陌生的環境。</p>
+    <p>很多事情不是一件一件來。<span class="pop">是一起來。</span></p>
+    <p>那時候的感覺，很像一個不會游泳的人被丟進海裡。一個浪打過來，你好不容易浮出水面，吸一口氣。下一個浪，又把你打回去。</p>
+
+    <p class="turn">第一次轉變，是熱瑜珈。</p>
+    <p>不是因為我終於學會靜下來。剛好相反。滿頭大汗。高難度動作。一次又一次，就在我覺得「不行了」的時候。</p>
+    <p class="beat">喔。原來我可以。</p>
+    <p>很奇怪。我明明在練身體，最後被改變的，卻不只是身體。我開始相信自己。開始對一件事好奇：原來改變一個人的心理，不一定要先從心理開始？</p>
+
+    <p class="turn">第二次轉變，是人生教練。</p>
+    <p>身體有力量了。但腦子裡還是有很多聲音、很多分析、很多「可是」。我不是沒有想。我是想太多，多到不知道自己到底在想什麼。</p>
+    <p>後來我接觸到教練式對話。第一次有人不急著給我答案，而是一直問。問到我停下來。問到我發現自己前後矛盾。問到有些我講了很多年的「我就是這樣」，突然變成：</p>
+    <p class="ask">等一下。真的是這樣嗎？</p>
+    <p>我拿到人生教練(Life Coach)與神經語言程式學(NLP)的認證，成為一名教練。我以為，我找到答案了。</p>
+
+    <p class="turn">直到我開始真正陪人做教練。</p>
+    <p>我最愛的風格，一直是快速轉化(Rapid Transformation)。一個問題問下去，對方停住，眼睛亮起來：「天啊，我從來沒有這樣想過。」</p>
+    <p class="beat">我超愛那一刻。</p>
+    <p>可是慢慢地，我注意到另一件事。有些人，回來了。同一個問題。相似的卡住。熟悉的故事。</p>
+    <p>那一次的看見，不是真的嗎？<br>當然是真的。</p>
+    <p class="ask">那為什麼，一個這麼深的頓悟，還是會被原來的生活慢慢蓋回去？</p>
+
+    <p class="key">頓悟是一個瞬間。你怎麼看自己，卻是很多年慢慢長出來的。</p>
+    <p>一次失敗。一句別人說過的話。一個忘不掉的畫面。<br>慢慢地，你得到一個結論：「我就是這樣的人。」</p>
+    <p>所以一句「你其實很有價值」，很難打贏你累積二十年的故事。<br>因為底下那些「我不夠好」的證據，一件都沒有動。</p>
+    <p>真正的改變，不是換掉一句話。是把那些散落在生命裡的經驗，一件一件找回來、重新看見、重新歸位，<span class="pop">直到你對自己的理解，本身變成一個新的結構。</span></p>
+    <p>這需要時間。而且需要有人陪你，一次一次地問。問題是，不是每個人都負擔得起長期教練。而且再好的教練，也不可能每天陪在身邊。</p>
+
+    <p class="turn"><span class="sy">看見自己</span>，就是從這裡開始的。</p>
+    <p>從職場，到婚姻。從親子教育，到在異國尋找歸屬感。從追求完美、渴望認同，到慢慢接納完整的自己。從追求每天高能量，到有一天發現，低能量的我，也可以好好過完今天。</p>
+    <p class="beat">這些都是我。</p>
+    <p>我沒有想把哪一個版本刪掉。我只是越來越想認識她們。</p>
+
+    <p>所以，我做了<span class="sy">看見自己</span>。不是鞭策你成為更好的自己。而是透過一場又一場教練對話，陪你把自己說出來。</p>
+    <p class="beat">看見她。認識她。理解她。</p>
+    <p>然後有一天，也許你會發現。</p>
+    <p class="close">原來完整的自己，<br>比你一直努力成為的那個完美版本，<br>更值得<b>喜歡</b>。</p>
+
+    <div class="byline">—— Vivi<span class="cred">Life Coach · NLP Practitioner · Yoga Instructor</span></div>
+    <div class="cta-row"><a href="#start" class="link-cta">免費開始 Day 1 <span class="arw">→</span></a></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- VS：AI vs 教練 -->
+<section class="vs band" id="vs">
+  <div class="wrap">
+    <div class="sec-head"><h2>AI 可以回答你的問題。<br>但如果連問題都是舊的呢？</h2></div>
+    <div class="vs-grid">
+      <div class="vs-copy">
+        <p>你問 AI：<br><span class="q-you">「我很容易焦慮，怎麼放鬆？」</span></p>
+        <p>它可以告訴你十種方法。<br>呼吸。冥想。運動。寫日記。<br><span class="pop">都沒有錯。</span></p>
+        <p>但教練可能會問：<br><span class="q-coach">「你什麼時候開始相信，自己是一個很容易焦慮的人？」</span></p>
+        <p>因為你問出的問題，本身就帶著你看世界的方式。</p>
+        <p>如果問題一直站在舊的地圖上，再好的答案，也可能只是讓你在原地走得更有效率。</p>
+      </div>
+      <div class="vs-table">
+        <div class="row head"><div>一般 AI</div><div>See Yourself 教練</div></div>
+        <div class="row"><div>你問 → 它答</div><div>它問 → 你答</div></div>
+        <div class="row"><div>解決眼前問題</div><div>看見問題背後的模式</div></div>
+        <div class="row"><div>提供可能答案</div><div>挖出你的信念與動機</div></div>
+        <div class="row"><div>幫你決定方向</div><div>把選擇權還給你</div></div>
+      </div>
+    </div>
+    <p class="vs-quote">真正的轉變，不一定是多一個答案。<br>而是你終於能回答，<b>一個自己從來沒想過的問題</b>。</p>
+    <div class="cta-row center"><a href="#start" class="link-cta">免費開始 Day 1 <span class="arw">→</span></a></div>
+  </div>
+</section>
+
+<!-- 21 天旅程總覽 -->
+<section class="jr">
+  <div class="wrap">
+    <div class="sec-head"><h2>21 天，一層一層看見自己。</h2>
+      <p class="lead">每一天，一場教練對話。<br>從你現在說出口的故事，慢慢走到那些你從來沒有懷疑過的信念、身分與選擇。</p></div>
+    <div class="jr-grid" id="jrGrid"></div>
+    <div class="jr-phz">
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 14s4-7 12-7 12 7 12 7-4 7-12 7-12-7-12-7z"/><circle cx="14" cy="14" r="3"/></svg></span><span class="rg">Step 1</span><b>發現底層</b><small>看見自動導航與模式</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 23s-9-5-9-12a4.5 4.5 0 0 1 9-2 4.5 4.5 0 0 1 9 2c0 7-9 12-9 12z"/></svg></span><span class="rg">Step 2</span><b>承認渴望</b><small>允許自己想要更多</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l10 5-10 5-10-5z"/><path d="M4 14l10 5 10-5M4 19l10 5 10-5"/></svg></span><span class="rg">Step 3</span><b>挖掘數據</b><small>看懂模式與故事</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="14" cy="10" r="4"/><path d="M6 24c0-5 4-8 8-8s8 3 8 8"/></svg></span><span class="rg">Step 4</span><b>認領身分</b><small>看見可能</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l8 6-8 14-8-14z"/><path d="M6 10h16M14 4v20"/></svg></span><span class="rg">Step 5</span><b>發現資源</b><small>看見擁有的資源</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 4v20"/><path d="M8 6h13l-3 4 3 4H8"/></svg></span><span class="rg">Step 6</span><b>奪回主權</b><small>我決定什麼是重要</small></div>
+      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l2.5 7.5L24 14l-7.5 2.5L14 24l-2.5-7.5L4 14l7.5-2.5z"/></svg></span><span class="rg">Step 7</span><b>新的身分</b><small>成為完整的自己</small></div>
+    </div>
+    <div class="cta-row"><a href="#start" class="link-cta">免費開始 Day 1 <span class="arw">→</span></a></div>
+  </div>
+</section>
+
+<!-- 21 天後 OUTCOME + 見證（同一塊：我們承諾的 + 別人拿到的） -->
+<section class="proof band">
+  <div class="wrap">
+    <div class="sec-head"><h2>21 天後，<br>你不會變成更好的自己。</h2>
+      <p class="lead">但你可能會，比以前<span class="gold">更喜歡自己</span>。</p></div>
+    <div class="steps">
+      <div class="step"><div class="no">01</div><div><h3>更認識自己</h3><p>你開始看見，那些你一直說「我就是這樣」的地方，<br><span class="pop">有些真的是你。有些，只是你相信很久了。</span></p></div></div>
+      <div class="step"><div class="no">02</div><div><h3>更理解自己</h3><p>你不再急著問：「我為什麼又這樣？」<br>而是開始好奇：「原來，我這樣做有我的原因。」<br><span class="pop">理解自己之後，很多對自己的責怪，會慢慢鬆開。</span></p></div></div>
+      <div class="step"><div class="no">03</div><div><h3>更相信自己</h3><p>別人的一句話，不再那麼容易變成你對自己的判決。<br>你開始知道：那是他的看法。<br><span class="pop">而我，也有我的感受、想要和選擇。</span></p></div></div>
+      <div class="step"><div class="no">04</div><div><h3>更站在自己這邊</h3><p>你還是會犯錯。還是可能界線沒畫好。還是會有情緒、會後悔、會做出不完美的選擇。<br>但你不再因為一次做不好，<span class="pop">就站到自己的對立面。</span></p></div></div>
+    </div>
+    <div class="outcome-close">
+      <p>喜歡自己，不是覺得自己什麼都好。<br>是完整的你，你都願意認識。</p>
+      <p class="big-line">你不用成為更好的自己。<br>你可以<b>更完整地成為你</b>。</p>
+    </div>
+    <div class="proof-testi">
+      <div class="sec-head"><h2>有些東西，<br>只有你自己看見的那一刻才會改變。</h2></div>
+    <div class="insights">
+      <details class="insight-card">
+        <summary>
+          <p class="quote">一樣的事，我看別人做，會覺得他很棒；換成自己做，卻只覺得那是應該的。那一刻我才看見，<span class="em">我一直把自己排在最後。</span></p>
+          <div class="who"><span>— 天空藍｜Day 21</span><span class="more"></span></div>
+        </summary>
+        <div class="full">
+          <p>曾經去醫院看過精神科或身心科診所，把我憂鬱或困擾的事情跟醫生說，聽到的都是勸說或安慰的話語，對當下的自己並沒有幫助。道理都懂，但就是自己說服不了自己，才會傷心難過，甚至到憂鬱的狀況，而醫生就只能開些鎮定劑或安眠藥之類的。</p>
+          <p>在與「看見自己」對話前，網路上有很多心靈雞湯、人格分析的影片，或是身邊的親友以他們的認知來告訴我，我是如何如何，要我多愛自己一點。但我覺得，我就是以愛自己的方式在做，只是有些結果不是好的，但不代表我就是不愛自己的人。</p>
+          <p>與「看見自己」對話後，每天的對話完會有小結論，做完 21 天後，會有一份關於我的故事，系統有 7 個步驟：發現匱乏 → 承認渴望 → 挖掘數據 → 認領身份 → 發現資源 → 奪回主權 → 新的身分。系統引導我從第三者的角度來看自己，淺顯易懂地很快讓我明白，原來的我，不是自己所認為的那個我。<b>原來在生活上、心靈上，我都是把我自己排在最後。</b>一樣的事情，我看到別人做，會覺得對方很棒、很好；而當這件事是我做的時候，我卻覺得那是我應該做的。這讓我突然意識到我是這樣的人，過去的我不曾允許自己相信自己，因為過去的經驗限制了我的認知，我把結果都交給了別人，來驗證我是怎樣的一個人。</p>
+          <p>系統告訴我，原來我帶著一個很重的方程式走進這段旅程：被需要，才有愛；有愛，才有活下去的重量。這不是我選擇的邏輯，它更像是我很早就學會的生存語言，陪我走了很長的路，長到我幾乎認不出它是一個假設，而不是事實。「別人的認可才算數，自己給自己的不算」，這個聲音讓我自動折扣了自己的重量。內心潛意識的我，用「外在認可才算數」來保護我不必做那個選擇。這是潛意識的善意，只是它讓我的雷達一直朝外轉，轉了很多年。</p>
+          <p>原來我愛一個人所做的付出，與對方最後有沒有選擇我，不是畫上等號的。對方沒有選擇我的那個選擇，說的是她的處境、她的位置、她的功課，不是我這個人值不值得被愛的裁決書。<b>我要練習：身份不由任何關係的成敗定義，也不由任何人的選擇來授權。我自己說了算。</b></p>
+        </div>
+      </details>
+      <details class="insight-card">
+        <summary>
+          <p class="quote">我把自我成長，變成衡量自己值不值得擁有的一把尺。<span class="em">只要有尺，就代表我一直覺得自己還不夠好。</span></p>
+          <div class="who"><span>— 歡喜心｜Day 21</span><span class="more"></span></div>
+        </summary>
+        <div class="full">
+          <p>參加「看見自己」之前，我一直相信，人應該要善良、有愛、慈悲、懂得感恩。我也一直覺得，如果世界上的每一個人都能做到這樣，一定會是很美好的世界。</p>
+          <p>所以每當人生卡關、不順利的時候，我第一個反應不是去檢視外在，而是回頭懷疑自己：「是不是我修為還不夠？是不是我轉念不夠？是不是我還不夠慈悲？」</p>
+          <p>我一直以為，自我成長就是要讓自己變得更好、更有愛。直到第一天看到教練給我的身分解析卡，我真的震驚了。教練跟我說：「你好像覺得，你要夠慈悲、夠大度，才值得擁有你想要的。<b>你把自我成長，變成衡量自己值不值得擁有的一把尺。只要有尺，就代表你覺得自己目前不足、不夠好。</b>我想問你，慈悲良善，要怎麼衡量呢？」</p>
+          <p>這段話對我來說像當頭棒喝。我一直希望自己對世人有愛，卻忘了，我也是「世人」的一部分。為什麼我願意對別人寬容，卻對自己設下這麼高、甚至沒有終點的標準？回頭看，我上過很多身心靈課程、聽過很多座談、也練習過冥想，但從來沒有人這麼直接地指出我真正的盲點。</p>
+          <p>後來教練問我的問題越來越犀利：「你可以只有 50% 的良善活著嗎？」「那 10% 呢？」「還是一天 24 小時、每一分鐘都要達標，才算是夠慈悲？」這些問題讓我開始發現，我一直努力追求的，不是真正的成長，而是在追逐一個永遠達不到的標準。只要沒有達到，我就告訴自己：「我還不值得。」</p>
+          <p>直到那一刻，我才真正看見，原來真正限制我的，不是能力、不是真實的修為，而是我自己替自己訂下了一個「夠好才值得擁有」的規則。而最諷刺的是，這個標準，從來沒有人要求我，是我自己要求自己的。</p>
+          <p>這 21 天最大的收穫，不是我變得更慈悲，而是我開始把那份慈悲，也留一點給自己。我開始相信，我不需要等到完美、不需要等到修得夠高、不需要通過自己設下的層層考驗，才有資格擁有我想要的人生。<b>原來，我一直都值得。真正需要重塑的，不是我的能力，而是我看待自己的身分。</b></p>
+        </div>
+      </details>
+    </div>
+    </div>
+  </div>
+</section>
+
+<!-- 主轉換區：quiz 在此，所有 #start 錨點的終點 -->
+<section class="convert" id="start">
+  <div class="wrap">
+    <div class="pivot-inner">
+      <h2 class="convert-h">準備好，跟自己談一次了嗎？</h2>
+      <button class="btn-primary" id="openQuiz"><span class="main">免費開始 Day 1 →</span></button>
+      <div class="pivot-reassure">Day 1 免費 · 不需要信用卡</div>
       <form class="quiz" id="quiz">
         <div class="q">1. 你的性別？</div>
         <div class="opts row">
@@ -388,105 +648,23 @@
           <label class="opt"><input type="checkbox" name="q3" data-qkey="試過的方式" value="線上課程"><span>線上課程</span></label>
           <label class="opt"><input type="checkbox" name="q3" data-qkey="試過的方式" value="一對一諮商教練"><span>一對一諮商教練</span></label>
         </div>
-        <input type="email" id="quizEmail" placeholder="你的 email">
-        <button type="submit" class="btn-primary submit"><span class="main">立刻領取 →</span></button>
-        <p class="qmsg" id="quizMsg" aria-live="polite"></p>
+        <div class="email-block">
+          <input type="email" id="quizEmail" placeholder="你的 email">
+          <button type="submit" class="btn-primary submit"><span class="main">立刻領取 →</span></button>
+          <p class="qmsg" id="quizMsg" aria-live="polite"></p>
+        </div>
       </form>
     </div>
   </div>
-</header>
-
-<!-- 21 天旅程總覽 -->
-<section class="jr">
-  <div class="wrap">
-    <div class="sec-head"><h2>21 天旅程總覽</h2>
-      <p class="lead">每天都會有一張身分解析卡，從第 1 天走到第 21 天，記錄你的身分轉化旅程。</p></div>
-    <div class="jr-grid" id="jrGrid"></div>
-    <div class="jr-phz">
-      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 14s4-7 12-7 12 7 12 7-4 7-12 7-12-7-12-7z"/><circle cx="14" cy="14" r="3"/></svg></span><span class="rg">Step 1</span><b>發現匱乏</b><small>看見自動導航與模式</small></div>
-      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 23s-9-5-9-12a4.5 4.5 0 0 1 9-2 4.5 4.5 0 0 1 9 2c0 7-9 12-9 12z"/></svg></span><span class="rg">Step 2</span><b>承認渴望</b><small>允許自己想要更多</small></div>
-      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l10 5-10 5-10-5z"/><path d="M4 14l10 5 10-5M4 19l10 5 10-5"/></svg></span><span class="rg">Step 3</span><b>挖掘數據</b><small>看懂模式與故事</small></div>
-      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="14" cy="10" r="4"/><path d="M6 24c0-5 4-8 8-8s8 3 8 8"/></svg></span><span class="rg">Step 4</span><b>認領身分</b><small>看見可能</small></div>
-      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l8 6-8 14-8-14z"/><path d="M6 10h16M14 4v20"/></svg></span><span class="rg">Step 5</span><b>發現資源</b><small>看見擁有的資源</small></div>
-      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 4v20"/><path d="M8 6h13l-3 4 3 4H8"/></svg></span><span class="rg">Step 6</span><b>奪回主權</b><small>我決定什麼是重要</small></div>
-      <div class="jr-ph"><span class="ic"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 4l2.5 7.5L24 14l-7.5 2.5L14 24l-2.5-7.5L4 14l7.5-2.5z"/></svg></span><span class="rg">Step 7</span><b>新的身分</b><small>成為完整的自己</small></div>
-    </div>
-    <div class="cta-row"><a href="#start" class="link-cta">開始對話 <span class="arw">→</span></a></div>
-  </div>
 </section>
 
-<!-- STORY -->
-<section class="story">
-  <div class="wrap">
-    <div class="sec-head"><h2>為什麼有這個產品</h2></div>
-    <p>真正讓一個人慢慢偏離自己的，通常不是能力不夠。<br>而是一路走來，他滿足了很多期待，完成了很多責任，卻很少停下來問：<br><span class="ask">「什麼對我真的重要？」</span></p>
-    <p>所以，他知道很多方法，也做對很多事。<br>只是有時候會忍不住問自己：<span class="ask">「然後呢？」</span></p>
-    <p>我一直覺得，<span class="pop">改變一個人的，從來不是更多建議。</span><br>而是有人能幫他把那些散落在生命裡的價值觀、信念、經歷和選擇，一點一點整理回來。</p>
-    <p>讓他重新看見：<br>自己真正重視什麼。<br>哪些是自己的聲音。<br>哪些只是一路走來，慢慢接手的期待。</p>
-    <p>問題是，不是每個人都負擔得起長期教練。<br>而且再好的教練，也不可能每天陪在身邊。</p>
-    <p>所以我開始思考：<br>如果能把一個人的故事、價值觀和人生地圖，慢慢整理出來，<br>最後形成一套真正理解他的<span class="pop glow">「人生操作系統」</span>。</p>
-    <p>讓他遇到重要決定時，不再只是問：<span class="ask">「大家覺得怎麼樣？」</span><br>而是能回到自己。<br>知道什麼值得，什麼不值得。<br>知道哪些路，雖然辛苦，但是自己選的。</p>
-    <p>這就是為什麼，我做了<span class="pop glow">「21 天身分重塑計畫」</span>。<br>不是為了讓你變成另一個人。<br>而是讓你重新看見，<span class="pop">你本來就有的資源。</span></p>
-    <div class="byline">— Vivi · Life Coach · NLP Practitioner · Yoga Instructor</div>
-    <div class="cta-row"><a href="#start" class="link-cta">開始對話 <span class="arw">→</span></a></div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- VS -->
-<section class="vs" id="vs">
-  <div class="wrap">
-    <div class="sec-head"><h2>大部分 AI，<br>都在替你想答案。</h2>
-      <p class="lead"><span class="kicker">你問的問題，就是你看世界的方式。</span></p></div>
-    <div class="vs-grid">
-      <div class="vs-copy">
-        <p>你問 AI 你「能想到」的問題，拿回來的答案，就永遠困在你已知的範圍裡——換個說法，AI 能回答你所有問題，但回答不了你該問卻沒問的問題。</p>
-        <p class="pop">真正的轉變，不是多一個答案。是你終於能回答，連自己都沒想過的問題。</p>
-        <p>讓教練問你，順著一層一層往內走，走到只屬於你、別人給不了的地方。那裡的答案，才有力量。</p>
-      </div>
-      <div class="vs-table">
-        <div class="row head"><div>一般 AI</div><div>《21天身分重塑計畫》</div></div>
-        <div class="row"><div>你問 → 它答</div><div>它問 → 你答</div></div>
-        <div class="row"><div>解決眼前問題</div><div>看懂問題背後的模式</div></div>
-        <div class="row"><div>給你大眾的標準答案</div><div>挖出你獨有的動機與信念</div></div>
-        <div class="row"><div>替你決定方向</div><div>把主導權還到你手上</div></div>
-      </div>
-    </div>
-    <div class="cta-row"><a href="#start" class="link-cta">開始對話 <span class="arw">→</span></a></div>
-  </div>
-</section>
-
-<!-- STATUS -->
+<!-- STATUS：限量 / Day 1 優先 -->
 <section class="narrative">
   <div class="wrap">
-    <div class="sec-head"><h2>《21天身分重塑計畫》<br>還沒正式對外開放。</h2></div>
-    <p>如果你讀到這裡，代表你心裡那個一直被壓著的「真正的自己」，正在共鳴。</p>
-    <p>為了讓每一份生成的「犀利剖析」都精準對上你的生命脈絡，這套對話引擎需要極高的運算資源與細膩設計。<span class="pop">所以我們不打算對所有人開放</span>——我們更在乎每一位參與者，到底有沒有真的拿回主導權。</p>
-    <p>當產品正式啟動，這張「專屬教練」的門票，會優先發給已經完成 Day 1 對話的人。因為你已經發出了信號，而我們聽見了。</p>
-  </div>
-</section>
-
-<!-- 21 天 -->
-<section class="vs">
-  <div class="wrap">
-    <div class="sec-head"><h2>21 天，你會慢慢拿回什麼？</h2>
-      <p class="lead">一天一點，把你一路交出去的，一樣一樣收回來。</p></div>
-    <div class="steps">
-      <div class="step"><div class="no">01</div><div><h3>拿回定義「什麼值得」的權利</h3><p>不是從清單挑幾個好聽的詞，而是從你的對話裡，找出那些你一違背就整個人不對勁的東西。</p><div class="out">→ 不再什麼都重要。能量不再內耗，全用在你真正想去的地方。</div></div></div>
-      <div class="step"><div class="no">02</div><div><h3>拿回做決定的主控權</h3><p>不是替你設目標逼你達成，而是看清你現在活的這個「我」，是你選的，還是一路被變成的。</p><div class="out">→ 不再一直活在別人的「應該」。做選擇變輕鬆，不再什麼都想抓、什麼都不敢放。</div></div></div>
-      <div class="step"><div class="no">03</div><div><h3>拿回理解自己的能力</h3><p>不是評判你卡在哪，而是辨認那些一直在保護你不受傷的信念，理解它們為什麼還在。</p><div class="out">→ 不再一直責怪自己。看見「為什麼我又這樣」背後，那個一直在保護你的善意。</div></div></div>
-      <div class="step"><div class="no">04</div><div><h3>拿回人生的方向盤</h3><p>不是給你建議該怎麼做，而是看出你在類似情境反覆做的事，讓你自己看見「原來我一直是這樣」。</p><div class="out">→ 不再為別人的期待打防守戰。知道什麼能量是你的、什麼不是，終於敢說「這不是我的」。</div></div></div>
-      <div class="step feature"><div class="no">05</div><div>
-        <div class="step-label">21 天後，你帶走的</div>
-        <h3>留下一套屬於自己的<span class="glow">人生操作系統</span></h3>
-        <p>21 天的對話、價值觀、信念與選擇，會被整理成一份只屬於你的教練檔案——放進任何 AI（ChatGPT、Gemini、Claude、Grok…），就生成一個最懂你的專屬教練。</p>
-        <p>凌晨三點睡不著、面試前、跟伴侶吵完架想不通——<span class="pop">需要就在</span>。它不會用「給普通人的答案」回你，而是用你最在乎什麼、你的盲點跟夢想，跟你對話。</p>
-        <p>再加一份結業的深度分析 PDF：21 天所有的身分解析卡、你的對話旅程，那個你慢慢答出來的「你是誰」——一份可以一直翻回去看的地圖。</p>
-        <div class="out big">→ 讓未來的重要決定，不需要一直向外找答案。</div>
-      </div></div>
-    </div>
-    <div class="cta-row"><a href="#start" class="link-cta">開始對話 <span class="arw">→</span></a></div>
+    <div class="sec-head"><h2>我們還沒，<br>對所有人開放。</h2></div>
+    <p>如果你讀到這裡，代表有些話，已經在你心裡輕輕響了一下。<br>那個你很久沒好好聽的，<span class="pop">自己的聲音。</span></p>
+    <p>我們不打算一次對所有人開放。<span class="pop">因為這不是一堂人多就好的課。</span>它是一場對話，需要我們好好陪每一個，真的想認識自己的人。</p>
+    <p>所以名額是有限的。當我們準備好開放下一批，會<span class="pop">優先留給已經走完 Day 1 的人</span>。因為你已經先走了一步，而我們看見了。</p>
   </div>
 </section>
 
@@ -494,26 +672,26 @@
 <section class="faq">
   <div class="wrap">
     <div class="sec-head"><h2>幾個你可能想問的</h2></div>
-    <details open><summary>21天身分重塑計畫是什麼？</summary><p>一套 21 天的純 App 自我概念教練。每天約 5–10 分鐘的文字對話——它不是陪你聊天的 AI。它問你的每一個問題、都來自一套設計過的系統性教練學，陪你問到你自己想不到的地方。</p></details>
-    <details><summary>這跟我自己找 AI 聊天有什麼不同？</summary><p>一般 AI 是你問、它答；你不問，它不會帶你去任何地方。《21天身分重塑計畫》是反過來的——它問你，而且每一個問題都來自一套設計過的教練學，順著一層一層往內走。它記得你昨天說的話，今天從那裡接著問。<br><br>更重要的是——你問 AI 的問題，就是你看世界的方式。如果你只能問 AI 你想得到的問題，你拿回來的答案就永遠在你已知的範圍裡。讓教練問你，你才會走到你沒看過的地方。</p></details>
-    <details><summary>要花多少時間？</summary><p>每天約 5–10 分鐘、共 21 天。每天結束會收到一張當天的身分解析卡；第 21 天結業、會拿到一份「結業大禮包」——一份完整的自我深度剖析，加上你接下來可以怎麼走的方向。</p></details>
-    <details><summary>要看影片、或上課嗎？</summary><p>不用。第一階段是純 App、沒有影片、沒有直播——就是每天一段對話。</p></details>
-    <details><summary>它會直接給我建議嗎？</summary><p>不會。它不替你下結論、也不直接給答案——它用提問、陪你自己看見。</p></details>
-    <details><summary>什麼時候開放？我能先做什麼？</summary><p>《21天身分重塑計畫》還沒正式對外開放。如果你想成為第一波參與者——現在可以開始免費體驗 Day 1。當第一波名額開放時，我們會優先通知已經體驗過的人。</p></details>
-    <details><summary>這不適合誰？</summary><p>想直接拿到答案的人。《21天身分重塑計畫》不會替你下結論——它陪你自己慢慢答出來。如果你要的是「直接告訴我我是誰」、不想花時間面對自己，這個產品幫不了你。</p></details>
-    <details><summary>有沒有產品期限？</summary><p>購買日起算一年。一年內你可以在任何時候開始、跑完 21 個互動單位（不需要連續）。第 21 個單位結束、深度分析 PDF 會自動寄到你的 email、對話轉為唯讀；唯讀到購買滿一年。<br><br>滿一年後對話紀錄會從系統刪除，email 保留。如果你拖到剩一個月才開始、可能跑不完 21 個單位——這是為什麼我們建議早點啟用。</p></details>
-    <details><summary>可以退費嗎？</summary><p>不提供退費。我們用「免費體驗 Day 1」做風險反轉——先免費走完 Day 1、確定這是你要的、再決定要不要付。</p></details>
-    <details><summary>我寫的內容會被誰看到？</summary><p>只有你。你在《21天身分重塑計畫》裡寫下的每一句話，都只屬於你——不分享、不販售給第三方。它存在那裡，只是為了讓教練記得你昨天說的話、陪你走完 21 天，最後整理成你專屬的深度分析 PDF。<br><br><b>購買滿一年後，你的對話紀錄會從我們的系統刪除。</b>我們不留你不再需要我們留的東西。</p></details>
-    <details><summary>教練跟心理諮商有什麼不同？</summary><p>簡單講：諮商從「過去／問題／修復」出發，教練從「未來／方向／前進」出發。21天身分重塑計畫是教練——陪你看見自己的地圖、定方向、往前走。</p></details>
-    <details><summary>這會取代心理諮商或治療嗎？</summary><p>不會、也不打算取代。如果你正在經歷較嚴重的困擾、請優先尋求專業心理諮商或醫療協助。</p></details>
+    <details open><summary>看見自己是什麼？</summary><p>一套 21 天的教練對話，全程在 App 裡完成，每天大約 5 到 10 分鐘的文字對話。它不是陪你聊天的 AI，而是每一個問題都來自設計過的教練提問，陪你問到自己想不到的地方。</p></details>
+    <details><summary>這跟我自己找 AI 聊天有什麼不同？</summary><p>一般 AI 是你問、它答；你不問，它不會帶你去任何地方。看見自己是反過來的：它問你，而且每一個問題都來自設計過的教練提問，順著一層一層往內走。它記得你昨天說的話，今天從那裡接著問。<br><br>更重要的是，你問出的問題，本身就帶著你看世界的方式。如果你只能問你想得到的問題，拿回來的答案就永遠在你已知的範圍裡。讓教練問你，你才會走到自己沒看過的地方。</p></details>
+    <details><summary>要花多少時間？</summary><p>每天大約 5 到 10 分鐘，共 21 天。每天結束會收到一張當天的身分解析卡；第 21 天走完，會拿到一份完整的自我分析，加上你接下來可以怎麼走。</p></details>
+    <details><summary>要看影片、或上課嗎？</summary><p>不用。第一階段全在 App 裡，沒有影片、沒有直播，就是每天一段對話。</p></details>
+    <details><summary>它會直接給我建議嗎？</summary><p>不會。它不替你下結論，也不直接給答案，而是用提問，陪你自己看見。</p></details>
+    <details><summary>什麼時候開放？我能先做什麼？</summary><p>看見自己還沒正式對所有人開放。如果你想成為第一波，現在可以先免費走 Day 1。當我們開放下一批名額時，會優先通知已經走過的人。</p></details>
+    <details><summary>這不適合誰？</summary><p>想直接拿到答案的人。看見自己不會替你下結論，而是陪你自己慢慢答出來。如果你要的是「直接告訴我我是誰」、不想花時間認識自己，這個產品幫不了你。</p></details>
+    <details><summary>有沒有產品期限？</summary><p>購買日起算一年。一年內你可以隨時開始，跑完 21 個對話單位（不需要連續）。第 21 個單位結束後，完整的自我分析 PDF 會自動寄到你的 email，對話轉為唯讀，唯讀到購買滿一年。<br><br>滿一年後對話紀錄會從系統刪除，email 保留。如果你拖到剩一個月才開始，可能跑不完，所以我們建議早點開始。</p></details>
+    <details><summary>可以退費嗎？</summary><p>不提供退費。我們用「免費走 Day 1」做風險反轉：先免費走完 Day 1，確定這是你要的，再決定要不要付。</p></details>
+    <details><summary>我寫的內容會被誰看到？</summary><p>只有你。你在看見自己裡寫下的每一句話，都只屬於你，不分享、不販售給第三方。它存在那裡，只是為了讓教練記得你昨天說的話、陪你走完 21 天，最後整理成一份只屬於你的自我分析。<br><br><b>購買滿一年後，你的對話紀錄會從我們的系統刪除。</b>我們不留你不再需要我們留的東西。</p></details>
+    <details><summary>教練跟心理諮商有什麼不同？</summary><p>簡單說：諮商多半從「過去、問題、修復」出發；教練從「現在、你想要什麼、往哪裡走」出發。看見自己是教練，陪你看見自己、聽見自己的聲音，往前走。</p></details>
+    <details><summary>這會取代心理諮商或治療嗎？</summary><p>不會，也不打算取代。如果你正在經歷比較嚴重的困擾，請優先尋求專業的心理諮商或醫療協助。</p></details>
   </div>
 </section>
 
 <!-- FINAL -->
 <section class="final" id="final">
   <div class="wrap">
-    <h2>該你了。<br><span class="glow">把主導權拿回來。</span></h2>
-    <p>也許你這輩子，都還沒好好替自己做過決定。<br>「21 天身分重塑計畫」，是最好的開始。</p>
+    <h2>你不用完美。<br><span class="glow">你需要完整。</span></h2>
+    <p>也許你這輩子，都還沒好好認識過自己。<br>就從免費的 Day 1 開始。</p>
     <a href="#start" class="link-cta">免費開始 Day 1 <span class="arw">→</span></a>
     <div class="reassure">你寫的內容只屬於你，不分享、不販售。<br>已經有帳號？<a href="https://seeyourself.now/login.html">點這再寄一次登入連結 →</a></div>
   </div>
@@ -524,7 +702,7 @@
     <span class="logo" style="width:26px;height:26px"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="34" cy="58" r="16" stroke="#D8B27F" stroke-width="5.5"/><circle cx="66" cy="58" r="16" stroke="#D8B27F" stroke-width="5.5"/><path d="M26 44 L32 28 H44" stroke="#D8B27F" stroke-width="5"/><path d="M56 28 H68 L74 44" stroke="#D8B27F" stroke-width="5"/><path d="M42 58 Q50 54 58 58" stroke="#D8B27F" stroke-width="4.5"/><path d="M82 20 L84.5 26 L91 28.5 L84.5 31 L82 37 L79.5 31 L73 28.5 L79.5 26 Z" fill="#D8B27F"/></svg></span>
     <span class="bt"><b>看見自己</b></span>
   </a>
-  <div style="margin-top:8px">看見自己團隊 See Yourself · 發現世界</div>
+  <div style="margin-top:var(--s2)">看見自己團隊 See Yourself · 發現世界</div>
 </footer>
 
 <script>
@@ -537,6 +715,11 @@
     form.querySelectorAll('input[type=checkbox][data-qkey]:checked').forEach(function(c){(a[c.dataset.qkey]=a[c.dataset.qkey]||[]).push(c.value);});
     return a;
   }
+  // v11 email-block gating：3 題皆選才亮 email + 送出 (Vivi 決定 3-A)
+  if(quiz){quiz.addEventListener('change',function(){
+    var answers=collectQuiz(quiz);
+    quiz.classList.toggle('ready', Object.keys(answers).length>=3);
+  });}
   if(quiz){quiz.addEventListener('submit',function(e){
     e.preventDefault();
     var form=e.target;
@@ -611,7 +794,7 @@
   if(reduce) return;
 
   /* 為主要內容掛上 reveal，並為序列卡片設 stagger */
-  var blocks = document.querySelectorAll('.sec-head, .vs-copy, .vs-table, .story p, .narrative p, .byline, .step, details, .peek-item');
+  var blocks = document.querySelectorAll('.sec-head, .vs-copy, .vs-table, .story p, .narrative p, .byline, .step, .insight-card, details, .peek-item');
   blocks.forEach(function(el){ el.classList.add('reveal'); });
   document.querySelectorAll('.steps').forEach(function(s){
     s.querySelectorAll('.step').forEach(function(st,i){ st.style.setProperty('--d', (i*0.07)+'s'); });
