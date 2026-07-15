@@ -217,8 +217,7 @@
   footer .brand{justify-content:center;color:var(--ink)}
   footer .brand .bt b{font-size:15px}
 
-  .quiz{display:none;margin-top:var(--s4);border-top:1px dashed var(--line);padding-top:var(--s4)}
-  .quiz.open{display:block;animation:fade .35s ease}
+  .quiz{display:block;margin-top:var(--s4);border-top:1px dashed var(--line);padding-top:var(--s4)}
   @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   .quiz .q{font-weight:600;font-size:var(--fs-cap);color:var(--ink);margin:var(--s4) 0 var(--s2)}
   .quiz .opts{display:grid;gap:var(--s2)}
@@ -626,7 +625,6 @@
   <div class="wrap">
     <div class="pivot-inner">
       <h2 class="convert-h">準備好，跟自己談一次了嗎？</h2>
-      <button class="btn-primary" id="openQuiz"><span class="main">免費開始 Day 1 →</span></button>
       <div class="pivot-reassure">Day 1 免費 · 不需要信用卡</div>
       <form class="quiz" id="quiz">
         <div class="q">1. 你的性別？</div>
@@ -706,8 +704,7 @@
 </footer>
 
 <script>
-  var btn=document.getElementById('openQuiz'),quiz=document.getElementById('quiz');
-  if(btn){btn.addEventListener('click',function(){quiz.classList.toggle('open');if(quiz.classList.contains('open')){quiz.scrollIntoView({behavior:'smooth',block:'nearest'});}});}
+  var quiz=document.getElementById('quiz');
   function validEmail(v){return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((v||'').trim());}
   function collectQuiz(form){
     var a={};
