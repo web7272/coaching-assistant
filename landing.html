@@ -224,8 +224,9 @@
   .quiz .opts button{text-align:left;background:#fff;border:1px solid var(--line);border-radius:var(--r-md);
     padding:var(--s3) var(--s4);font-family:inherit;font-size:var(--fs-sm);color:var(--ink-soft);cursor:pointer;transition:.15s}
   .quiz .opts button:hover,.quiz .opts button.sel{border-color:var(--gold-brd);background:var(--gold-tint);color:var(--ink);font-weight:700}
-  .quiz input[type=email]{width:100%;margin-top:var(--s4);padding:var(--s3) var(--s3);border-radius:var(--r-md);border:1px solid var(--line);
-    font-family:inherit;font-size:var(--fs-cap);background:#fff;color:var(--ink)}
+  .quiz input[type=email]{width:100%;margin-top:var(--s4);padding:var(--s3) var(--s3);border-radius:var(--r-md);border:1.5px solid #C4C7CD;
+    font-family:inherit;font-size:var(--fs-cap);background:#F7F8FA;color:var(--ink)}
+  .quiz input[type=email]::placeholder{color:#8A8D94}
   .quiz .submit{margin-top:var(--s3)}
   .note{display:block;text-align:center;color:var(--ink-dim);font-size:var(--fs-xs);margin-top:var(--s4)}
 
@@ -364,7 +365,7 @@
   .convert-h{font-size:var(--fs-h2);line-height:var(--lh-head);margin-bottom:var(--s5)}
   .convert .btn-primary{max-width:340px;margin:0 auto}
   .convert .quiz{max-width:520px;margin:var(--s5) auto 0;text-align:left}
-  .quiz .email-block{opacity:.35;pointer-events:none;transition:opacity .3s var(--ease)}
+  .quiz .email-block{opacity:.5;pointer-events:none;transition:opacity .3s var(--ease)}
   .quiz.ready .email-block{opacity:1;pointer-events:auto}
   /* ===== 對齊紀律 =====
      規則:一個 section 只能有一種對齊。
