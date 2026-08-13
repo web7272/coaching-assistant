@@ -1,16 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "trailingSlash": false,
   "functions": {
     "api/chat.js":          { "maxDuration": 60  },
     "api/finalize-day.js":  { "maxDuration": 300 }
   },
   "redirects": [
-    { "source": "/", "destination": "/seminar", "permanent": true },
-    { "source": "/landing", "destination": "/seminar", "permanent": true },
-    { "source": "/login", "destination": "/seminar", "permanent": true },
-    { "source": "/auth", "destination": "/seminar", "permanent": true },
-    { "source": "/auth/:path*", "destination": "/seminar", "permanent": true },
-    { "source": "/app", "destination": "/seminar", "permanent": true },
-    { "source": "/app/:path*", "destination": "/seminar", "permanent": true }
+    { "source": "/",              "destination": "/seminar", "permanent": false },
+    { "source": "/landing",       "destination": "/seminar", "permanent": false },
+    { "source": "/login",         "destination": "/seminar", "permanent": false },
+    { "source": "/auth",          "destination": "/seminar", "permanent": false },
+    { "source": "/auth/:path*",   "destination": "/seminar", "permanent": false },
+    { "source": "/app",           "destination": "/seminar", "permanent": false },
+    { "source": "/app/:path*",    "destination": "/seminar", "permanent": false }
   ]
 }
