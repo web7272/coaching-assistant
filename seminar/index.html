@@ -968,6 +968,16 @@ html,body{background:var(--paper)}
 .proof-quote footer{margin-top:auto;padding-top:28px;color:var(--muted);font-size:var(--fs-small);letter-spacing:.08em}
 @media(max-width:820px){.proof{padding:82px 0 78px}.proof-grid{grid-template-columns:1fr;margin-top:36px}.proof-quote{min-height:0;padding:34px 26px 30px}}
 
+/* HERO 表單置前 (Vivi 8/13 · above the fold, LINE/FB/YT 進站直達表單) */
+.lead-grid{display:grid;grid-template-columns:1.05fr .95fr;column-gap:52px;align-items:center;text-align:left}
+.demo-wrap{margin-top:clamp(42px,6vw,74px)}
+.hero-signup{max-width:none;margin:0;padding:clamp(28px,3vw,38px) clamp(24px,2.6vw,34px);border:1px solid rgba(201,165,116,.42);border-radius:var(--r-card);background:rgba(252,250,246,.05);text-align:left;box-shadow:0 26px 60px -42px rgba(0,0,0,.65)}
+.hero-signup h2{margin-top:0}
+@media(max-width:820px){
+  .lead-grid{grid-template-columns:1fr;row-gap:26px}
+  .hero-signup{padding:26px 22px}
+}
+
 </style>
 </head>
 <body>
@@ -984,11 +994,26 @@ html,body{background:var(--paper)}
 
 <!-- HERO -->
 <section class="lead-hero" id="top">
-  <div class="lead-in">
-    <div class="eb-lead">免費線上講座 · 9/30</div>
+  <div class="lead-in lead-grid">
+    <div class="lead-head">
+      <div class="eb-lead">免費線上講座 · 9/30</div>
+      <h1 class="lead-h">別再找答案<br><em>找自己</em></h1>
+    </div>
 
-    <h1 class="lead-h">別再找答案<br><em>找自己</em></h1>
+    <div class="hero-signup" id="hero-signup">
+      <h2>帶一個你卡很久的問題來。</h2>
+      <div class="hero-date">9 月 30 日（三） · 台灣時間晚上 9:00 · 線上</div>
+      <form class="hero-form" action="/api/subscribe" method="POST" data-subscribe>
+        <input type="email" name="email" placeholder="你的 Email" aria-label="你的 Email" autocomplete="email" required>
+        <textarea name="question" placeholder="你現在最想問的一個問題" aria-label="你現在最想問的一個問題" required></textarea>
+        <input type="hidden" name="source" value="hero">
+        <button type="submit">免費報名 →</button>
+      </form>
+      <div class="hero-fine">完全免費 · 不需開麥 · 不需露臉 · 可看回放</div>
+    </div>
+  </div>
 
+  <div class="lead-in demo-wrap">
     <p class="lead-sub"><b>AI 可以回答你所有的問題。</b><br><strong>但如果你問問題的方式，早就把答案限制住了呢？</strong><br>你問出的問題，本身就帶著你看世界的方式。</p>
 
     <div class="demo">
@@ -1002,18 +1027,6 @@ html,body{background:var(--paper)}
         <p class="dm-q">「討好他人」和「對人好」，對你來說有什麼不同？</p>
         <p class="dm-q">你是真的想要改掉對他人好，還是想要對人好但不被利用？</p>
       </div>
-    </div>
-
-    <div class="hero-signup" id="hero-signup">
-      <h2>帶一個你卡很久的問題來。</h2>
-      <div class="hero-date">9 月 30 日（三） · 台灣時間晚上 9:00 · 線上</div>
-      <form class="hero-form" action="/api/subscribe" method="POST" data-subscribe>
-        <input type="email" name="email" placeholder="你的 Email" aria-label="你的 Email" autocomplete="email" required>
-        <textarea name="question" placeholder="你現在最想問的一個問題" aria-label="你現在最想問的一個問題" required></textarea>
-        <input type="hidden" name="source" value="hero">
-        <button type="submit">免費報名 →</button>
-      </form>
-      <div class="hero-fine">完全免費 · 不需開麥 · 不需露臉 · 可看回放</div>
     </div>
   </div>
 </section>
