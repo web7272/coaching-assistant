@@ -3,9 +3,13 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "functions": {
-    "api/chat.js":          { "maxDuration": 60  },
-    "api/finalize-day.js":  { "maxDuration": 300 }
+    "api/chat.js":                  { "maxDuration": 60  },
+    "api/finalize-day.js":          { "maxDuration": 300 },
+    "api/daily-signup-report.js":   { "maxDuration": 15  }
   },
+  "crons": [
+    { "path": "/api/daily-signup-report", "schedule": "0 13 * * *" }
+  ],
   "redirects": [
     { "source": "/",              "destination": "/seminar", "permanent": true },
     { "source": "/landing",       "destination": "/seminar", "permanent": true },
