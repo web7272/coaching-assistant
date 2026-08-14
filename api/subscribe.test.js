@@ -425,3 +425,61 @@ test('normalizeEmail: non-string → empty', () => {
   assert.equal(normalizeEmail(123), '');
   assert.equal(normalizeEmail({ email: 'a@b.co' }), '');
 });
+
+// ═════════════════════════════════════════════════════════
+// 8/14 Vivi 診斷: mailer 走 stub (env 缺) → 靜默失敗. 加聚合 log 讓 Vercel
+// dashboard grep [SUBSCRIBE:STUB] 直接看到 root cause.
+// ═════════════════════════════════════════════════════════
+
+test('🛑 8/14 handler: brevo mailer 回 stubbed → [SUBSCRIBE:STUB] error 一條聚合 log', async () => {
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
+  _setAddToSeminarListFn(async () => ({ ok: true, stubbed: true, reason: 'SEMINAR_LIST_ID not configured' }));
+  _setSendSeminarConfirmationFn(async () => ({ ok: true, stubbed: true, reason: 'BREVO_API_KEY not configured' }));
+
+  const errs = [];
+  const origErr = console.error;
+  console.error = (...args) => errs.push(args.join(' '));
+
+  try {
+    const res = mockRes();
+    await handler(mockReq({
+      headers: { 'content-type': 'application/json', 'accept': 'application/json' },
+      body:    { email: 'a@b.co', question: 'q', source: 'hero' },
+    }), res);
+
+    assert.equal(res.statusCode, 200);
+    // 聚合 log 必須出現, 且包含兩個 stubbed 部件
+    const stubLog = errs.find(l => l.includes('[SUBSCRIBE:STUB]'));
+    assert.ok(stubLog, `[SUBSCRIBE:STUB] 聚合 log 必須寫出來讓 Vercel logs grep 到. errs=${JSON.stringify(errs)}`);
+    assert.match(stubLog, /list\(SEMINAR_LIST_ID/);
+    assert.match(stubLog, /mail\(BREVO_API_KEY/);
+    assert.match(stubLog, /a@b\.co/);
+    assert.match(stubLog, /BREVO_API_KEY \/ SEMINAR_LIST_ID/, 'log 明示要查的 env 名稱');
+  } finally {
+    console.error = origErr;
+  }
+});
+
+test('🛑 8/14 handler: mailer 都正常 → 不寫 [SUBSCRIBE:STUB] (無誤報)', async () => {
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
+  _setAddToSeminarListFn(async () => ({ ok: true, status: 201 }));
+  _setSendSeminarConfirmationFn(async () => ({ ok: true, status: 201 }));
+
+  const errs = [];
+  const origErr = console.error;
+  console.error = (...args) => errs.push(args.join(' '));
+
+  try {
+    const res = mockRes();
+    await handler(mockReq({
+      headers: { 'content-type': 'application/json', 'accept': 'application/json' },
+      body:    { email: 'a@b.co', question: 'q', source: 'hero' },
+    }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(errs.filter(l => l.includes('[SUBSCRIBE:STUB]')).length, 0, '正常路徑不能誤報 stub');
+  } finally {
+    console.error = origErr;
+  }
+});

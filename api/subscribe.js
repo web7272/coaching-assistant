@@ -155,8 +155,9 @@ export default async function handler(req, res) {
   const thanksUrl = `${resolveBaseUrl()}/seminar/thanks`;
 
   // Three side effects, each independently protected. Promise.allSettled so
-  // one failure never masks another — every branch logs its own error.
-  await Promise.allSettled([
+  // one failure never masks another — 名單失敗不吃確認信 (Vivi 8/14 確認).
+  // 每個 branch 各自 try/catch + return 結果, 讓 post-mortem 看得到 stub.
+  const [neonRes, listRes, mailRes] = await Promise.allSettled([
     (async () => {
       try {
         const sql = getSql();
@@ -164,26 +165,47 @@ export default async function handler(req, res) {
           INSERT INTO seminar_signups (email, question, source)
           VALUES (${email}, ${question || null}, ${source})
         `;
+        return { ok: true };
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[subscribe] neon insert failed:', e?.message || e);
+        return { ok: false, reason: e?.message || 'neon threw' };
       }
     })(),
     (async () => {
-      try { await brevoAdd()(email, { question, source }); }
+      try { return await brevoAdd()(email, { question, source }); }
       catch (e) {
         // eslint-disable-next-line no-console
         console.error('[subscribe] brevo list-add threw:', e?.message || e);
+        return { ok: false, reason: e?.message || 'brevo add threw' };
       }
     })(),
     (async () => {
-      try { await brevoSend()(email, thanksUrl); }
+      try { return await brevoSend()(email, thanksUrl); }
       catch (e) {
         // eslint-disable-next-line no-console
         console.error('[subscribe] brevo confirm-email threw:', e?.message || e);
+        return { ok: false, reason: e?.message || 'brevo send threw' };
       }
     })(),
   ]);
+
+  // Vivi 8/14 診斷: Brevo logs 0 筆 + Vercel logs 靜默 = mailer 走 stub, API
+  //   call 從沒發生 (env 缺 SEMINAR_LIST_ID / BREVO_API_KEY). 加聚合 stub log
+  //   讓 Vercel dashboard grep [SUBSCRIBE:STUB] 直接看到 root cause.
+  const stubs = [];
+  const val = (r) => r.status === 'fulfilled' ? r.value : null;
+  const lv = val(listRes);
+  const mv = val(mailRes);
+  if (lv && lv.stubbed) stubs.push(`list(${lv.reason || 'stubbed'})`);
+  if (mv && mv.stubbed) stubs.push(`mail(${mv.reason || 'stubbed'})`);
+  if (stubs.length) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[SUBSCRIBE:STUB] ${email} — Brevo API not called: ${stubs.join(', ')}. `
+      + `Check Vercel env: BREVO_API_KEY / SEMINAR_LIST_ID (production scope + redeploy).`,
+    );
+  }
 
   return respond(req, res);
 }
