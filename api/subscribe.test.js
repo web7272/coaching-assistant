@@ -12,6 +12,7 @@ import handler, {
   parseMultipart,
   readBody,
   normalizeEmail,
+  isValidEmail,
   resolveBaseUrl,
 } from './subscribe.js';
 
@@ -174,10 +175,10 @@ test('🛑 handler: Accept: text/html → 303 (native form treatment)', async ()
 });
 
 // ═════════════════════════════════════════════════════════
-// invalid email → still respond ok (attacker probing envelope)
+// invalid email → 400 早退 (Vivi 8/14: 不送垃圾往下游 Brevo)
 // ═════════════════════════════════════════════════════════
 
-test('🛑 handler: invalid email → 200 ok (no INSERT / no Brevo)', async () => {
+test('🛑 8/14 handler: invalid email → 400 (no INSERT / no Brevo)', async () => {
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   const addCalls  = [];
@@ -191,14 +192,15 @@ test('🛑 handler: invalid email → 200 ok (no INSERT / no Brevo)', async () =
     body:    { email: 'not-an-email', question: 'q', source: 'hero' },
   }), res);
 
-  assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.body, { ok: true });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.error, 'invalid_email');
   assert.equal(sql.calls.length, 0, 'no DB call for invalid email');
   assert.equal(addCalls.length,  0, 'no Brevo add for invalid email');
   assert.equal(sendCalls.length, 0, 'no Brevo send for invalid email');
 });
 
-test('🛑 handler: missing email → 200 ok (envelope, no side effects)', async () => {
+test('🛑 8/14 handler: missing email → 400', async () => {
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   _setAddToSeminarListFn(async () => ({ ok: true }));
@@ -209,11 +211,31 @@ test('🛑 handler: missing email → 200 ok (envelope, no side effects)', async
     headers: { 'content-type': 'application/json', 'accept': 'application/json' },
     body:    {},
   }), res);
-  assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.body, { ok: true });
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.error, 'invalid_email');
 });
 
-test('🛑 handler: invalid email via native form → still 303 (envelope)', async () => {
+test('🛑 8/14 handler: multipart raw body 誤當 email (root cause) → 400 早退', async () => {
+  // Simulate the exact prod bug: FormData 送 multipart, Vercel 沒 parse,
+  // body.email 變成 raw boundary string.
+  const sql = makeMockSql([]);
+  _setSqlClient(sql);
+  const addCalls  = [];
+  const sendCalls = [];
+  _setAddToSeminarListFn(async () => { addCalls.push(1);  return { ok: true }; });
+  _setSendSeminarConfirmationFn(async () => { sendCalls.push(1); return { ok: true }; });
+
+  const res = mockRes();
+  await handler(mockReq({
+    headers: { 'content-type': 'application/json', 'accept': 'application/json' },
+    body:    { email: '------WebKitFormBoundary2xgxJUNK\r\nContent-Disposition: form-data...', question: 'q' },
+  }), res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(addCalls.length, 0, 'raw multipart 不能送到 Brevo (root cause 已修)');
+  assert.equal(sendCalls.length, 0);
+});
+
+test('🛑 8/14 handler: invalid email via native form → 也 400 (不再 303 到 thanks)', async () => {
   const sql = makeMockSql([]);
   _setSqlClient(sql);
   _setAddToSeminarListFn(async () => ({ ok: true }));
@@ -224,8 +246,7 @@ test('🛑 handler: invalid email via native form → still 303 (envelope)', asy
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body:    { email: 'bad', question: 'q' },
   }), res);
-  assert.equal(res.statusCode, 303);
-  assert.equal(res._headers['location'], '/seminar/thanks');
+  assert.equal(res.statusCode, 400);
 });
 
 // ═════════════════════════════════════════════════════════
@@ -427,6 +448,43 @@ test('normalizeEmail: non-string → empty', () => {
 });
 
 // ═════════════════════════════════════════════════════════
+// isValidEmail (Vivi 8/14: email gate 早退避免垃圾往下游 Brevo)
+// ═════════════════════════════════════════════════════════
+
+test('isValidEmail: valid formats', () => {
+  assert.equal(isValidEmail('a@b.co'), true);
+  assert.equal(isValidEmail('vivi@example.com'), true);
+  assert.equal(isValidEmail('user.name+tag@sub.example.co.uk'), true);
+});
+
+test('isValidEmail: invalid formats', () => {
+  assert.equal(isValidEmail(''), false);
+  assert.equal(isValidEmail('not-an-email'), false);
+  assert.equal(isValidEmail('a@b'), false, '無 tld');
+  assert.equal(isValidEmail('@b.co'), false);
+  assert.equal(isValidEmail('a@'), false);
+  assert.equal(isValidEmail('a @b.co'), false, '含空白');
+  assert.equal(isValidEmail('a\n@b.co'), false, '含換行');
+});
+
+test('isValidEmail: length > 254 → false (Brevo 400 Email length exceeded)', () => {
+  const long = 'a'.repeat(250) + '@b.co';
+  assert.equal(long.length > 254, true);
+  assert.equal(isValidEmail(long), false);
+});
+
+test('isValidEmail: multipart boundary 字串 → false (Vivi 8/14 root cause)', () => {
+  const raw = '------WebKitFormBoundary2xgxJUNK\r\nContent-Disposition: form-data; name="email"\r\n\r\niamvivi@gmail.com';
+  assert.equal(isValidEmail(raw), false, '整包 raw body 絕不能通過');
+});
+
+test('isValidEmail: non-string → false', () => {
+  assert.equal(isValidEmail(null), false);
+  assert.equal(isValidEmail(undefined), false);
+  assert.equal(isValidEmail(123), false);
+});
+
+// ═════════════════════════════════════════════════════════
 // 8/14 Vivi 診斷: mailer 走 stub (env 缺) → 靜默失敗. 加聚合 log 讓 Vercel
 // dashboard grep [SUBSCRIBE:STUB] 直接看到 root cause.
 // ═════════════════════════════════════════════════════════
@@ -434,8 +492,8 @@ test('normalizeEmail: non-string → empty', () => {
 test('🛑 8/14 handler: brevo mailer 回 stubbed → [SUBSCRIBE:STUB] error 一條聚合 log', async () => {
   const sql = makeMockSql([]);
   _setSqlClient(sql);
-  _setAddToSeminarListFn(async () => ({ ok: true, stubbed: true, reason: 'SEMINAR_LIST_ID not configured' }));
-  _setSendSeminarConfirmationFn(async () => ({ ok: true, stubbed: true, reason: 'BREVO_API_KEY not configured' }));
+  _setAddToSeminarListFn(async () => ({ ok: true, stubbed: true, envMissing: true, reason: 'SEMINAR_LIST_ID not configured' }));
+  _setSendSeminarConfirmationFn(async () => ({ ok: true, stubbed: true, envMissing: true, reason: 'BREVO_API_KEY not configured' }));
 
   const errs = [];
   const origErr = console.error;

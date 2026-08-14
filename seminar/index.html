@@ -1176,10 +1176,15 @@ document.querySelectorAll('form[data-subscribe]').forEach(function(f){
     var btn = f.querySelector('button[type=submit]');
     var label = btn ? btn.textContent : '';
     if (btn){ btn.disabled = true; btn.textContent = '送出中…'; }
+    // 8/14 Vivi: FormData 送 multipart, Vercel Node runtime 不 auto parse
+    //   → email 被填成整包 raw body. 改送 urlencoded, 跟 no-JS native POST 一致.
     fetch(f.action, {
       method: 'POST',
-      headers: { 'Accept': 'application/json' },
-      body: new FormData(f)
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams(new FormData(f))
     }).then(function(r){
       if (!r.ok) throw new Error('subscribe failed: ' + r.status);
       window.location.href = '/seminar/thanks';

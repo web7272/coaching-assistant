@@ -106,6 +106,20 @@ export function normalizeEmail(raw) {
   return raw.trim().toLowerCase();
 }
 
+/**
+ * 8/14 Vivi: 呼叫 Brevo 之前先驗證 email 格式, 不要把垃圾往下游送.
+ * 之前 bug: 前端送 multipart, 後端讀不到 → 整包 raw body 被當 email → Brevo
+ * 回 400 "Email length exceeded". 加這條 gate 早退 400.
+ *
+ * RFC 5321: max 254 chars. 簡化 regex: `local@domain.tld` 三段, 無空白.
+ * (不 strict RFC 5322, 那個 regex 太複雜且實務上 Brevo 自己再驗一次.)
+ */
+export function isValidEmail(s) {
+  if (typeof s !== 'string') return false;
+  if (s.length < 3 || s.length > 254) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
 function cleanText(raw, maxLen) {
   if (typeof raw !== 'string') return '';
   return raw.trim().slice(0, maxLen);
@@ -147,9 +161,16 @@ export default async function handler(req, res) {
   const rawSource = cleanText(body.source, 40);
   const source    = rawSource || 'unknown';
 
-  // Invalid email → still respond ok (attacker probing envelope).
-  if (!email || !email.includes('@')) {
-    return respond(req, res);
+  // 8/14 Vivi: email 格式無效 → 400 早退, 不呼叫 Brevo (不送垃圾下游).
+  // 舊行為是 200 envelope (防 attacker probing), 但這是 seminar 報名不是
+  // login, 沒有 email-exists 資訊差異 → 400 合理且方便 debug.
+  if (!isValidEmail(email)) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[subscribe] invalid email rejected: len=${email.length} ct=${req.headers['content-type'] || 'unset'} `
+      + `preview=${email.slice(0, 60)}...`,
+    );
+    return res.status(400).json({ ok: false, error: 'invalid_email' });
   }
 
   const thanksUrl = `${resolveBaseUrl()}/seminar/thanks`;
@@ -193,12 +214,16 @@ export default async function handler(req, res) {
   // Vivi 8/14 診斷: Brevo logs 0 筆 + Vercel logs 靜默 = mailer 走 stub, API
   //   call 從沒發生 (env 缺 SEMINAR_LIST_ID / BREVO_API_KEY). 加聚合 stub log
   //   讓 Vercel dashboard grep [SUBSCRIBE:STUB] 直接看到 root cause.
+  //
+  //   ⭐ 只 flag envMissing (env 缺, 沒呼叫 Brevo). Brevo 4xx / throw 不算
+  //   stub (那些**有**呼叫但失敗) — brevo.js 各 method 已 log 自己的 error,
+  //   subscribe 這層再 flag 會誤導 (Vivi 8/14 第 2 bug).
   const stubs = [];
   const val = (r) => r.status === 'fulfilled' ? r.value : null;
   const lv = val(listRes);
   const mv = val(mailRes);
-  if (lv && lv.stubbed) stubs.push(`list(${lv.reason || 'stubbed'})`);
-  if (mv && mv.stubbed) stubs.push(`mail(${mv.reason || 'stubbed'})`);
+  if (lv && lv.envMissing) stubs.push(`list(${lv.reason || 'env missing'})`);
+  if (mv && mv.envMissing) stubs.push(`mail(${mv.reason || 'env missing'})`);
   if (stubs.length) {
     // eslint-disable-next-line no-console
     console.error(
