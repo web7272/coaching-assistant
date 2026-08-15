@@ -34,83 +34,291 @@
   .label{font-size:11px;letter-spacing:.22em;text-transform:uppercase}
   .balance{text-wrap:balance}
   .pretty{text-wrap:pretty}
+/* =========================================================
+   SEMINAR HERO — Light / Warm Ivory / Editorial(視覺定稿)
+   變數限縮在 .seminar-page,避免影響 hero 以下區塊
+========================================================= */
+.seminar-page{
+  --ivory-1:#faf7f2; --ivory-2:#f6f1ea; --ivory-3:#eee5dc;
+  --ink:#29211b; --ink-soft:#64594f;
+  --accent:#ad6f4d; --accent-dark:#995e3e;
+  --gold:#c99b55; --gold-soft:#ddc5a3;
+  --line:rgba(148,112,80,.20);
+  --field-bg:rgba(255,252,247,.82);
+  --max-width:1240px;
+
+  color:var(--ink);
+  background:var(--ivory-1);
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+}
+.seminar-page *{box-sizing:border-box}
+.anchor-compat{position:absolute;width:1px;height:1px;overflow:hidden}
+
+/* HEADER */
+.seminar-header{position:relative;z-index:50;height:82px;display:flex;align-items:center;
+  background:rgba(250,247,242,.96);border-bottom:1px solid rgba(129,95,67,.14);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.header-inner{width:min(calc(100% - 56px),var(--max-width));margin:0 auto;
+  display:flex;align-items:center;justify-content:space-between}
+.brand{display:inline-flex;align-items:center;gap:13px;color:inherit;text-decoration:none}
+.brand-mark{width:34px;fill:none;stroke:#b27b3e;stroke-width:2.2;stroke-linecap:round}
+.brand-mark .spark{fill:#c89a50;stroke:none}
+.brand-text{display:flex;flex-direction:column}
+.brand-text strong{font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  font-size:21px;font-weight:600;letter-spacing:.11em;line-height:1.15}
+.brand-text small{margin-top:5px;font-family:Georgia,serif;color:#94887d;font-size:9px;letter-spacing:.28em}
+.header-actions{display:flex;align-items:center;gap:28px}
+.header-date{color:#756a60;font-size:14px;letter-spacing:.045em}
+.header-date span{margin:0 5px;color:#ac9b8b}
+.header-cta{min-width:126px;height:48px;padding:0 24px;display:inline-flex;align-items:center;
+  justify-content:center;gap:12px;border-radius:999px;color:#fff;
+  background:linear-gradient(110deg,#29231e,#1d1916);text-decoration:none;
+  font-size:14px;font-weight:600;letter-spacing:.06em;
+  transition:transform 180ms ease,box-shadow 180ms ease,background 180ms ease}
+.header-cta:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(47,34,24,.13)}
+
+/* HERO */
+.seminar-hero{position:relative;min-height:calc(100vh - 82px);overflow:hidden;isolation:isolate;
+  background:linear-gradient(118deg,#fbf8f3 0%,#f8f3ed 47%,#f3e9df 100%)}
+.seminar-hero::before{content:"";position:absolute;z-index:-3;width:900px;height:900px;
+  left:-340px;top:-160px;border-radius:50%;border:1px solid rgba(193,145,94,.10)}
+.seminar-hero::after{content:"";position:absolute;z-index:-4;inset:0;pointer-events:none;
+  background:
+    radial-gradient(circle at 72% 42%, rgba(255,255,255,.90) 0%, rgba(255,253,250,.55) 22%, rgba(253,247,239,.22) 38%, transparent 58%),
+    radial-gradient(circle at 18% 35%, rgba(255,255,255,.65), transparent 42%)}
+.hero-inner{position:relative;width:min(calc(100% - 64px),var(--max-width));
+  min-height:calc(100vh - 82px);margin:0 auto;padding:clamp(62px,8vh,94px) 0 54px}
+
+.hero-wash{position:absolute;pointer-events:none;border-radius:50%;filter:blur(2px)}
+.hero-wash-left{width:650px;height:650px;left:-210px;top:90px;
+  background:radial-gradient(circle, rgba(255,255,255,.55), transparent 70%)}
+.hero-wash-right{width:640px;height:640px;right:5%;top:11%;
+  background:radial-gradient(circle, rgba(255,252,247,.62), rgba(238,224,205,.10) 52%, transparent 70%)}
+
+.hero-copy{position:relative;z-index:6;width:54%;max-width:625px}
+.hero-kicker{display:inline-flex;align-items:center;gap:10px;width:fit-content;padding:9px 18px;
+  margin-bottom:28px;border:1px solid rgba(170,119,73,.28);border-radius:999px;
+  background:rgba(255,251,245,.58);color:#87654c;font-size:13px;letter-spacing:.07em}
+.kicker-dot{width:6px;height:6px;border-radius:50%;background:#b76f49}
+.hero-kicker i{width:1px;height:14px;background:rgba(133,98,70,.24)}
+
+.hero-title{margin:0;font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  font-size:clamp(66px,5.2vw,84px);font-weight:500;line-height:1.04;letter-spacing:-.045em}
+.hero-title span{display:block}
+.title-dark{color:#28201a}
+.title-accent{margin-top:9px;color:var(--accent);
+  background:linear-gradient(105deg,#bc7c56 0%,#a96848 62%,#925c41 100%);
+  background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+
+.editorial-rule{display:flex;align-items:center;width:290px;gap:8px;margin:24px 0 12px;color:#bd864d}
+.editorial-rule span{font-size:14px}
+.editorial-rule i{display:block;flex:1;height:1px;
+  background:linear-gradient(90deg, rgba(181,125,75,.65), rgba(181,125,75,.06))}
+
+.hero-description{max-width:560px;color:#665a50;
+  font-family:"Noto Serif TC","Songti TC",serif;font-size:16px;line-height:1.7}
+.hero-description p{margin:0 0 3px}
+.hero-description strong{color:#3b312a;font-weight:500}
+
+/* FORM */
+.hero-form{position:relative;z-index:8;width:520px;max-width:47%;
+  display:flex;flex-direction:column;gap:10px;margin-top:28px}
+.form-control{position:relative;display:flex;align-items:center;min-height:56px;
+  border:1px solid rgba(165,123,87,.25);border-radius:12px;background:rgba(255,252,247,.82);
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 10px 30px rgba(84,61,42,.035);
+  transition:border-color 180ms ease,box-shadow 180ms ease,background 180ms ease}
+.form-control:focus-within{background:rgba(255,255,255,.92);border-color:rgba(171,112,69,.55);
+  box-shadow:0 0 0 3px rgba(177,119,76,.08), 0 10px 30px rgba(84,61,42,.05)}
+.form-icon{width:21px;height:21px;margin-left:20px;flex-shrink:0;color:#967b65}
+.form-icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.hero-form input,.hero-form textarea{width:100%;border:0;outline:0;background:transparent;
+  color:#443a32;font:inherit;font-size:15px}
+.hero-form input{height:56px;padding:0 18px 0 15px}
+.hero-form textarea{min-height:56px;padding:17px 18px 13px 15px;resize:none;line-height:1.5}
+.hero-form input::placeholder,.hero-form textarea::placeholder{color:#a19183;opacity:1}
+
+.hero-submit{height:60px;margin-top:2px;border:0;border-radius:12px;display:flex;
+  align-items:center;justify-content:center;gap:15px;cursor:pointer;color:#fff;
+  background:linear-gradient(110deg,#bd8058 0%,#a96c49 100%);
+  box-shadow:0 11px 27px rgba(151,93,56,.12);
+  font-family:"Noto Serif TC",serif;font-size:17px;font-weight:600;letter-spacing:.08em;
+  transition:transform 180ms ease,filter 180ms ease,box-shadow 180ms ease}
+.hero-submit:hover{transform:translateY(-1px);filter:brightness(1.035);
+  box-shadow:0 13px 30px rgba(151,93,56,.17)}
+.submit-arrow{font-family:sans-serif;font-size:19px}
+
+.hero-trust{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:5px;
+  color:#9c8d80;font-size:12px;letter-spacing:.025em}
+.hero-trust i{width:2px;height:2px;background:#c9a27c;border-radius:50%}
+
+/* PORTRAIT — 單一畫布,非欄位 */
+.portrait-area{position:absolute;z-index:4;right:-15px;top:50%;transform:translateY(-48%);
+  width:54%;height:88%;pointer-events:none}
+.portrait-halo{position:absolute;z-index:-2;width:760px;height:760px;left:43%;top:46%;
+  transform:translate(-50%,-50%);border-radius:50%;filter:blur(6px);
+  background:radial-gradient(circle,
+    rgba(255,255,255,.98) 0%,
+    rgba(255,254,252,.92) 18%,
+    rgba(254,250,245,.72) 32%,
+    rgba(252,245,237,.44) 46%,
+    rgba(250,242,232,.20) 60%,
+    rgba(249,240,229,.07) 72%,
+    transparent 84%)}
+.portrait-ring{position:absolute;z-index:-1;width:560px;height:560px;left:44%;top:46%;
+  transform:translate(-50%,-50%);border:1px solid rgba(188,136,82,.12);border-radius:50%}
+.vivi-portrait{position:absolute;z-index:3;bottom:-3%;left:48%;transform:translateX(-50%);
+  width:min(580px,91%);height:96%;object-fit:contain;object-position:center bottom;
+  filter:saturate(.94) contrast(.99) drop-shadow(0 24px 34px rgba(83,57,38,.08))}
+.portrait-bottom-fade{position:absolute;z-index:5;left:2%;right:0;bottom:-2%;height:20%;
+  background:linear-gradient(to bottom, transparent 0%, rgba(247,241,234,.38) 40%, #f7f1ea 92%)}
+
+/* BOTANICAL */
+.botanical{position:absolute;z-index:1;width:305px;height:650px;right:-54px;top:54px;
+  color:#c69a6b;opacity:.22;stroke:currentColor;stroke-width:1.1;pointer-events:none}
+
+/* TABLET */
+@media (max-width:1050px){
+  .hero-title{font-size:clamp(58px,6vw,72px)}
+  .portrait-area{right:-60px;width:52%}
+  .hero-copy{width:55%}
+  .hero-form{max-width:50%}
+  .botanical{right:-115px;opacity:.15}
+}
+
+/* MOBILE */
+@media (max-width:820px){
+  .seminar-header{height:68px}
+  .header-inner{width:calc(100% - 36px)}
+  .brand-mark{width:29px}
+  .brand-text strong{font-size:17px}
+  .brand-text small{font-size:7px}
+  .header-date{display:none}
+  .header-actions{gap:0}
+  .header-cta{min-width:auto;height:42px;padding:0 19px;font-size:13px}
+  .seminar-hero{min-height:0}
+  .hero-inner{width:100%;min-height:0;padding:42px 22px 42px;display:flex;flex-direction:column}
+  .hero-copy{width:100%;max-width:none}
+  .hero-kicker{margin-bottom:24px;padding:8px 15px;font-size:12px}
+  .hero-title{font-size:clamp(48px,13vw,60px);line-height:1.03}
+  .title-accent{margin-top:5px}
+  .editorial-rule{width:220px;margin-top:20px}
+  .hero-description{font-size:15px;line-height:1.65}
+  .portrait-area{position:relative;order:3;right:auto;top:auto;transform:none;
+    width:calc(100% + 44px);height:360px;margin:22px -22px -5px}
+  .portrait-halo{width:420px;height:420px;left:53%}
+  .portrait-ring{width:340px;height:340px;left:54%}
+  .vivi-portrait{width:min(390px,85vw);height:100%;left:54%;bottom:0}
+  .portrait-bottom-fade{height:22%;background:linear-gradient(to bottom, transparent, #f7f1ea)}
+  .hero-form{order:2;width:100%;max-width:none;margin-top:22px}
+  .botanical{width:190px;height:420px;right:-72px;top:215px;opacity:.13}
+  .hero-trust{justify-content:center}
+}
+
+/* SMALL MOBILE */
+@media (max-width:460px){
+  .hero-inner{padding-top:34px}
+  .hero-title{font-size:clamp(45px,13vw,54px)}
+  .hero-description{font-size:14px}
+  .portrait-area{height:325px}
+  .form-control{min-height:55px;border-radius:13px}
+  .hero-submit{height:58px;border-radius:13px}
+  .hero-trust{font-size:11px;gap:6px}
+}
+
 </style>
 </head>
 <body class="bg-paper font-sans text-ink antialiased">
 
-<!-- ============ NAV ============ -->
-<header class="sticky top-0 z-50 border-b border-line/80 bg-paper/90 backdrop-blur">
-  <div class="mx-auto flex h-[68px] max-w-content items-center gap-6 px-5 sm:px-8">
-    <a href="#top" class="flex items-center gap-2.5">
-      <svg viewBox="0 0 100 100" class="h-8 w-8 text-clay" fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="34" cy="60" r="15"/><circle cx="66" cy="60" r="15"/>
-        <path d="M28 47 L34 32 H44"/><path d="M56 32 H66 L72 47"/>
-        <path d="M84 22 l1.6 4 4 1.6 -4 1.6 -1.6 4 -1.6-4 -4-1.6 4-1.6 z" fill="currentColor" stroke="none"/>
-      </svg>
-      <span class="leading-none">
-        <span class="block font-serif text-[17px] font-semibold tracking-wide">看見自己</span>
-        <span class="mt-0.5 block text-[9px] font-light tracking-[.28em] text-ink3">SEE YOURSELF</span>
-      </span>
-    </a>
-    <div class="ml-auto flex items-center gap-3 sm:gap-5">
-      <span class="hidden text-[13px] text-ink3 sm:inline">9/30 · 台灣 21:00</span>
-      <a href="#signup" class="rounded-full bg-ink px-5 py-2.5 text-[13px] font-medium text-paper transition hover:bg-ink/85">免費報名 →</a>
+<div class="seminar-page">
+  <header class="seminar-header">
+    <div class="header-inner">
+      <a href="/" class="brand" aria-label="看見自己 See Yourself">
+        <svg class="brand-mark" viewBox="0 0 52 36" aria-hidden="true">
+          <circle cx="15" cy="20" r="8"></circle>
+          <circle cx="37" cy="20" r="8"></circle>
+          <path d="M23 20h6"></path>
+          <path d="M14 11c1-5 4-7 8-7"></path>
+          <path d="M38 11c-1-5-4-7-8-7"></path>
+          <circle cx="46" cy="4" r="1.5" class="spark"></circle>
+        </svg>
+        <span class="brand-text">
+          <strong>看見自己</strong>
+          <small>SEE YOURSELF</small>
+        </span>
+      </a>
+      <div class="header-actions">
+        <div class="header-date">9/30 <span>·</span> 台灣 21:00</div>
+        <a href="#seminar-form" class="header-cta">免費報名 <span>→</span></a>
+      </div>
     </div>
-  </div>
-</header>
+  </header>
 
-<!-- ============ HERO ============ -->
-<section id="top" class="relative overflow-hidden">
-  <div class="pointer-events-none absolute -right-40 -top-32 h-[560px] w-[560px] rounded-full bg-clay/[.07] blur-3xl"></div>
-  <div class="relative mx-auto max-w-content px-5 pb-16 pt-14 sm:px-8 sm:pt-20 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-16 lg:pb-24">
+  <main class="seminar-hero" id="top">
+    <div class="hero-wash hero-wash-left" aria-hidden="true"></div>
+    <div class="hero-wash hero-wash-right" aria-hidden="true"></div>
 
-    <div>
-      <div class="inline-flex items-center gap-2.5 rounded-full border border-line bg-white px-4 py-2">
-        <span class="h-1.5 w-1.5 rounded-full bg-clay"></span>
-        <span class="text-[13px] font-medium tracking-wide text-ink2">免費線上講座 · 9/30</span>
+    <svg class="botanical" viewBox="0 0 420 760" fill="none" aria-hidden="true">
+      <path d="M370 10C341 94 349 168 324 241C296 322 247 390 235 477C223 566 253 644 210 747"/>
+      <path d="M336 165C300 137 273 137 246 151C269 177 298 184 336 165Z"/>
+      <path d="M326 231C357 205 385 201 411 211C391 240 362 248 326 231Z"/>
+      <path d="M293 316C253 293 225 298 201 316C229 337 259 337 293 316Z"/>
+      <path d="M264 395C301 367 332 365 358 380C332 408 301 413 264 395Z"/>
+      <path d="M238 482C201 453 170 453 144 468C170 495 201 502 238 482Z"/>
+      <path d="M236 568C270 544 299 544 323 559C300 584 272 589 236 568Z"/>
+    </svg>
+
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <div class="hero-kicker">
+          <span class="kicker-dot"></span>
+          <span>免費線上講座</span>
+          <i></i>
+          <span>9/30</span>
+        </div>
+        <h1 class="hero-title">
+          <span class="title-dark">別再找答案</span>
+          <span class="title-accent">找自己</span>
+        </h1>
+        <div class="editorial-rule" aria-hidden="true"><span>✦</span><i></i></div>
+        <div class="hero-description">
+          <p><strong>AI 可以回答你的問題。</strong></p>
+          <p>但如果你問問題的方式，早就把答案限制住了呢？</p>
+          <p>你問出的問題，本身就帶著你看世界的方式。</p>
+        </div>
       </div>
 
-      <h1 class="mt-7 font-serif text-[clamp(44px,7vw,76px)] font-semibold leading-[1.12] tracking-tight balance">
-        別再找答案<br><span class="text-clay">找自己</span>
-      </h1>
+      <div class="portrait-area">
+        <div class="portrait-halo" aria-hidden="true"></div>
+        <div class="portrait-ring" aria-hidden="true"></div>
+        <img class="vivi-portrait" src="/seminar/vivi-seminar-hero.png" alt="Vivi">
+        <div class="portrait-bottom-fade" aria-hidden="true"></div>
+      </div>
 
-      <p class="mt-7 max-w-xl text-[17px] leading-[1.95] text-ink2 pretty">
-        <span class="font-medium text-ink">AI 可以回答你的問題。</span><br>
-        但如果你問問題的方式，早就把答案限制住了呢？<br>
-        你問出的問題，本身就帶著你看世界的方式。
-      </p>
-
-      <!-- FORM -->
-      <form action="/api/subscribe" method="post" data-subscribe id="hero-signup"
-            class="mt-9 max-w-[440px] space-y-3">
+      <span id="hero-signup" class="anchor-compat" aria-hidden="true"></span>
+      <form id="seminar-form" class="hero-form"
+            action="/api/subscribe" method="post" data-subscribe>
         <input type="hidden" name="source" value="hero">
-        <label class="sr-only" for="hero-email">你的 Email</label>
-        <input id="hero-email" name="email" type="email" autocomplete="email" required
-               placeholder="你的 Email"
-               class="h-14 w-full rounded-xl border border-line bg-white px-5 text-[15px] text-ink placeholder:text-ink3 outline-none transition focus:border-ink focus:ring-4 focus:ring-ink/5">
-        <label class="sr-only" for="hero-question">你現在最想問的一個問題</label>
-        <textarea id="hero-question" name="question" rows="3" placeholder="你現在最想問的一個問題"
-               class="w-full resize-y rounded-xl border border-line bg-white px-5 py-4 text-[15px] leading-relaxed text-ink placeholder:text-ink3 outline-none transition focus:border-ink focus:ring-4 focus:ring-ink/5"></textarea>
-        <button type="submit"
-               class="group flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-ink text-[15px] font-medium tracking-wide text-paper transition hover:bg-ink/88 active:translate-y-px">
-          免費報名 <span class="transition group-hover:translate-x-0.5">→</span>
-        </button>
-        <p class="pt-1 text-[13px] text-ink3">完全免費 · 不需開麥 · 不需露臉 · 可看回放</p>
+        <label class="form-control">
+          <span class="form-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M4 7l8 6 8-6"></path></svg>
+          </span>
+          <input type="email" name="email" autocomplete="email" placeholder="你的 Email" required aria-label="你的 Email">
+        </label>
+        <label class="form-control form-question">
+          <span class="form-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M5 19l1.2-3.2A8 8 0 1 1 9 19H5Z"></path><circle cx="9" cy="11" r=".8" fill="currentColor" stroke="none"></circle><circle cx="12" cy="11" r=".8" fill="currentColor" stroke="none"></circle><circle cx="15" cy="11" r=".8" fill="currentColor" stroke="none"></circle></svg>
+          </span>
+          <textarea name="question" rows="1" placeholder="你現在最想問的一個問題" aria-label="你現在最想問的一個問題"></textarea>
+        </label>
+        <button type="submit" class="hero-submit"><span>免費報名</span><span class="submit-arrow">→</span></button>
+        <div class="hero-trust">
+          <span>完全免費</span><i></i><span>不需開麥</span><i></i><span>不需露臉</span><i></i><span>可看回放</span>
+        </div>
       </form>
     </div>
-
-    <div class="relative mt-14 lg:mt-0">
-      <div class="overflow-hidden rounded-[28px] border border-line bg-paper2">
-        <img src="/seminar/vivi-light.jpg" alt="Vivi" class="h-full w-full object-cover" style="aspect-ratio:3/4">
-      </div>
-      <div class="mt-4 flex items-baseline gap-3">
-        <span class="font-serif text-[17px] font-semibold">Vivi</span>
-        <span class="text-[13px] text-ink3">ICF 認證教練 · 講師</span>
-      </div>
-    </div>
-
-  </div>
-</section>
+  </main>
+</div>
 
 <!-- ============ AI vs 教練 ============ -->
 <section class="border-y border-line bg-white">
@@ -365,6 +573,5 @@ document.querySelectorAll('form[data-subscribe]').forEach(function(f){
   });
 });
 </script>
-
 </body>
 </html>
